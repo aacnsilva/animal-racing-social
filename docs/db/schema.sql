@@ -298,6 +298,22 @@ CREATE TABLE market.price_snapshots (                           -- [G]
   PRIMARY KEY (market_id, kind)
 );
 
+-- Full per-second price history, written once when a market results.
+-- One compressed columnar series per market (~600 rows/day). Purged after
+-- PRICE_HISTORY_RETENTION (config, default = one season length, 28 days rolling).
+CREATE TABLE market.price_history (                             -- [G]
+  market_id   BIGINT PRIMARY KEY REFERENCES market.markets,
+  race_id     BIGINT NOT NULL,
+  first_tick  INT NOT NULL,
+  step_ticks  INT NOT NULL DEFAULT 2,       -- one point per reprice (1 s)
+  points      INT NOT NULL,
+  series      BYTEA NOT NULL,               -- zstd(columnar: tick[], per-entrant price[])
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at  TIMESTAMPTZ NOT NULL           -- created_at + PRICE_HISTORY_RETENTION
+);
+CREATE INDEX ON market.price_history (race_id);
+CREATE INDEX ON market.price_history (expires_at);
+
 -- ───────────────────────────── betting ─────────────────────────────
 
 CREATE TABLE betting.bets (                                     -- [U]

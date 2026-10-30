@@ -95,10 +95,18 @@ copied into `racing.race_replays` (public) and the seed into `racing.races.seed`
 A retention job deletes replays after `REPLAY_RETENTION_HOURS`; results,
 seed, hashes and incidents stay forever.
 
-**Prices.** Postgres holds only the latest price per selection
-(`market.selections`) plus opening / at-lock / at-start snapshots. The
-per-second price log is Kafka (`market.events`); live prices are read from
-Redis.
+**Prices.** Three tiers:
+
+| Tier | Where | Retention |
+|---|---|---|
+| Live | Redis `price:{marketId}` + `market.selections` (latest only) | until resulted |
+| Replay buffer | Kafka `market.events` | **7 days** (`KAFKA_RETENTION_DAYS`), for rebuilding consumers, not for queries |
+| History | `market.price_history`: one compressed series per market, written at `MarketResulted` | **`PRICE_HISTORY_RETENTION`**, config, default **one season (28 days rolling)** |
+| Forever | `market.price_snapshots` (opening / at-lock / at-start) | permanent |
+
+Odds charts on replay and history pages read `price_history`; a daily job
+deletes rows past `expires_at`. Bet disputes don't depend on it: each leg
+stores its locked price and `price_version`.
 
 **Immutable config.** Venues, engine versions, market templates and the
 race programme are versioned rows; editing creates a new version, and races
