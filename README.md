@@ -56,7 +56,7 @@ API ─bet.commands─► Bet worker ─debit─► Wallet ─wallet.events─�
 | `server/` | TypeScript services on Node 22 (`api`, `sse`, `scheduler`, `stable`, `market-manager`, `bet-worker`, `settlement`, `combo-aggregator`, `wallet`, `season`, `notification`, `migrate`) |
 | `web/` | React + three.js client (Vite), served by Caddy |
 | `mock-oauth/` | Fake Google/GitHub OAuth provider (PKCE) for local runs and tests |
-| `e2e/` | Playwright UI tests |
+| `e2e/` | Playwright UI tests, desktop and mobile |
 | `db/` | SQL migrations and per-service role grants |
 | `shared/` | Venues, species, market templates, programme, engine params |
 | `deploy/` | Production compose, VPS setup, deploy and backup scripts |
@@ -90,7 +90,7 @@ That stops everything and wipes the data.
 | TypeScript unit tests | `cd server && npm ci && npm test` |
 | Mock OAuth tests | `cd mock-oauth && npm test` |
 | Engine tests | `cd engine && cargo test --workspace` |
-| Playwright UI and observability tests (stack running on :8080) | `cd e2e && npm ci && npx playwright install chromium && npx playwright test` |
+| Playwright UI (desktop and Pixel 7 mobile) and observability tests (stack running on :8080) | `cd e2e && npm ci && npx playwright install chromium && npx playwright test` |
 
 After changing `proto/`, regenerate the TypeScript types with `cd server && npm run gen` (needs `protoc`); CI fails if they are stale.
 

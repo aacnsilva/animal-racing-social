@@ -187,7 +187,7 @@ function TricastBuilder({ market, entrants, canBet, onPick }: { market: Market; 
     <div className="stack" data-testid="tricast-builder" style={{ gap: 10 }}>
       <div className="small muted">Pick the exact first three in order. Prices are quoted on demand.</div>
       {winning && <div className="notice success small">Result: {winning.map(name).join(' → ')}</div>}
-      <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+      <div className="form-grid tricast-picks">
         {[0, 1, 2].map((index) => (
           <label className="field" key={index}>
             <span>{['1st', '2nd', '3rd'][index]}</span>

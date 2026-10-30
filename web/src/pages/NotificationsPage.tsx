@@ -96,7 +96,7 @@ export function NotificationsPage() {
   };
 
   return (
-    <div className="race-body" style={{ gridTemplateColumns: 'minmax(0, 1fr) 340px' }}>
+    <div className="race-body notif-layout">
       <main>
         <div className="page-head" style={{ marginBottom: 0 }}>
           <div>

@@ -16,7 +16,8 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   projects: [
-    { name: 'chromium', testIgnore: /observability\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', testIgnore: /(observability|mobile)\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'mobile', testMatch: /mobile\.spec\.ts/, use: { ...devices['Pixel 7'] } },
     { name: 'observability', testMatch: /observability\.spec\.ts/, dependencies: ['chromium'] },
   ],
 });

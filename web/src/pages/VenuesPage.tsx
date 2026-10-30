@@ -88,7 +88,7 @@ export function VenuePage({ id }: { id: string }) {
           <span className="chip">{v.lanes} lanes</span>
         </div>
       </div>
-      <div className="grid-2" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)' }}>
+      <div className="grid-2 venue-layout">
         <section className="card stack">
           <div className="card-head" style={{ marginBottom: 0 }}>
             <h2>Track map</h2>

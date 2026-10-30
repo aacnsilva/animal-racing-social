@@ -410,7 +410,7 @@ function Seasons() {
           <span>Name</span>
           <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </label>
-        <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="form-grid form-pair">
           <label className="field">
             <span>Starts</span>
             <input className="input" type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />

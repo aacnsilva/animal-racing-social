@@ -58,7 +58,7 @@ export function MyBetsPage() {
           </Link>
         </Empty>
       ) : (
-        <div className="cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+        <div className="cards bet-cards">
           {paged.items.map((bet) => (
             <BetCard key={bet.id} bet={bet} races={races} cashout="manual" />
           ))}

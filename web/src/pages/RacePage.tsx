@@ -19,6 +19,8 @@ import { RaceViewer, useReplayTick } from '../race/RaceViewer';
 import { RaceFeed, Standings } from '../race/Standings';
 import { RaceStream } from '../race/stream';
 
+type Section = 'markets' | 'race' | 'result' | 'runners' | 'bets';
+
 export function RacePage({ id }: { id: string }) {
   const session = useSession();
   const ready = session.status !== 'loading';
@@ -30,6 +32,7 @@ export function RacePage({ id }: { id: string }) {
   const [slip, setSlip] = useState<SlipSelection | null>(null);
   const [replay, setReplay] = useState<ReplayPlayback | null>(null);
   const [replayLoading, setReplayLoading] = useState(false);
+  const [section, setSection] = useState<Section | null>(null);
   const viewerAnchor = useRef<HTMLDivElement>(null);
   const now = useNow(1000);
 
@@ -69,6 +72,10 @@ export function RacePage({ id }: { id: string }) {
 
   const raceStatus = state.race?.status;
   useEffect(() => {
+    if (raceStatus === 'LIVE' || raceStatus === 'FINISHED') setSection(null);
+  }, [raceStatus]);
+
+  useEffect(() => {
     if (raceStatus !== 'FINISHED' && raceStatus !== 'SETTLED') return;
     if (state.race?.entrants?.some((e) => e.result)) return;
     const timer = setTimeout(() => {
@@ -100,7 +107,7 @@ export function RacePage({ id }: { id: string }) {
       const playback = new ReplayPlayback(ticks, race.tickMs);
       setReplay(playback);
       playback.play();
-      viewerAnchor.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      (viewerAnchor.current?.firstElementChild ?? viewerAnchor.current)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
       toast(friendlyError(error), 'error');
     } finally {
@@ -129,9 +136,19 @@ export function RacePage({ id }: { id: string }) {
   const racesForBets: Record<string, Race> = { ...otherRaces, [race.id]: race };
   const visibleBets = state.myBets.filter((bet) => bet.status !== 'REJECTED');
   const replayAvailable = finished;
+  const fallbackSection: Section = finished ? 'result' : race.status === 'LIVE' ? 'race' : 'markets';
+  const activeSection = section ?? fallbackSection;
+  const sectionClass = (name: Section) => `race-section${activeSection === name ? '' : ' m-hide'}`;
+  const sections: { id: Section; label: string; count?: number }[] = [
+    ...(finished ? [{ id: 'result' as const, label: 'Result' }] : []),
+    { id: 'markets', label: 'Markets' },
+    { id: 'race', label: finished ? 'Standings' : race.status === 'LIVE' ? 'Live' : 'Field' },
+    { id: 'runners', label: 'Runners' },
+    { id: 'bets', label: 'My bets', count: visibleBets.length },
+  ];
 
   return (
-    <div>
+    <div className="race-page">
       <RaceHeader race={race} venue={venue.data} connection={state.connection} now={now} />
       {race.status === 'CANCELLED' && (
         <div className="notice warn" style={{ marginBottom: 16 }}>
@@ -155,13 +172,39 @@ export function RacePage({ id }: { id: string }) {
             setReplay(null);
           }}
         />
-        <Standings race={race} tick={displayTick} title={replay ? 'Replay standings' : race.status === 'LIVE' ? 'Live standings' : finished ? 'Final standings' : 'Field'} />
+        <div className="race-tabs" role="tablist" aria-label="Race sections" data-testid="race-sections">
+          {sections.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={activeSection === item.id}
+              className={activeSection === item.id ? 'active' : ''}
+              data-testid={`race-section-${item.id}`}
+              onClick={() => setSection(item.id)}
+            >
+              {item.label}
+              {item.count ? <span className="count">{item.count}</span> : null}
+            </button>
+          ))}
+        </div>
+        <div className={sectionClass('race')}>
+          <Standings race={race} tick={displayTick} title={replay ? 'Replay standings' : race.status === 'LIVE' ? 'Live standings' : finished ? 'Final standings' : 'Field'} />
+        </div>
       </div>
       <div className="race-body">
         <main>
-          <MarketsPanel race={race} markets={state.markets} bettingOpen={bettingOpen} selected={slip} onPick={onPick} />
-          {finished && <RaceResult raceId={race.id} version={state.resultVersion} entrants={entrants} onWatchReplay={() => void watchReplay()} replayLoading={replayLoading} />}
-          <Entrants entrants={entrants} winMarket={winMarket} />
+          <div className={sectionClass('markets')}>
+            <MarketsPanel race={race} markets={state.markets} bettingOpen={bettingOpen} selected={slip} onPick={onPick} />
+          </div>
+          {finished && (
+            <div className={sectionClass('result')}>
+              <RaceResult raceId={race.id} version={state.resultVersion} entrants={entrants} onWatchReplay={() => void watchReplay()} replayLoading={replayLoading} />
+            </div>
+          )}
+          <div className={sectionClass('runners')}>
+            <Entrants entrants={entrants} winMarket={winMarket} />
+          </div>
         </main>
         <aside>
           {slip && (
@@ -175,29 +218,33 @@ export function RacePage({ id }: { id: string }) {
               onRequote={(next) => setSlip(next)}
             />
           )}
-          <ComboSlip docked />
-          <section className="card">
-            <div className="card-head">
-              <h2>My bets</h2>
-              {session.status === 'authed' && (
-                <Link to="/bets" className="small link">
-                  All bets
-                </Link>
-              )}
-            </div>
-            {session.status !== 'authed' ? (
-              <div className="small muted">Sign in to bet with your season points.</div>
-            ) : visibleBets.length === 0 ? (
-              <div className="small muted">No bets on this race yet. Pick a price to get started.</div>
-            ) : (
-              <div className="stack" style={{ gap: 8 }}>
-                {visibleBets.map((bet) => (
-                  <BetCard key={bet.id} bet={bet} races={racesForBets} focusRaceId={race.id} live={state.cashouts[bet.id]} cashout="live" />
-                ))}
+          <div className={sectionClass('bets')}>
+            <ComboSlip docked />
+            <section className="card">
+              <div className="card-head">
+                <h2>My bets</h2>
+                {session.status === 'authed' && (
+                  <Link to="/bets" className="small link">
+                    All bets
+                  </Link>
+                )}
               </div>
-            )}
-          </section>
-          <RaceFeed race={race} feed={state.feed} />
+              {session.status !== 'authed' ? (
+                <div className="small muted">Sign in to bet with your season points.</div>
+              ) : visibleBets.length === 0 ? (
+                <div className="small muted">No bets on this race yet. Pick a price to get started.</div>
+              ) : (
+                <div className="stack" style={{ gap: 8 }}>
+                  {visibleBets.map((bet) => (
+                    <BetCard key={bet.id} bet={bet} races={racesForBets} focusRaceId={race.id} live={state.cashouts[bet.id]} cashout="live" />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+          <div className={sectionClass('race')}>
+            <RaceFeed race={race} feed={state.feed} />
+          </div>
         </aside>
       </div>
     </div>

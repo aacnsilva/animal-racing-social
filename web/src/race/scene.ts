@@ -159,6 +159,7 @@ export class RaceScene {
     this.controls.minDistance = 15;
     this.controls.maxDistance = this.track.size * 3;
     this.controls.enabled = false;
+    this.renderer.domElement.style.touchAction = 'pan-y';
 
     this.sun = new THREE.DirectionalLight('#fff4e0', 2.2);
     this.buildEnvironment(options);
@@ -180,6 +181,7 @@ export class RaceScene {
     this.mode = mode;
     this.snapCamera = true;
     this.controls.enabled = mode === 'overview';
+    this.renderer.domElement.style.touchAction = mode === 'overview' ? 'none' : 'pan-y';
     if (mode === 'overview') {
       const size = this.track.size;
       this.camera.fov = 50;
