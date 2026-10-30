@@ -125,7 +125,8 @@ GET /v1/races/{raceId}/stream        (cookie auth; anonymous = public events onl
 
 ## 7. Notifications: in-app inbox only
 
-Scope: **only races the user has bet on.** No following, no email, no push.
+Scope: in-app only (no email, no push, no following). Race-starting alerts
+are sent **only for races the user has bet on**.
 
 ```
 GET  /v1/me/notifications?unread=&cursor=      → { items, nextCursor, unreadCount }
@@ -136,7 +137,8 @@ PUT  /v1/me/notification-settings              { enabled: bool, types: { [type]:
 
 - `enabled: false` turns everything off; per-type toggles otherwise
   (default all on).
-- A Notification Service (TS) consumes `bet.events` and `race.lifecycle`,
+- A Notification Service (TS) consumes `bet.events`, `race.lifecycle`, `season.events`
+and leaderboard changes,
   checks settings, writes the inbox (Postgres, keyed by userId, 30-day
   retention) and pushes a `notification` event to any open race streams for
   that user, plus a badge count via `GET …?unread=true` polling.
@@ -144,6 +146,10 @@ PUT  /v1/me/notification-settings              { enabled: bool, types: { [type]:
 | Type | Trigger |
 |---|---|
 | `RACE_STARTING` | a race you bet on starts in 2 min |
+| `DAILY_REWARD_READY` | new UTC day, unclaimed |
+| `LEADERBOARD_MOVE` | entered/left top 10 / top 100 |
+| `SEASON_ENDING` | `endsAt − 24 h` |
+| `SEASON_RESULT` | `SeasonEnded` (your final rank) |
 | `BET_WON` / `BET_LOST` / `BET_VOID` | `BetSettled` |
 | `BET_REJECTED` | live bet not accepted |
 | `CASHOUT_DONE` / `CASHOUT_REJECTED` | cash-out result |

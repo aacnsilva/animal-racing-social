@@ -315,8 +315,11 @@ players back in the game.
   starts at `endsAt − 1 h`, so every bet is placed and settled inside one season.
 - At season start each user gets a fresh season wallet (`SEASON_GRANT`);
   the previous season's balance is frozen as its final score.
-- **Leaderboard** (per season) ranks by season balance; secondary boards for
-  biggest single payout, best ROI (min. N bets) and longest win streak.
+- **Leaderboard** (per season) counts **settled bets only**. Open bets are
+  ignored: `rankScore = balance + stakes currently in open bets`, so placing a
+  bet doesn't move you until it settles (won, lost or cashed out).
+  Secondary boards: biggest single payout, best ROI and longest win streak.
+  ROI and streak boards need **≥ 20 settled bets** to rank.
 - Implemented as a Kafka consumer of `wallet.events` / `bet.events` that
   maintains Redis sorted sets (`lb:{seasonId}:balance`, …). Postgres is the
   source of truth; Redis can be rebuilt by replaying the topics.

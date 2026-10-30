@@ -318,8 +318,9 @@ components:
         raceId: { type: string }
         finishedAt: { type: string, format: date-time }
         class: { type: string }
-        position: { type: integer }
-        timeSec: { type: number }
+        position: { type: integer, description: "Official position; DQ/DNF/NR are classified last" }
+        resultStatus: { type: string, enum: [FINISHED, DISQUALIFIED, DNF, NON_RUNNER] }
+        timeSec: { type: number, description: "null unless FINISHED or DISQUALIFIED" }
         lapsLed: { type: array, items: { type: integer } }
         statsSnapshot: { $ref: '#/components/schemas/Stats' }
     Entrant:

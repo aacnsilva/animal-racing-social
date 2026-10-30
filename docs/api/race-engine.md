@@ -109,9 +109,16 @@ Rates are engine `params` (defaults below, tuned so most races have none).
 |---|---|---|---|---|
 | `STUMBLE` | any tick | ∝ (1−consistency) × curve × surface | speed drop for 2–6 ticks | none |
 | `FALSE_START` | tick 0 | 1% per race | offender starts +3 s late | none (race stands) |
-| `REFUSED_TO_RUN` | tick 0 | 0.5% per entrant | never starts | **non-runner**: bets on it VOID (refund); tricasts containing it VOID; other bets stand |
-| `PULLED_UP` (DNF) | mid-race | 0.3% per entrant | stops, `state: DNF` | bets on it LOST; already resulted lap markets stand |
-| `DISQUALIFIED` | after finish | 0.2% per race | removed from order, others promoted | position/podium/tricast settle on **official** order; `LEADER_AT_LAP` settles as run |
+| `REFUSED_TO_RUN` | tick 0 | 0.5% per entrant | never starts | classified **last** (`NON_RUNNER`); bets on it LOST; other bets stand |
+| `PULLED_UP` | mid-race | 0.3% per entrant | stops, `state: DNF` | classified **last** (`DNF`); bets on it LOST; already resulted lap markets stand |
+| `DISQUALIFIED` | after finish | 0.2% per race | moved to **last** (`DISQUALIFIED`), others promoted | position/podium/tricast settle on **official** order; `LEADER_AT_LAP` settles as run |
+
+**No bets are voided by incidents.** Non-runners, DNFs and DQs all count as
+last place. When several entrants are classified last, the official order is:
+finishers → `DISQUALIFIED` (by crossing time) → `DNF` (by distance covered) →
+`NON_RUNNER` (by lane). Every result row stores a `resultStatus`
+(`FINISHED | DISQUALIFIED | DNF | NON_RUNNER`) so history, form and the UI
+can tell them apart (e.g. form `1-3-DQ-2-NR`). Only `RaceCancelled` voids bets.
 
 Incidents appear in tick `events[]` when they happen (so the broadcaster
 reveals them live and markets suspend). DQ is announced at `RaceFinished`
