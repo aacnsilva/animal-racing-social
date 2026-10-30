@@ -161,6 +161,19 @@ paths:
         - { name: around, in: query, schema: { type: string, enum: [me] }, description: "Return the window around the caller" }
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LeaderboardEntry' } } } } }
+  /venues:
+    get:
+      parameters:
+        - { name: class, in: query, schema: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Venue' } } } } }
+  /venues/{venueId}:
+    get:
+      parameters:
+        - { name: venueId, in: path, required: true, schema: { type: string } }
+        - { name: version, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Venue' } } } }
   /animals:
     get:
       parameters:
@@ -205,6 +218,28 @@ components:
                        STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED]
               message: { type: string }
   schemas:
+    Venue:
+      type: object
+      properties:
+        id: { type: string }
+        version: { type: integer }
+        name: { type: string }
+        class: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] }
+        lanes: { type: integer }
+        lapLength: { type: number }
+        lapsRange: { type: array, items: { type: integer }, minItems: 2, maxItems: 2 }
+        surface: { type: string, enum: [DIRT, GRASS, SAND, MUD, ICE] }
+        segments:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [STRAIGHT, CURVE, UPHILL, DOWNHILL] }
+              length: { type: number }
+              radius: { type: number }
+              angle: { type: number }
+              grade: { type: number }
+        assets: { type: object, properties: { model: { type: string } } }
     Season:
       type: object
       properties:
@@ -274,8 +309,9 @@ components:
         status: { $ref: '#/components/schemas/RaceStatus' }
         class: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] }
         startAt: { type: string, format: date-time }
+        venueId: { type: string }
+        venueVersion: { type: integer }
         laps: { type: integer }
-        trackLength: { type: number }
         estimatedDurationSec: { type: integer }
         tickMs: { type: integer, example: 500 }
         currentTick: { type: integer }

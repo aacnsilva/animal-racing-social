@@ -26,7 +26,7 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 
 | Type | Payload |
 |---|---|
-| `RaceScheduled` | `raceId, class, startAt, laps, trackLength, estimatedDurationSec, tickMs, entrants[{entrantId, animalId, lane, statsSnapshot}], seedHash, scriptHash` |
+| `RaceScheduled` | `raceId, class, venueId, venueVersion, startAt, laps, estimatedDurationSec, tickMs, entrants[{entrantId, animalId, lane, statsSnapshot}], seedHash, scriptHash` |
 | `RaceOpened` | `raceId` (pre-race markets open) |
 | `RaceStarted` | `raceId, startedAt` |
 | `RaceFinished` | `raceId, finishTick, order[entrantId], seed` (script now public) |

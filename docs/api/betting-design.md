@@ -85,6 +85,40 @@ Multiple races may be `LIVE` simultaneously.
 | STANDARD | 6–8 | ~5 min |
 | ENDURANCE | 12–15 | up to 10 min |
 
+### Venues
+
+- **12 fixed venues: 4 per class** (SPRINT, STANDARD, ENDURANCE). The
+  Scheduler picks one at random when it schedules a race; the venue is public
+  from `SCHEDULED` onward.
+- A venue is versioned static data shared by engine and client:
+
+```jsonc
+{ "id": "v_dune_loop", "version": 3, "class": "STANDARD",
+  "lanes": 8, "lapLength": 520,
+  "lapsRange": [6, 8],
+  "surface": "SAND",
+  "segments": [
+    { "type": "STRAIGHT", "length": 140 },
+    { "type": "CURVE", "radius": 45, "angle": 180 },
+    { "type": "UPHILL", "length": 60, "grade": 0.08 },
+    { "type": "STRAIGHT", "length": 90 },
+    { "type": "CURVE", "radius": 35, "angle": 180 }
+  ],
+  "assets": { "model": "venues/dune_loop/v3.glb" } }
+```
+
+- The engine simulates in 1D (`dist`, `lane`) and looks up the segment at each
+  distance for modifiers (curves penalize velocity, uphill drains stamina,
+  surface favors certain species).
+- The client builds three.js geometry from the same `segments` (plus the
+  decorative `.glb`), so positions always match.
+- **Laps are chosen per race** within `lapsRange` to hit the class's target
+  duration; the venue's lap length is fixed.
+- Venues are versioned: a race records `venueId + venueVersion`, so replays
+  and seed verification stay valid after a venue is edited.
+- Venue-specific form is tracked (wins/podiums per venue) and shown with the
+  animal's stats ("course specialist").
+
 ### Race script (private until FINISHED)
 
 ```jsonc
