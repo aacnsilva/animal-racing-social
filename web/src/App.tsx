@@ -132,7 +132,7 @@ export function App({ authError }: { authError: string | null }) {
       <footer className="footer">
         Animal Racing Social is a portfolio project. Fictional animals, fictional points: no real money, prizes or wagering of any kind.
       </footer>
-      <ComboSlip />
+      {!matchPath('/races/:id', path) && <ComboSlip />}
       <Toasts />
     </div>
   );

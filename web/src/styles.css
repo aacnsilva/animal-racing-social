@@ -1898,6 +1898,14 @@ table.table {
   padding: 8px 12px;
 }
 
+.combo.docked {
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  z-index: auto;
+}
+
 .combo-head {
   display: flex;
   align-items: center;

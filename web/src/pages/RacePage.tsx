@@ -9,6 +9,7 @@ import { useRaceInfos } from '../lib/raceCache';
 import { Link } from '../lib/router';
 import type { Bet, Market, Page, Race, RaceTick, Venue } from '../lib/types';
 import { BetSlip, type SlipSelection } from '../race/BetSlip';
+import { ComboSlip } from '../components/ComboSlip';
 import { Entrants } from '../race/Entrants';
 import { MarketsPanel } from '../race/Markets';
 import { ReplayPlayback } from '../race/playback';
@@ -173,6 +174,7 @@ export function RacePage({ id }: { id: string }) {
               onRequote={(next) => setSlip(next)}
             />
           )}
+          <ComboSlip docked />
           <section className="card">
             <div className="card-head">
               <h2>My bets</h2>

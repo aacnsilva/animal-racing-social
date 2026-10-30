@@ -23,7 +23,7 @@ function placementFromBet(bet: Bet): Placement {
   return { kind: 'accepted', bet, message: `Combo ${bet.status} · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)} · returns ${fmtPoints(Math.floor(bet.stake * price))} pts` };
 }
 
-export function ComboSlip() {
+export function ComboSlip({ docked = false }: { docked?: boolean }) {
   const combo = useStore(comboStore);
   const session = useSession();
   const wallet = useStore(walletStore);
@@ -156,7 +156,7 @@ export function ComboSlip() {
 
   if (!combo.open) {
     return (
-      <div className="combo collapsed" data-testid="combo-slip">
+      <div className={`combo collapsed${docked ? ' docked' : ''}`} data-testid="combo-slip">
         <button className="btn ghost small" onClick={() => patchCombo({ open: true })}>
           Combo · {combo.legs.length} leg{combo.legs.length === 1 ? '' : 's'} · @{fmtPrice(combined)}
         </button>
@@ -165,7 +165,7 @@ export function ComboSlip() {
   }
 
   return (
-    <div className="combo" data-testid="combo-slip">
+    <div className={`combo${docked ? ' docked' : ''}`} data-testid="combo-slip">
       <div className="combo-head">
         <h3>
           Combo slip · {combo.legs.length} leg{combo.legs.length === 1 ? '' : 's'}
