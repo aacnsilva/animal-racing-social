@@ -1,0 +1,7 @@
+{
+  "racesPerHour": 3,
+  "classMix": { "slots": [["SPRINT"], ["STANDARD"], ["SPRINT", "ENDURANCE"]] },
+  "speciesRotation": ["HORSE", "GIRAFFE"],
+  "horizonHours": 24,
+  "recoveryMinutes": { "SPRINT": 60, "STANDARD": 90, "ENDURANCE": 120 }
+}

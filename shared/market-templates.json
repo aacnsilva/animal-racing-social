@@ -1,0 +1,31 @@
+{
+  "SPRINT": {
+    "markets": [
+      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
+      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
+      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+      { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } }
+    ]
+  },
+  "STANDARD": {
+    "markets": [
+      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
+      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
+      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+      { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } },
+      { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } }
+    ]
+  },
+  "ENDURANCE": {
+    "markets": [
+      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
+      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
+      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+      { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } },
+      { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } }
+    ]
+  }
+}

@@ -1,0 +1,518 @@
+[
+  {
+    "id": "v_meadow_dash",
+    "version": 1,
+    "name": "Meadow Dash",
+    "class": "SPRINT",
+    "surface": "GRASS",
+    "description": "Flat and fast with sweeping curves: pure speed.",
+    "lanes": 10,
+    "lapLength": 602.74,
+    "lapsRange": [
+      3,
+      4
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/meadow_dash/v1.glb"
+    }
+  },
+  {
+    "id": "v_dune_drag",
+    "version": 1,
+    "name": "Dune Drag",
+    "class": "SPRINT",
+    "surface": "SAND",
+    "description": "Long sand straights that tax stamina.",
+    "lanes": 10,
+    "lapLength": 641.06,
+    "lapsRange": [
+      3,
+      4
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 220
+      },
+      {
+        "type": "CURVE",
+        "radius": 32,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 220
+      },
+      {
+        "type": "CURVE",
+        "radius": 32,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/dune_drag/v1.glb"
+    }
+  },
+  {
+    "id": "v_frost_strip",
+    "version": 1,
+    "name": "Frost Strip",
+    "class": "SPRINT",
+    "surface": "ICE",
+    "description": "Short and slippery, four tight corners.",
+    "lanes": 10,
+    "lapLength": 523.36,
+    "lapsRange": [
+      3,
+      4
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 120
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 120
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      }
+    ],
+    "assets": {
+      "model": "venues/frost_strip/v1.glb"
+    }
+  },
+  {
+    "id": "v_canyon_chute",
+    "version": 1,
+    "name": "Canyon Chute",
+    "class": "SPRINT",
+    "surface": "DIRT",
+    "description": "Downhill start, uphill finish.",
+    "lanes": 10,
+    "lapLength": 611.33,
+    "lapsRange": [
+      3,
+      4
+    ],
+    "segments": [
+      {
+        "type": "DOWNHILL",
+        "length": 120,
+        "grade": 0.06
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 40,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "UPHILL",
+        "length": 120,
+        "grade": 0.06
+      },
+      {
+        "type": "CURVE",
+        "radius": 40,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/canyon_chute/v1.glb"
+    }
+  },
+  {
+    "id": "v_dune_loop",
+    "version": 1,
+    "name": "Dune Loop",
+    "class": "STANDARD",
+    "surface": "SAND",
+    "description": "Classic oval with a hill on the back straight.",
+    "lanes": 10,
+    "lapLength": 562.74,
+    "lapsRange": [
+      6,
+      8
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 140
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      },
+      {
+        "type": "UPHILL",
+        "length": 60,
+        "grade": 0.08
+      },
+      {
+        "type": "DOWNHILL",
+        "length": 80,
+        "grade": 0.06
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/dune_loop/v1.glb"
+    }
+  },
+  {
+    "id": "v_riverside_oval",
+    "version": 1,
+    "name": "Riverside Oval",
+    "class": "STANDARD",
+    "surface": "GRASS",
+    "description": "Wide and balanced: the neutral venue.",
+    "lanes": 10,
+    "lapLength": 614.16,
+    "lapsRange": [
+      6,
+      8
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 150
+      },
+      {
+        "type": "CURVE",
+        "radius": 50,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 150
+      },
+      {
+        "type": "CURVE",
+        "radius": 50,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/riverside_oval/v1.glb"
+    }
+  },
+  {
+    "id": "v_mudflat_ring",
+    "version": 1,
+    "name": "Mudflat Ring",
+    "class": "STANDARD",
+    "surface": "MUD",
+    "description": "Heavy going that favours stamina.",
+    "lanes": 10,
+    "lapLength": 561.59,
+    "lapsRange": [
+      6,
+      8
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 130
+      },
+      {
+        "type": "CURVE",
+        "radius": 48,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 130
+      },
+      {
+        "type": "CURVE",
+        "radius": 48,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/mudflat_ring/v1.glb"
+    }
+  },
+  {
+    "id": "v_hairpin_hollow",
+    "version": 1,
+    "name": "Hairpin Hollow",
+    "class": "STANDARD",
+    "surface": "DIRT",
+    "description": "Long straights joined by tight hairpins.",
+    "lanes": 10,
+    "lapLength": 575.66,
+    "lapsRange": [
+      6,
+      8
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 225
+      },
+      {
+        "type": "CURVE",
+        "radius": 20,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 225
+      },
+      {
+        "type": "CURVE",
+        "radius": 20,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/hairpin_hollow/v1.glb"
+    }
+  },
+  {
+    "id": "v_summit_circuit",
+    "version": 1,
+    "name": "Summit Circuit",
+    "class": "ENDURANCE",
+    "surface": "DIRT",
+    "description": "Long climbs and descents every lap.",
+    "lanes": 10,
+    "lapLength": 531.33,
+    "lapsRange": [
+      12,
+      15
+    ],
+    "segments": [
+      {
+        "type": "UPHILL",
+        "length": 100,
+        "grade": 0.07
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 40
+      },
+      {
+        "type": "CURVE",
+        "radius": 40,
+        "angle": 180
+      },
+      {
+        "type": "DOWNHILL",
+        "length": 100,
+        "grade": 0.07
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 40
+      },
+      {
+        "type": "CURVE",
+        "radius": 40,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/summit_circuit/v1.glb"
+    }
+  },
+  {
+    "id": "v_glacier_grand",
+    "version": 1,
+    "name": "Glacier Grand",
+    "class": "ENDURANCE",
+    "surface": "ICE",
+    "description": "Long icy laps where consistency matters.",
+    "lanes": 10,
+    "lapLength": 539.91,
+    "lapsRange": [
+      12,
+      15
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 35,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 35,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/glacier_grand/v1.glb"
+    }
+  },
+  {
+    "id": "v_jungle_marathon",
+    "version": 1,
+    "name": "Jungle Marathon",
+    "class": "ENDURANCE",
+    "surface": "MUD",
+    "description": "Mixed terrain attrition race.",
+    "lanes": 10,
+    "lapLength": 568.5,
+    "lapsRange": [
+      12,
+      15
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 80
+      },
+      {
+        "type": "UPHILL",
+        "length": 50,
+        "grade": 0.05
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "DOWNHILL",
+        "length": 50,
+        "grade": 0.05
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 80
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      }
+    ],
+    "assets": {
+      "model": "venues/jungle_marathon/v1.glb"
+    }
+  },
+  {
+    "id": "v_coastal_classic",
+    "version": 1,
+    "name": "Coastal Classic",
+    "class": "ENDURANCE",
+    "surface": "SAND",
+    "description": "Long wind-swept sand straights.",
+    "lanes": 10,
+    "lapLength": 525.93,
+    "lapsRange": [
+      12,
+      15
+    ],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 175
+      },
+      {
+        "type": "CURVE",
+        "radius": 28,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 175
+      },
+      {
+        "type": "CURVE",
+        "radius": 28,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/coastal_classic/v1.glb"
+    }
+  }
+]

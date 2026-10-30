@@ -1,0 +1,490 @@
+syntax = "proto3";
+
+package ars.v1;
+
+message Envelope {
+  string event_id = 1;
+  string type = 2;
+  uint32 version = 3;
+  string occurred_at = 4;
+  oneof payload {
+    RaceScheduled race_scheduled = 10;
+    RaceOpened race_opened = 11;
+    RaceLocked race_locked = 12;
+    RaceStarted race_started = 13;
+    ScriptSealed script_sealed = 14;
+    ScriptFailed script_failed = 15;
+    RaceFinished race_finished = 16;
+    RaceSettled race_settled = 17;
+    RaceCancelled race_cancelled = 18;
+
+    GenerateScript generate_script = 20;
+    ScheduleRace schedule_race = 21;
+    CancelRace cancel_race = 22;
+    MarketCommand market_command = 23;
+
+    RaceTick race_tick = 30;
+    LapCompleted lap_completed = 31;
+
+    MarketOpened market_opened = 40;
+    PriceUpdated price_updated = 41;
+    MarketSuspended market_suspended = 42;
+    MarketResumed market_resumed = 43;
+    MarketClosed market_closed = 44;
+    MarketResulted market_resulted = 45;
+    MarketVoided market_voided = 46;
+
+    BetRequested bet_requested = 50;
+    ComboRequested combo_requested = 51;
+    CashOutRequested cash_out_requested = 52;
+
+    BetAccepted bet_accepted = 60;
+    BetRejected bet_rejected = 61;
+    LegSettled leg_settled = 62;
+    BetSettled bet_settled = 63;
+    BetCashedOut bet_cashed_out = 64;
+    CashOutRejected cash_out_rejected = 65;
+
+    LedgerEntryAppended ledger_entry_appended = 70;
+
+    AnimalRecruited animal_recruited = 80;
+    AnimalAged animal_aged = 81;
+    AnimalRetired animal_retired = 82;
+
+    SeasonStarted season_started = 90;
+    SeasonEnding season_ending = 91;
+    SeasonEnded season_ended = 92;
+    LeaderboardMoved leaderboard_moved = 93;
+
+    NotificationCreated notification_created = 100;
+
+    AdminAudit admin_audit = 110;
+  }
+}
+
+message Stats {
+  double velocity = 1;
+  double stamina = 2;
+  double acceleration = 3;
+  double consistency = 4;
+}
+
+message EntrantInfo {
+  string entrant_id = 1;
+  int64 animal_id = 2;
+  uint32 lane = 3;
+  string temperament = 4;
+  Stats stats = 5;
+  string name = 6;
+}
+
+message RaceScheduled {
+  int64 race_id = 1;
+  int64 season_id = 2;
+  string species = 3;
+  string race_class = 4;
+  string venue_id = 5;
+  uint32 venue_version = 6;
+  string engine_version = 7;
+  string start_at = 8;
+  uint32 laps = 9;
+  uint32 estimated_duration_sec = 10;
+  uint32 tick_ms = 11;
+  repeated EntrantInfo entrants = 12;
+  string seed_hash = 13;
+  string script_hash = 14;
+}
+
+message RaceOpened {
+  int64 race_id = 1;
+}
+
+message RaceLocked {
+  int64 race_id = 1;
+}
+
+message RaceStarted {
+  int64 race_id = 1;
+  string started_at = 2;
+}
+
+message ScriptSealed {
+  int64 race_id = 1;
+  string engine_version = 2;
+  string seed_hash = 3;
+  string script_hash = 4;
+}
+
+message ScriptFailed {
+  int64 race_id = 1;
+  string reason = 2;
+}
+
+message Incident {
+  uint32 seq = 1;
+  uint32 tick = 2;
+  string type = 3;
+  optional string entrant_id = 4;
+  string data_json = 5;
+}
+
+message EntrantResult {
+  string entrant_id = 1;
+  uint32 official_position = 2;
+  uint32 as_run_position = 3;
+  string result_status = 4;
+  optional int64 finish_time_ms = 5;
+  double distance_covered = 6;
+  repeated uint32 laps_led = 7;
+}
+
+message LapLeader {
+  uint32 lap = 1;
+  string entrant_id = 2;
+  uint32 tick = 3;
+}
+
+message RaceFinished {
+  int64 race_id = 1;
+  uint32 finish_tick = 2;
+  repeated string order = 3;
+  repeated string as_run = 4;
+  repeated Incident incidents = 5;
+  string seed = 6;
+  repeated EntrantResult results = 7;
+  repeated LapLeader lap_leaders = 8;
+  string finished_at = 9;
+}
+
+message RaceSettled {
+  int64 race_id = 1;
+}
+
+message RaceCancelled {
+  int64 race_id = 1;
+  string reason = 2;
+}
+
+message GenerateScript {
+  int64 race_id = 1;
+  string engine_version = 2;
+  string venue_id = 3;
+  uint32 venue_version = 4;
+  uint32 laps = 5;
+  repeated EntrantInfo entrants = 6;
+  string species = 7;
+}
+
+message ScheduleRace {
+  int64 race_id = 1;
+  string start_at = 2;
+  string species = 3;
+  string race_class = 4;
+  optional string venue_id = 5;
+  optional uint32 field_size = 6;
+  int64 admin_user_id = 7;
+}
+
+message CancelRace {
+  int64 race_id = 1;
+  string reason = 2;
+  int64 admin_user_id = 3;
+}
+
+message MarketCommand {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  string action = 3;
+  string reason = 4;
+  int64 admin_user_id = 5;
+}
+
+message TickEntrant {
+  string id = 1;
+  double dist = 2;
+  double lane = 3;
+  double speed = 4;
+  double stamina_pct = 5;
+  string state = 6;
+  uint32 pos = 7;
+}
+
+message TickEvent {
+  string type = 1;
+  optional string id = 2;
+  optional string a = 3;
+  optional string b = 4;
+  optional uint32 lap = 5;
+  optional uint32 pos = 6;
+}
+
+message RaceTick {
+  int64 race_id = 1;
+  uint32 tick = 2;
+  uint32 lap = 3;
+  repeated TickEntrant entrants = 4;
+  repeated TickEvent events = 5;
+}
+
+message LapCompleted {
+  int64 race_id = 1;
+  uint32 tick = 2;
+  uint32 lap = 3;
+  string leader_entrant_id = 4;
+  repeated string standings = 5;
+}
+
+message SelectionPrice {
+  int64 selection_id = 1;
+  string entrant_id = 2;
+  double price = 3;
+  double probability = 4;
+}
+
+message MarketOpened {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  string type = 3;
+  map<string, int32> params = 4;
+  repeated SelectionPrice selections = 5;
+  uint32 price_version = 6;
+  optional uint32 closes_at_lap = 7;
+}
+
+message PriceUpdated {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  uint32 tick = 3;
+  uint32 price_version = 4;
+  repeated SelectionPrice selections = 5;
+}
+
+message MarketSuspended {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  uint32 tick = 3;
+  string reason = 4;
+}
+
+message MarketResumed {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  uint32 tick = 3;
+  uint32 price_version = 4;
+}
+
+message MarketClosed {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  uint32 tick = 3;
+}
+
+message MarketResulted {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  repeated int64 winning = 3;
+  repeated string order = 4;
+}
+
+message MarketVoided {
+  int64 market_id = 1;
+  int64 race_id = 2;
+  string reason = 3;
+}
+
+message BetSelection {
+  optional string entrant_id = 1;
+  repeated string order = 2;
+}
+
+message BetRequested {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  int64 market_id = 3;
+  BetSelection selection = 4;
+  int64 stake = 5;
+  double accepted_price = 6;
+  uint32 price_version = 7;
+  string accept_price_changes = 8;
+  optional uint32 requested_at_tick = 9;
+  optional uint32 accept_at_tick = 10;
+  int64 race_id = 11;
+  int64 season_id = 12;
+  int64 accept_at_ms = 13;
+}
+
+message ComboLeg {
+  uint32 leg_no = 1;
+  int64 market_id = 2;
+  int64 race_id = 3;
+  BetSelection selection = 4;
+  double accepted_price = 5;
+  uint32 price_version = 6;
+}
+
+message ComboRequested {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  repeated ComboLeg legs = 3;
+  int64 stake = 4;
+  string accept_price_changes = 5;
+  optional uint32 accept_at_tick = 6;
+  int64 season_id = 7;
+  int64 accept_at_ms = 8;
+}
+
+message CashOutRequested {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  string quote_id = 3;
+  int64 min_amount = 4;
+  optional uint32 requested_at_tick = 5;
+  optional uint32 accept_at_tick = 6;
+  int64 cashout_id = 7;
+  int64 accept_at_ms = 8;
+}
+
+message BetAccepted {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  int64 market_id = 3;
+  int64 race_id = 4;
+  BetSelection selection = 5;
+  int64 stake = 6;
+  double locked_price = 7;
+  string bet_type = 8;
+  repeated int64 race_ids = 9;
+  int64 season_id = 10;
+}
+
+message BetRejected {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  string reason = 3;
+}
+
+message LegSettled {
+  int64 bet_id = 1;
+  uint32 leg_no = 2;
+  int64 market_id = 3;
+  string outcome = 4;
+  int64 user_id = 5;
+}
+
+message BetSettled {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  string outcome = 3;
+  int64 payout = 4;
+  int64 stake = 5;
+  int64 season_id = 6;
+  string bet_type = 7;
+}
+
+message BetCashedOut {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  int64 amount = 3;
+  optional uint32 tick = 4;
+  int64 stake = 5;
+  int64 season_id = 6;
+}
+
+message CashOutRejected {
+  int64 bet_id = 1;
+  int64 user_id = 2;
+  string reason = 3;
+  int64 cashout_id = 4;
+}
+
+message LedgerEntryAppended {
+  int64 entry_id = 1;
+  int64 user_id = 2;
+  int64 season_id = 3;
+  string type = 4;
+  int64 amount = 5;
+  string ref_id = 6;
+  int64 balance_after = 7;
+  int64 open_stake_after = 8;
+}
+
+message CareerStats {
+  uint32 races = 1;
+  uint32 wins = 2;
+  uint32 podiums = 3;
+}
+
+message AnimalRecruited {
+  int64 animal_id = 1;
+  string species = 2;
+  string name = 3;
+  Stats base = 4;
+  string temperament = 5;
+}
+
+message AnimalAged {
+  int64 animal_id = 1;
+  uint32 age_weeks = 2;
+  string life_stage = 3;
+  Stats current = 4;
+  uint32 career_day = 5;
+}
+
+message AnimalRetired {
+  int64 animal_id = 1;
+  string reason = 2;
+  CareerStats career_stats = 3;
+}
+
+message SeasonStarted {
+  int64 season_id = 1;
+  string starts_at = 2;
+  string ends_at = 3;
+  int64 starting_grant = 4;
+  string name = 5;
+}
+
+message SeasonEnding {
+  int64 season_id = 1;
+  string ends_at = 2;
+}
+
+message SeasonStanding {
+  int64 user_id = 1;
+  uint32 rank = 2;
+  double score = 3;
+}
+
+message SeasonEnded {
+  int64 season_id = 1;
+  repeated SeasonStanding top = 2;
+}
+
+message LeaderboardMoved {
+  int64 season_id = 1;
+  int64 user_id = 2;
+  string board = 3;
+  uint32 from_rank = 4;
+  uint32 to_rank = 5;
+  uint32 threshold = 6;
+  bool entered = 7;
+}
+
+message NotificationCreated {
+  int64 user_id = 1;
+  int64 notification_id = 2;
+  string type = 3;
+  string payload_json = 4;
+  string created_at = 5;
+}
+
+message AdminAudit {
+  int64 audit_id = 1;
+  int64 admin_user_id = 2;
+  string action = 3;
+  string target_type = 4;
+  string target_id = 5;
+  string before_json = 6;
+  string after_json = 7;
+  string reason = 8;
+}
