@@ -127,6 +127,7 @@ export function RacePage({ id }: { id: string }) {
   const entrants = race.entrants ?? [];
   const winMarket = state.markets.find((m) => m.type === 'FINISH_POSITION' && m.params.position === 1);
   const racesForBets: Record<string, Race> = { ...otherRaces, [race.id]: race };
+  const visibleBets = state.myBets.filter((bet) => bet.status !== 'REJECTED');
   const replayAvailable = finished;
 
   return (
@@ -186,11 +187,11 @@ export function RacePage({ id }: { id: string }) {
             </div>
             {session.status !== 'authed' ? (
               <div className="small muted">Sign in to bet with your season points.</div>
-            ) : state.myBets.length === 0 ? (
+            ) : visibleBets.length === 0 ? (
               <div className="small muted">No bets on this race yet. Pick a price to get started.</div>
             ) : (
               <div className="stack" style={{ gap: 8 }}>
-                {state.myBets.map((bet) => (
+                {visibleBets.map((bet) => (
                   <BetCard key={bet.id} bet={bet} races={racesForBets} focusRaceId={race.id} live={state.cashouts[bet.id]} cashout="live" />
                 ))}
               </div>
