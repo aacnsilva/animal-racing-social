@@ -1,0 +1,336 @@
+openapi: 3.1.0
+info:
+  title: "Animal Racing Social: Racing & Betting API"
+  version: 0.1.0
+  description: "Fictional points only. See betting-design.md for semantics."
+servers:
+  - url: /v1
+security:
+  - bearerAuth: []
+
+paths:
+  /races:
+    get:
+      summary: List races
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/RaceStatus' } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RacePage' } } } }
+  /races/{raceId}:
+    get:
+      summary: Race detail with entrants
+      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Race' } } } }
+  /races/{raceId}/ticks:
+    get:
+      summary: Revealed ticks only (catch-up / replay)
+      parameters:
+        - { $ref: '#/components/parameters/RaceId' }
+        - { name: fromTick, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RaceTick' } } } } }
+  /races/{raceId}/script:
+    get:
+      summary: Full script + seed (only after FINISHED)
+      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      responses:
+        '200': { description: OK }
+        '409': { $ref: '#/components/responses/Error' }
+  /races/{raceId}/markets:
+    get:
+      summary: Markets for a race
+      parameters:
+        - { $ref: '#/components/parameters/RaceId' }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/MarketStatus' } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Market' } } } } }
+  /races/{raceId}/stream:
+    get:
+      summary: SSE stream (ticks, market events, own bet/cashout updates)
+      description: |
+        Event names: race.tick, race.lap, race.lifecycle, market.opened, market.price,
+        market.suspended, market.resumed, market.closed, market.resulted,
+        bet.updated, cashout.updated, wallet.updated.
+      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      responses:
+        '200': { description: text/event-stream, content: { text/event-stream: {} } }
+
+  /markets/{marketId}:
+    get:
+      parameters: [ { $ref: '#/components/parameters/MarketId' } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Market' } } } }
+  /markets/{marketId}/quotes:
+    post:
+      summary: Price a combination selection (TRICAST)
+      parameters: [ { $ref: '#/components/parameters/MarketId' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Selection' } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Quote' } } } }
+  /markets/{marketId}/bets:
+    post:
+      summary: Place a bet (async acceptance)
+      parameters:
+        - { $ref: '#/components/parameters/MarketId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlaceBet' } } }
+      responses:
+        '202': { description: Pending, content: { application/json: { schema: { $ref: '#/components/schemas/Bet' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  /bets/{betId}:
+    get:
+      parameters: [ { $ref: '#/components/parameters/BetId' } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Bet' } } } }
+  /bets/{betId}/cashout:
+    get:
+      summary: Current full cash-out quote
+      parameters: [ { $ref: '#/components/parameters/BetId' } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CashOutQuote' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+    post:
+      summary: Request full cash-out (async acceptance)
+      parameters:
+        - { $ref: '#/components/parameters/BetId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quoteId, minAmount]
+              properties:
+                quoteId: { type: string }
+                minAmount: { type: integer, minimum: 0 }
+      responses:
+        '202': { description: Pending, content: { application/json: { schema: { $ref: '#/components/schemas/Bet' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /me/bets:
+    get:
+      parameters:
+        - { name: raceId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/BetStatus' } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200': { description: OK }
+  /me/wallet:
+    get:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance: { type: integer }
+                  inOpenBets: { type: integer }
+  /me/wallet/ledger:
+    get:
+      parameters: [ { $ref: '#/components/parameters/Cursor' } ]
+      responses:
+        '200': { description: OK }
+
+  /animals:
+    get:
+      parameters:
+        - { name: species, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, RETIRED] } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200': { description: OK }
+  /animals/{animalId}:
+    get:
+      parameters: [ { name: animalId, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Animal' } } } }
+  /animals/{animalId}/history:
+    get:
+      parameters:
+        - { name: animalId, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RaceResult' } } } } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  parameters:
+    RaceId: { name: raceId, in: path, required: true, schema: { type: string } }
+    MarketId: { name: marketId, in: path, required: true, schema: { type: string } }
+    BetId: { name: betId, in: path, required: true, schema: { type: string } }
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: string
+                enum: [BETTING_CLOSED, MARKET_SUSPENDED, PRICE_CHANGED, INSUFFICIENT_FUNDS,
+                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED]
+              message: { type: string }
+  schemas:
+    RaceStatus: { type: string, enum: [SCHEDULED, OPEN, LIVE, FINISHED, SETTLED, CANCELLED] }
+    MarketStatus: { type: string, enum: [OPEN, SUSPENDED, CLOSED, RESULTED] }
+    MarketType: { type: string, enum: [FINISH_POSITION, TOP_N, TRICAST, LEADER_AT_LAP] }
+    BetStatus: { type: string, enum: [PENDING, ACCEPTED, REJECTED, WON, LOST, VOID, CASHED_OUT] }
+    Stats:
+      type: object
+      properties:
+        velocity: { type: number }
+        stamina: { type: number }
+        acceleration: { type: number }
+        consistency: { type: number }
+    Animal:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        species: { type: string }
+        status: { type: string, enum: [ACTIVE, RETIRED] }
+        ageRaces: { type: integer }
+        lifeStage: { type: string, enum: [ROOKIE, PRIME, VETERAN] }
+        base: { $ref: '#/components/schemas/Stats' }
+        current: { $ref: '#/components/schemas/Stats' }
+        form:
+          type: object
+          properties:
+            last5: { type: array, items: { type: integer } }
+            races: { type: integer }
+            wins: { type: integer }
+            podiums: { type: integer }
+    RaceResult:
+      type: object
+      properties:
+        raceId: { type: string }
+        finishedAt: { type: string, format: date-time }
+        class: { type: string }
+        position: { type: integer }
+        timeSec: { type: number }
+        lapsLed: { type: array, items: { type: integer } }
+        statsSnapshot: { $ref: '#/components/schemas/Stats' }
+    Entrant:
+      type: object
+      properties:
+        entrantId: { type: string }
+        animal: { $ref: '#/components/schemas/Animal' }
+        lane: { type: integer }
+        statsSnapshot: { $ref: '#/components/schemas/Stats' }
+    Race:
+      type: object
+      properties:
+        id: { type: string }
+        status: { $ref: '#/components/schemas/RaceStatus' }
+        class: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] }
+        startAt: { type: string, format: date-time }
+        laps: { type: integer }
+        trackLength: { type: number }
+        estimatedDurationSec: { type: integer }
+        tickMs: { type: integer, example: 500 }
+        currentTick: { type: integer }
+        currentLap: { type: integer }
+        seedHash: { type: string }
+        scriptHash: { type: string }
+        entrants: { type: array, items: { $ref: '#/components/schemas/Entrant' } }
+        result: { type: array, items: { type: string }, description: entrantIds in finish order }
+    RacePage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Race' } }
+        nextCursor: { type: string }
+    RaceTick:
+      type: object
+      properties:
+        tick: { type: integer }
+        lap: { type: integer }
+        entrants:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              dist: { type: number }
+              lane: { type: number }
+              speed: { type: number }
+              staminaPct: { type: number }
+              state: { type: string, enum: [RUNNING, SPRINTING, TIRED, STUMBLED, FINISHED] }
+        events: { type: array, items: { type: object } }
+    Market:
+      type: object
+      properties:
+        id: { type: string }
+        raceId: { type: string }
+        type: { $ref: '#/components/schemas/MarketType' }
+        params: { type: object, example: { lap: 5 } }
+        status: { $ref: '#/components/schemas/MarketStatus' }
+        closesAtLap: { type: integer }
+        priceVersion: { type: integer }
+        selections:
+          type: array
+          items:
+            type: object
+            properties:
+              selectionId: { type: string }
+              entrantId: { type: string }
+              price: { type: number }
+              probability: { type: number }
+    Selection:
+      oneOf:
+        - type: object
+          required: [entrantId]
+          properties: { entrantId: { type: string } }
+        - type: object
+          required: [order]
+          properties: { order: { type: array, minItems: 3, maxItems: 3, items: { type: string } } }
+    Quote:
+      type: object
+      properties:
+        price: { type: number }
+        priceVersion: { type: integer }
+    PlaceBet:
+      type: object
+      required: [selection, stake, acceptedPrice, priceVersion]
+      properties:
+        selection: { $ref: '#/components/schemas/Selection' }
+        stake: { type: integer, minimum: 1 }
+        acceptedPrice: { type: number }
+        priceVersion: { type: integer }
+        acceptPriceChanges: { type: string, enum: [NONE, BETTER, ANY], default: NONE }
+    Bet:
+      type: object
+      properties:
+        id: { type: string }
+        marketId: { type: string }
+        raceId: { type: string }
+        selection: { $ref: '#/components/schemas/Selection' }
+        stake: { type: integer }
+        lockedPrice: { type: number }
+        status: { $ref: '#/components/schemas/BetStatus' }
+        rejectReason: { type: string }
+        payout: { type: integer }
+        cashOutAmount: { type: integer }
+        placedAtTick: { type: integer }
+    CashOutQuote:
+      type: object
+      properties:
+        quoteId: { type: string }
+        amount: { type: integer }
+        priceVersion: { type: integer }
+        expiresAtTick: { type: integer }
