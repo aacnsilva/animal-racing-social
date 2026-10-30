@@ -112,6 +112,27 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '422': { $ref: '#/components/responses/Error' }
 
+  /bets/combos:
+    post:
+      summary: Place a combo (multi-race accumulator) bet
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PlaceCombo' } } }
+      responses:
+        '202': { description: Pending, content: { application/json: { schema: { $ref: '#/components/schemas/Bet' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+  /bets/combos/quote:
+    post:
+      summary: Price a combo without placing it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { legs: { type: array, items: { $ref: '#/components/schemas/ComboLegInput' } } } }
+      responses:
+        '200': { description: OK }
   /bets/{betId}:
     get:
       parameters: [ { $ref: '#/components/parameters/BetId' } ]
@@ -241,7 +262,7 @@ components:
               code:
                 type: string
                 enum: [BETTING_CLOSED, MARKET_SUSPENDED, PRICE_CHANGED, INSUFFICIENT_FUNDS,
-                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED, REPLAY_EXPIRED, ALREADY_CLAIMED, RATE_LIMITED]
+                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED, REPLAY_EXPIRED, ALREADY_CLAIMED, RATE_LIMITED, COMBO_SAME_RACE, COMBO_TOO_MANY_LEGS, COMBO_CROSS_SEASON]
               message: { type: string }
   schemas:
     Venue:
@@ -413,15 +434,38 @@ components:
         acceptedPrice: { type: number }
         priceVersion: { type: integer }
         acceptPriceChanges: { type: string, enum: [NONE, BETTER, ANY], default: NONE }
+    ComboLegInput:
+      type: object
+      required: [marketId, selection, acceptedPrice, priceVersion]
+      properties:
+        marketId: { type: string }
+        selection: { $ref: '#/components/schemas/Selection' }
+        acceptedPrice: { type: number }
+        priceVersion: { type: integer }
+    PlaceCombo:
+      type: object
+      required: [legs, stake]
+      properties:
+        legs: { type: array, minItems: 2, items: { $ref: '#/components/schemas/ComboLegInput' }, description: "One leg per race, same season; max COMBO_MAX_LEGS" }
+        stake: { type: integer, minimum: 1 }
+        acceptPriceChanges: { type: string, enum: [NONE, BETTER, ANY], default: NONE }
+    BetLeg:
+      type: object
+      properties:
+        legId: { type: string }
+        marketId: { type: string }
+        raceId: { type: string }
+        selection: { $ref: '#/components/schemas/Selection' }
+        lockedPrice: { type: number }
+        status: { type: string, enum: [OPEN, WON, LOST, VOID] }
     Bet:
       type: object
       properties:
         id: { type: string }
-        marketId: { type: string }
-        raceId: { type: string }
-        selection: { $ref: '#/components/schemas/Selection' }
+        type: { type: string, enum: [SINGLE, COMBO] }
+        legs: { type: array, items: { $ref: '#/components/schemas/BetLeg' } }
         stake: { type: integer }
-        lockedPrice: { type: number }
+        lockedPrice: { type: number, description: "Product of leg prices for COMBO" }
         status: { $ref: '#/components/schemas/BetStatus' }
         rejectReason: { type: string }
         payout: { type: integer }

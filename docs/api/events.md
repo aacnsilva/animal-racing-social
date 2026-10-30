@@ -58,6 +58,7 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 
 | Type | Payload |
 |---|---|
+| `ComboRequested` | `betId, userId, legs[{marketId, selection, acceptedPrice, priceVersion}], stake, acceptPriceChanges, acceptAtTick?` (key betId) |
 | `BetRequested` | `betId, userId, marketId, selection, stake, acceptedPrice, priceVersion, acceptPriceChanges, requestedAtTick, acceptAtTick` |
 | `CashOutRequested` | `betId, userId, quoteId, minAmount, requestedAtTick, acceptAtTick` |
 
@@ -67,6 +68,7 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 |---|---|
 | `BetAccepted` | `betId, userId, marketId, raceId, selection, stake, lockedPrice` |
 | `BetRejected` | `betId, userId, reason: PRICE_CHANGED\|MARKET_SUSPENDED\|MARKET_CLOSED\|INSUFFICIENT_FUNDS` |
+| `LegSettled` | `betId, legId, marketId, outcome: WON\|LOST\|VOID` (key betId) |
 | `BetSettled` | `betId, userId, outcome: WON\|LOST\|VOID, payout` |
 | `BetCashedOut` | `betId, userId, amount, tick` |
 | `CashOutRejected` | `betId, userId, reason: BELOW_MIN\|MARKET_SUSPENDED\|ALREADY_SETTLED\|QUOTE_EXPIRED` |

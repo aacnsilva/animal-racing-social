@@ -273,6 +273,61 @@ POST /v1/markets/{marketId}/bets   Idempotency-Key: <uuid>
 
 Bet states: `PENDING → ACCEPTED → (WON | LOST | VOID | CASHED_OUT)` or `PENDING → REJECTED`.
 
+## 6a. Combo bets (multi-race accumulators)
+
+One bet with **2–N legs, each on a different race**. It wins only if every
+leg wins; the price is the product of the leg prices, so the payout grows with
+the risk.
+
+```
+POST /v1/bets/combos   Idempotency-Key: <uuid>
+{ "legs": [
+    { "marketId": "m_r1_win", "selection": { "entrantId": "e3" }, "acceptedPrice": 3.10, "priceVersion": 12 },
+    { "marketId": "m_r2_top3", "selection": { "entrantId": "e7" }, "acceptedPrice": 1.80, "priceVersion": 40 }
+  ],
+  "stake": 200,
+  "acceptPriceChanges": "NONE" }
+→ 202 { betId, type: "COMBO", status: "PENDING", combinedPrice: 5.58 }
+
+POST /v1/bets/combos/quote  { legs[] }   → { combinedPrice, legs[{price, priceVersion}] }
+```
+
+Rules:
+
+- **Legs** (2 to `COMBO_MAX_LEGS`, config) must be on **different races** in the
+  **same season**. Any market type is allowed, including tricast and
+  live markets.
+- **Price** = `Π leg.lockedPrice`, locked at acceptance. No extra bonus or
+  penalty in v1.
+- **Acceptance**: if every leg is pre-race, it's accepted immediately. If any leg
+  is in-running, the whole combo waits the live acceptance delay, and every
+  leg is re-checked against its current `priceVersion` and the
+  `acceptPriceChanges` policy. One rejected leg rejects the combo.
+- **Settlement** per leg, as each market results:
+  - leg LOST → combo LOST immediately (remaining legs are not needed);
+  - leg WON → continue;
+  - leg VOID (race cancelled) → leg price becomes 1.00, combo continues
+    (a combo left with a single leg settles like a single);
+  - all legs WON → payout `stake × Π lockedPrice` (void legs = 1.00).
+- **Cash-out** (full only), while not lost:
+  `fair = stake × Π lockedPrice × Π pNow(unsettled legs)`, minus the cash-out
+  margin. `pNow` for a race not yet started is its current pre-race probability.
+  Quotes expire on the next reprice of **any** unsettled leg.
+- **Leaderboards**: a combo counts as one settled bet.
+
+Implementation:
+
+- A combo spans partitions, so it doesn't use the race-keyed bet pipeline.
+  `bet.commands` for combos are keyed by `betId`; the acceptance worker
+  reads leg prices from the Redis price cache (`price:{marketId}` →
+  `{version, selections}`), which the Odds Engine updates alongside
+  `PriceUpdated`.
+- Settlement emits `LegSettled{betId, legId, outcome}` (key `betId`); a
+  **Combo Aggregator** consumer folds legs into `BetSettled`. That's a small
+  saga, and a nice showcase for the event-driven part of the portfolio.
+- Data model: every bet has `legs[]`; a single is a bet with one leg
+  (`type: SINGLE | COMBO`), so history, cash-out and the ledger share one path.
+
 ## 7. Cash-out (full only)
 
 Value of an accepted, unsettled bet:
