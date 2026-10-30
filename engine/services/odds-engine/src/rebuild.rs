@@ -82,6 +82,20 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
         selections.entry(market_id).or_default().push((row.get(0), ars_infra::ids::entrant_wire_id(entrant)));
     }
     drop(conn);
+    let mut cached_versions: HashMap<i64, u32> = HashMap::new();
+    if !market_ids.is_empty() {
+        let mut pipe = redis::pipe();
+        for market_id in &market_ids {
+            pipe.hget(format!("price:{market_id}"), "version");
+        }
+        let mut redis = app.redis.clone();
+        let versions: Vec<Option<u32>> = pipe.query_async(&mut redis).await.context("load cached price versions")?;
+        for (market_id, version) in market_ids.iter().zip(versions) {
+            if let Some(version) = version {
+                cached_versions.insert(*market_id, version);
+            }
+        }
+    }
     let mut registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
     for row in &races {
         let race_id: i64 = row.get(0);
@@ -116,7 +130,7 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
                 kind,
                 status: if status == "SUSPENDED" { MarketStatus::Suspended } else { MarketStatus::Open },
                 selections: selections.remove(&market_id).unwrap_or_default(),
-                price_version: row.get::<_, i32>(5).max(0) as u32,
+                price_version: (row.get::<_, i32>(5).max(0) as u32).max(cached_versions.get(&market_id).copied().unwrap_or(0)),
             },
         );
         market_count += 1;
