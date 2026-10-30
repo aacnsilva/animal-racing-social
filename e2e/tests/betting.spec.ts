@@ -25,8 +25,10 @@ test('quotes and places a tricast', async ({ page }) => {
   }
   await builder.getByTestId('tricast-quote').click();
   await expect(builder.getByTestId('tricast-price')).toHaveText(/\d+\.\d{2}/);
-  await builder.getByTestId('stake-input').fill('25');
   await builder.getByTestId('tricast-place').click();
+  const slip = page.getByTestId('bet-slip');
+  await slip.getByTestId('stake-input').fill('25');
+  await slip.getByTestId('place-bet').click();
   await expect(page.locator('[data-testid="my-bet"][data-bet-status="ACCEPTED"]')).toHaveCount(1);
   await expect.poll(() => headerBalance(page)).toBe(9975);
 });

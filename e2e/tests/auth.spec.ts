@@ -9,9 +9,9 @@ test('signs in with the Google provider and gets the season grant', async ({ pag
 
 test('signs in with the GitHub provider', async ({ page }) => {
   await signIn(page, { provider: 'github', name: 'Gil Hub' });
-  await page.getByTestId('user-menu').click();
   await page.goto('/me');
-  await expect(page.getByText(/github/i).first()).toBeVisible();
+  await expect(page.locator('[data-provider="github"]')).toHaveAttribute('data-linked', 'true');
+  await expect(page.locator('[data-provider="google"]')).toHaveAttribute('data-linked', 'false');
 });
 
 test('claims the daily reward once per day', async ({ page }) => {
@@ -30,7 +30,6 @@ test('keeps the session across reloads and signs out', async ({ page }) => {
   const { name } = await signIn(page, { subject: uniqueSubject('reload') });
   await page.reload();
   await expect(page.getByTestId('user-menu')).toContainText(name);
-  await page.getByTestId('user-menu').click();
   await page.getByTestId('logout').click();
   await expect(page.getByTestId('login-google')).toBeVisible();
   await page.reload();

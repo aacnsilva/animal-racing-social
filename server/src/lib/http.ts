@@ -164,7 +164,7 @@ export function serve(router: Router, port: number): Server {
       setCookies: [],
     };
     try {
-      const route = router.match(method, url.pathname);
+      const route = router.match(method === 'HEAD' ? 'GET' : method, url.pathname);
       if (!route) throw new ApiError(404, 'NOT_FOUND', `No route for ${method} ${url.pathname}`);
       ctx.params = route.params;
       for (const middleware of router.middlewares) await middleware(ctx);

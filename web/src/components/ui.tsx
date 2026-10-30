@@ -104,8 +104,8 @@ export function Empty({ children }: { children: ReactNode }) {
 
 export function Switch({ checked, onChange, disabled, label }: { checked: boolean; onChange: (value: boolean) => void; disabled?: boolean; label?: string }) {
   return (
-    <label className="switch" aria-label={label}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+    <label className="switch">
+      <input type="checkbox" aria-label={label} checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <i />
     </label>
   );

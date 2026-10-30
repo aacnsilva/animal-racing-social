@@ -4,19 +4,19 @@ import { signIn } from './support.ts';
 test('browses animals and an animal profile', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('nav-animals').click();
-  const first = page.locator('a[href^="/animals/"]').first();
+  const first = page.getByTestId('animal-card').first();
   await expect(first).toBeVisible();
-  const name = (await first.textContent())!.trim();
+  const animalId = await first.getAttribute('data-animal-id');
   await first.click();
-  await expect(page.getByRole('heading', { name })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/animals/${animalId}$`));
   await expect(page.getByText(/velocity/i).first()).toBeVisible();
 });
 
 test('lists the 12 venues and shows a track map', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('nav-venues').click();
-  await expect(page.locator('a[href^="/venues/"]')).toHaveCount(12);
-  await page.locator('a[href="/venues/v_dune_loop"]').first().click();
+  await expect(page.getByTestId('venue-card')).toHaveCount(12);
+  await page.locator('[data-testid="venue-card"][data-venue-id="v_dune_loop"]').click();
   await expect(page.getByRole('heading', { name: 'Dune Loop' })).toBeVisible();
   await expect(page.locator('svg path').first()).toBeVisible();
 });

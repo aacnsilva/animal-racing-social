@@ -150,15 +150,20 @@ export class MarketManager {
     this.races.delete(raceId);
   }
 
+  async raceStatus(client: Client, raceId: string): Promise<string | null> {
+    return (await one(client, 'SELECT status FROM racing.races WHERE race_id = $1', [raceId]))?.status ?? null;
+  }
+
   async onLocked(raceId: string): Promise<void> {
     await tx(this.pool, async (client) => {
+      const started = (await this.raceStatus(client, raceId)) !== 'LOCKED';
       const open = await many(client, `SELECT * FROM market.markets WHERE race_id = $1 AND status = 'OPEN' FOR UPDATE`, [raceId]);
       for (const market of open) {
         await this.snapshot(client, market.market_id, 'AT_LOCK');
         if (market.closes_rule?.at === 'LOCK') {
           await client.query(`UPDATE market.markets SET status = 'CLOSED', closed_at = now() WHERE market_id = $1`, [market.market_id]);
           await this.publishMarket(client, raceId, market.market_id, { tick: 0 }, 'marketClosed');
-        } else {
+        } else if (!started) {
           await client.query(`UPDATE market.markets SET status = 'SUSPENDED', suspend_reason = 'LOCK' WHERE market_id = $1`, [market.market_id]);
           await this.publishMarket(client, raceId, market.market_id, { tick: 0, reason: 'LOCK' }, 'marketSuspended');
         }
@@ -175,8 +180,14 @@ export class MarketManager {
         const price = await readPrice(this.runtime.redis, client, market.market_id);
         await this.publishMarket(client, raceId, market.market_id, { tick: 0, priceVersion: price?.version ?? market.price_version }, 'marketResumed');
       }
-      const pending = await many(client, `SELECT market_id FROM market.markets WHERE race_id = $1 AND status = 'PENDING' AND opens_rule->>'at' = 'START' FOR UPDATE`, [raceId]);
-      for (const market of pending) await this.openMarket(client, raceId, market.market_id);
+      const pending = await many(client, `SELECT market_id, closes_rule FROM market.markets WHERE race_id = $1 AND status = 'PENDING' FOR UPDATE`, [raceId]);
+      for (const market of pending) {
+        if (market.closes_rule?.at === 'LOCK') {
+          await client.query(`UPDATE market.markets SET status = 'CLOSED', closed_at = now() WHERE market_id = $1`, [market.market_id]);
+        } else {
+          await this.openMarket(client, raceId, market.market_id);
+        }
+      }
       const open = await many(client, `SELECT market_id FROM market.markets WHERE race_id = $1 AND status = 'OPEN'`, [raceId]);
       for (const market of open) await this.snapshot(client, market.market_id, 'AT_START');
     });

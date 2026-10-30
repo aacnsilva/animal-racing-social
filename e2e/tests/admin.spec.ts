@@ -5,7 +5,7 @@ test('hides the admin area from regular users', async ({ page }) => {
   await signIn(page);
   await expect(page.getByTestId('nav-admin')).toHaveCount(0);
   await page.goto('/admin');
-  await expect(page.getByText(/admin role required|not allowed|forbidden/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
 });
 
 test('admin schedules a one-off race from the admin page', async ({ page }) => {

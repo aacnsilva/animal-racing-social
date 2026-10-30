@@ -23,6 +23,7 @@ impl Producer {
             .set("bootstrap.servers", brokers)
             .set("client.id", client_id)
             .set("acks", "all")
+            .set("partitioner", "murmur2_random")
             .set("enable.idempotence", "true")
             .set("linger.ms", "2")
             .set("message.timeout.ms", "30000")
