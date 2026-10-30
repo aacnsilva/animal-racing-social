@@ -91,31 +91,59 @@ Required on `POST …/bets` and `POST …/cashout`.
   message parked in the DLQ is investigated and replayed by `betId`, so the
   HTTP key's lifetime doesn't matter there.
 
-## 6. Notifications
-
-Status: endpoints sketched; channel decisions pending.
+## 6. Live stream (SSE): one stream per race
 
 ```
-GET   /v1/me/notifications?unread=&cursor=     → inbox
-POST  /v1/me/notifications/read                { ids[] } | { all: true }
-GET   /v1/me/notification-preferences
-PUT   /v1/me/notification-preferences          { [type]: { inApp, push } }
-POST  /v1/me/push-subscriptions                (Web Push: endpoint + keys)
-DELETE /v1/me/push-subscriptions/{id}
+GET /v1/races/{raceId}/stream        (cookie auth; anonymous = public events only)
 ```
 
-A Notification Service (TS) consumes `bet.events`, `race.lifecycle`,
-`season.events` and leaderboard changes, applies preferences, writes the
-inbox, and fans out to SSE (`notification` event) and Web Push.
+- **Always live, no catch-up.** There is no `Last-Event-ID` resume. On
+  (re)connect the server first sends a `snapshot` event with the current state,
+  then live events. The client drops whatever it had and jumps the three.js
+  scene to the snapshot. Past ticks of a live race are never replayed to
+  clients. That keeps everyone on the same clock as the live-betting
+  acceptance delay.
+- Prices are always "latest wins"; a reconnecting client never sees stale
+  prices.
+- Client reconnects with backoff (0.5 s, 1 s, 2 s, max 5 s); server sends a
+  `ping` every 15 s.
+- One Kafka-fed fan-out per race in the SSE Gateway; the user's own bet
+  events are filtered per connection.
+
+| Event | Data (JSON) | Audience |
+|---|---|---|
+| `snapshot` | `{ race, tick?, markets[], myBets[] }` | on connect |
+| `race.lifecycle` | `{ status, at }` (OPEN→LOCKED→LIVE→FINISHED→SETTLED) | all |
+| `race.tick` | `RaceTick` | all (LIVE) |
+| `race.lap` | `{ lap, leaderEntrantId, standings[] }` | all |
+| `market.opened` / `market.closed` / `market.suspended` / `market.resumed` | `{ marketId, … }` | all |
+| `market.price` | `{ marketId, priceVersion, selections[{selectionId, price}] }` | all, ≤ 1 Hz |
+| `market.resulted` | `{ marketId, winning[] }` | all |
+| `bet.updated` | `Bet` | own bets only |
+| `cashout.updated` | `{ betId, amount, quoteId, expiresAtTick }` | own open bets, ≤ 1 Hz |
+| `ping` | `{}` | all |
+
+## 7. Notifications: in-app inbox only
+
+Scope: **only races the user has bet on.** No following, no email, no push.
+
+```
+GET  /v1/me/notifications?unread=&cursor=      → { items, nextCursor, unreadCount }
+POST /v1/me/notifications/read                 { ids[] } | { all: true }
+GET  /v1/me/notification-settings
+PUT  /v1/me/notification-settings              { enabled: bool, types: { [type]: bool } }
+```
+
+- `enabled: false` turns everything off; per-type toggles otherwise
+  (default all on).
+- A Notification Service (TS) consumes `bet.events` and `race.lifecycle`,
+  checks settings, writes the inbox (Postgres, keyed by userId, 30-day
+  retention) and pushes a `notification` event to any open race streams for
+  that user, plus a badge count via `GET …?unread=true` polling.
 
 | Type | Trigger |
 |---|---|
-| `BET_WON` / `BET_LOST` | `BetSettled` |
-| `BET_REJECTED` | `BetRejected` (live bets) |
-| `CASHOUT_DONE` | `BetCashedOut` |
-| `RACE_STARTING` | race you bet on, T−2 min |
-| `DAILY_REWARD_READY` | new UTC day, unclaimed |
-| `LEADERBOARD_MOVE` | entered/left top 10/100 |
-| `SEASON_ENDING` / `SEASON_RESULT` | `endsAt − 24 h` / `SeasonEnded` |
-| `FAVOURITE_RACING` | a followed animal is scheduled |
-| `ANIMAL_RETIRING` | a followed animal is in its last week |
+| `RACE_STARTING` | a race you bet on starts in 2 min |
+| `BET_WON` / `BET_LOST` / `BET_VOID` | `BetSettled` |
+| `BET_REJECTED` | live bet not accepted |
+| `CASHOUT_DONE` / `CASHOUT_REJECTED` | cash-out result |

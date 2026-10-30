@@ -75,11 +75,11 @@ paths:
         '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Market' } } } } }
   /races/{raceId}/stream:
     get:
-      summary: SSE stream (ticks, market events, own bet/cashout updates)
+      summary: SSE stream, one per race, always live (snapshot on connect, no resume)
       description: |
-        Event names: race.tick, race.lap, race.lifecycle, market.opened, market.price,
+        Event names: snapshot, race.lifecycle, race.tick, race.lap, market.opened, market.price,
         market.suspended, market.resumed, market.closed, market.resulted,
-        bet.updated, cashout.updated, wallet.updated.
+        bet.updated, cashout.updated, notification, ping. See platform.md §6.
       parameters: [ { $ref: '#/components/parameters/RaceId' } ]
       responses:
         '200': { description: text/event-stream, content: { text/event-stream: {} } }
