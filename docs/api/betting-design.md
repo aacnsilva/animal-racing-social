@@ -271,6 +271,8 @@ POST /v1/bets/{betId}/cashout          Idempotency-Key
 Ledger entry types: `SIGNUP_GRANT`, `DAILY_GRANT`, `BET_STAKE (−)`,
 `BET_PAYOUT (+)`, `BET_REFUND (+, void)`, `CASHOUT (+)`.
 Unique constraint `(type, refId)` makes every consumer idempotent.
+Amounts: **`SEASON_GRANT` = 10 000** points at season start (and on signup
+mid-season); **`DAILY_GRANT` = 50** points per day after that.
 Because all-in is allowed, `DAILY_GRANT` is the safety net that gets busted
 players back in the game.
 

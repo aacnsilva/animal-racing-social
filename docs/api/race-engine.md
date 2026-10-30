@@ -152,15 +152,29 @@ reveals them live and markets suspend). DQ is announced at `RaceFinished`
 - **6–10 entrants per race**, single species. Every venue has **10 lanes**.
 - v1 species: **horses** and **giraffes**. 1 real day = 1 animal week.
 
+**Max career: 5 seasons = 140 days** (= 140 animal weeks ≈ 2.7 animal years).
+Life stages are expressed in career days:
+
 | | Horse | Giraffe |
 |---|---|---|
-| ROOKIE | 2–4 y (~104 days) | 2–5 y (~156 days) |
-| PRIME | 4–8 y (~208 days) | 5–10 y (~260 days) |
-| VETERAN | 8–11 y (~156 days) | 10–13 y (~156 days) |
-| Retire by | 11 y (~470 days of racing) | 13 y (~570 days) |
+| ROOKIE | days 0–25 | days 0–35 (slower to mature) |
+| PRIME | days 25–95 | days 35–110 |
+| VETERAN | days 95–140 | days 110–140 |
+| Retire | ≤ day 140, earlier if stats decline below threshold | same |
 | Strengths | acceleration, tight curves, DIRT/GRASS | top speed on long straights, stamina, SAND |
 | Weaknesses | stamina on MUD | tight curves (hairpins), ICE stumble risk |
 
 Animals enter the roster at a random age within ROOKIE so retirements are
 staggered; the Stable keeps each species' active pool sized for its race
 programme.
+
+## 11. Race programme
+
+- **3 races per hour, 24/7** (= 72/day), alternating species
+  (≈ 36 horse + 36 giraffe races/day). Class mix per hour configurable
+  (default: 1 SPRINT, 1 STANDARD, 1 SPRINT/ENDURANCE alternating).
+- Cadence per race: scheduled & sealed → **OPEN ~10 min** → LIVE 2–10 min.
+  Races overlap, so at most ~3 are LIVE at once.
+- Roster sizing: ~36 races × ~8 entrants ≈ 290 starts/species/day. With
+  each animal racing roughly once a day (fatigue rule TBD) → **~300 active
+  animals per species**, ~2 retirements + recruits per species per day.
