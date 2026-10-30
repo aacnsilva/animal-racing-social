@@ -1,0 +1,9 @@
+**
+!proto/**
+!shared/**
+!engine/Cargo.toml
+!engine/Cargo.lock
+!engine/crates/**
+!engine/services/**
+engine/target
+**/target

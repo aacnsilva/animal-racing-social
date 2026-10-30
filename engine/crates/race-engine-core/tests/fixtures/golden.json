@@ -1,0 +1,35 @@
+{
+  "raceId": "424242",
+  "engineVersion": "1.0.0",
+  "species": "HORSE",
+  "laps": 7,
+  "seed": "a3f1c2d4e5b60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
+  "venue": {
+    "id": "v_dune_loop",
+    "version": 1,
+    "name": "Dune Loop",
+    "class": "STANDARD",
+    "surface": "SAND",
+    "lanes": 10,
+    "lapLength": 562.74,
+    "lapsRange": [6, 8],
+    "segments": [
+      { "type": "STRAIGHT", "length": 140 },
+      { "type": "CURVE", "radius": 45, "angle": 180 },
+      { "type": "UPHILL", "length": 60, "grade": 0.08 },
+      { "type": "DOWNHILL", "length": 80, "grade": 0.06 },
+      { "type": "CURVE", "radius": 45, "angle": 180 }
+    ]
+  },
+  "entrants": [
+    { "entrantId": "e1", "animalId": "77", "lane": 3, "temperament": "STALKER", "stats": { "velocity": 15.2, "stamina": 80, "acceleration": 3.1, "consistency": 0.8 } },
+    { "entrantId": "e2", "animalId": "78", "lane": 1, "temperament": "FRONT_RUNNER", "stats": { "velocity": 15.9, "stamina": 62, "acceleration": 3.8, "consistency": 0.71 } },
+    { "entrantId": "e3", "animalId": "79", "lane": 6, "temperament": "CLOSER", "stats": { "velocity": 14.8, "stamina": 91, "acceleration": 2.9, "consistency": 0.88 } },
+    { "entrantId": "e4", "animalId": "80", "lane": 2, "temperament": "STEADY", "stats": { "velocity": 15.5, "stamina": 75, "acceleration": 3.4, "consistency": 0.93 } },
+    { "entrantId": "e5", "animalId": "81", "lane": 9, "temperament": "STALKER", "stats": { "velocity": 16.4, "stamina": 58, "acceleration": 4.2, "consistency": 0.64 } },
+    { "entrantId": "e6", "animalId": "82", "lane": 4, "temperament": "CLOSER", "stats": { "velocity": 14.4, "stamina": 88, "acceleration": 2.6, "consistency": 0.77 } },
+    { "entrantId": "e7", "animalId": "83", "lane": 10, "temperament": "FRONT_RUNNER", "stats": { "velocity": 15.0, "stamina": 70, "acceleration": 3.6, "consistency": 0.82 } },
+    { "entrantId": "e8", "animalId": "84", "lane": 7, "temperament": "STEADY", "stats": { "velocity": 15.7, "stamina": 66, "acceleration": 3.3, "consistency": 0.69 } }
+  ],
+  "scriptHash": "d967ecccc7858b0e5a283d95a485bf7cede03d3af126e642d76f4370157f1ee5"
+}

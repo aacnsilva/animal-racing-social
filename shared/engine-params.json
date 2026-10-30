@@ -1,0 +1,118 @@
+{
+  "version": "1.0.0",
+  "tickMs": 500,
+  "maxTicks": 2400,
+  "classes": {
+    "SPRINT": { "minSec": 120, "maxSec": 180, "targetSec": 150 },
+    "STANDARD": { "minSec": 240, "maxSec": 360, "targetSec": 300 },
+    "ENDURANCE": { "minSec": 420, "maxSec": 600, "targetSec": 540 }
+  },
+  "planning": { "dryRuns": 9 },
+  "physics": {
+    "velocityElasticity": 0.5,
+    "brakingFactor": 2.0,
+    "curveLookAheadSec": 1.0,
+    "tightCurveRadius": 30,
+    "laneWidth": 0.6,
+    "laneChangePerTick": 0.35,
+    "blockingGap": 2.5,
+    "laneClearance": 0.8,
+    "freeLaneBehind": 3.0,
+    "freeLaneAhead": 3.0,
+    "overtakeMargin": 0.3,
+    "raceEffort": 0.93,
+    "minEffort": 0.6,
+    "uphillSpeedLossPerGrade": 2.0,
+    "downhillSpeedGainPerGrade": 0.8,
+    "uphillDrainPerGrade": 8.0,
+    "downhillDrainPerGrade": 3.0
+  },
+  "noise": {
+    "formSdBase": 0.012,
+    "formSdPerInconsistency": 0.05,
+    "formClampSd": 3.0,
+    "paceSdBase": 0.006,
+    "paceSdPerInconsistency": 0.03,
+    "paceCorrelation": 0.95,
+    "paceUpdateTicks": 2,
+    "pacingErrorSd": 0.1
+  },
+  "stamina": {
+    "drainBudget": 0.52,
+    "referenceLength": 3000,
+    "lengthExponent": 0.7,
+    "effortReference": 0.9,
+    "capacityBase": 0.7,
+    "capacityPerPoint": 0.004,
+    "tiredThreshold": 25,
+    "tiredFactor": 0.8,
+    "exhaustedFactor": 0.65,
+    "pacingReserve": 28,
+    "kickReserve": 25,
+    "replanTicks": 6
+  },
+  "temperaments": {
+    "FRONT_RUNNER": {
+      "effortBias": -0.003, "earlyBoost": 0.02, "earlyUntil": 0.4, "kickBoost": 0.005,
+      "kickFraction": 0.12, "kickMaxDistance": 400, "kickJitter": 0.25, "discipline": 0.8,
+      "preferredMinPosition": 1, "preferredMaxPosition": 1, "chaseBonus": 0.01, "easeOff": 0
+    },
+    "STALKER": {
+      "effortBias": 0.0, "earlyBoost": 0.0, "earlyUntil": 0.0, "kickBoost": 0.055,
+      "kickFraction": 0.28, "kickMaxDistance": 800, "kickJitter": 0.25, "discipline": 0.9,
+      "preferredMinPosition": 2, "preferredMaxPosition": 4, "chaseBonus": 0.008, "easeOff": 0.006
+    },
+    "CLOSER": {
+      "effortBias": 0.0, "earlyBoost": -0.005, "earlyUntil": 0.5, "kickBoost": 0.09,
+      "kickFraction": 0.2, "kickMaxDistance": 650, "kickJitter": 0.25, "discipline": 0.9,
+      "preferredMinPosition": 1, "preferredMaxPosition": 10, "chaseBonus": 0, "easeOff": 0
+    },
+    "STEADY": {
+      "effortBias": 0.0, "earlyBoost": 0.0, "earlyUntil": 0.0, "kickBoost": 0.02,
+      "kickFraction": 0.1, "kickMaxDistance": 350, "kickJitter": 0.2, "discipline": 0.9,
+      "preferredMinPosition": 1, "preferredMaxPosition": 10, "chaseBonus": 0, "easeOff": 0
+    }
+  },
+  "incidents": {
+    "stumblePerKm": 0.0035,
+    "stumbleTiredMultiplier": 2.0,
+    "stumbleTicksMin": 2,
+    "stumbleTicksMax": 6,
+    "stumbleSpeedDrop": 0.7,
+    "stumbleTargetFactor": 0.55,
+    "falseStartPerRace": 0.01,
+    "falseStartDelayTicks": 6,
+    "refusedPerEntrant": 0.005,
+    "pulledUpPerEntrant": 0.003,
+    "pulledUpFromFraction": 0.15,
+    "pulledUpToFraction": 0.9,
+    "disqualifiedPerRace": 0.002
+  },
+  "surfaces": {
+    "DIRT": { "grip": 1.0 },
+    "GRASS": { "grip": 0.95 },
+    "SAND": { "grip": 0.9 },
+    "MUD": { "grip": 0.8 },
+    "ICE": { "grip": 0.65 }
+  },
+  "species": {
+    "HORSE": {
+      "referenceVelocity": 15.5,
+      "lateralGrip": 9.0,
+      "surfaceAffinity": { "DIRT": 1.03, "GRASS": 1.03, "SAND": 0.97, "MUD": 0.95, "ICE": 0.95 },
+      "segmentAffinity": { "STRAIGHT": 1.0, "CURVE": 1.0, "TIGHT_CURVE": 1.0, "UPHILL": 0.98, "DOWNHILL": 1.0 },
+      "surfaceStaminaDrain": { "DIRT": 1.0, "GRASS": 0.95, "SAND": 1.2, "MUD": 1.5, "ICE": 1.05 },
+      "surfaceStumble": { "DIRT": 1.0, "GRASS": 0.8, "SAND": 1.0, "MUD": 1.5, "ICE": 2.0 },
+      "segmentStumble": { "STRAIGHT": 0.6, "CURVE": 1.2, "TIGHT_CURVE": 1.5, "UPHILL": 1.0, "DOWNHILL": 1.4 }
+    },
+    "GIRAFFE": {
+      "referenceVelocity": 14.4,
+      "lateralGrip": 6.5,
+      "surfaceAffinity": { "DIRT": 1.0, "GRASS": 1.0, "SAND": 1.04, "MUD": 0.98, "ICE": 0.92 },
+      "segmentAffinity": { "STRAIGHT": 1.03, "CURVE": 0.97, "TIGHT_CURVE": 0.9, "UPHILL": 1.0, "DOWNHILL": 0.98 },
+      "surfaceStaminaDrain": { "DIRT": 0.95, "GRASS": 0.95, "SAND": 0.85, "MUD": 1.2, "ICE": 1.0 },
+      "surfaceStumble": { "DIRT": 1.0, "GRASS": 0.9, "SAND": 0.8, "MUD": 1.3, "ICE": 2.6 },
+      "segmentStumble": { "STRAIGHT": 0.6, "CURVE": 1.3, "TIGHT_CURVE": 2.0, "UPHILL": 1.0, "DOWNHILL": 1.5 }
+    }
+  }
+}
