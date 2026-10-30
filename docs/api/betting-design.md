@@ -107,6 +107,27 @@ Multiple races may be `LIVE` simultaneously.
   "assets": { "model": "venues/dune_loop/v3.glb" } }
 ```
 
+- **Races are single-species.** Entrants are always the same species; venues
+  are shared across species, and each species has its own surface/terrain
+  affinities.
+
+Draft venue roster:
+
+| Class | Venue | Surface | Character |
+|---|---|---|---|
+| SPRINT | Meadow Dash | GRASS | Flat, one gentle curve, pure speed |
+| SPRINT | Dune Drag | SAND | Straight sand strip, stamina tax |
+| SPRINT | Frost Strip | ICE | Short, slippery curves (stumble risk) |
+| SPRINT | Canyon Chute | DIRT | Downhill start, uphill finish |
+| STANDARD | Dune Loop | SAND | Classic oval with a hill |
+| STANDARD | Riverside Oval | GRASS | Wide, balanced, the "neutral" venue |
+| STANDARD | Mudflat Ring | MUD | Heavy going, favours stamina |
+| STANDARD | Hairpin Hollow | DIRT | Tight hairpins, favours acceleration |
+| ENDURANCE | Summit Circuit | DIRT | Long climbs and descents |
+| ENDURANCE | Glacier Grand | ICE | Long laps, consistency matters |
+| ENDURANCE | Jungle Marathon | MUD | Mixed terrain, attrition race |
+| ENDURANCE | Coastal Classic | SAND | Long straights, wind-swept sand |
+
 - The engine simulates in 1D (`dist`, `lane`) and looks up the segment at each
   distance for modifiers (curves penalize velocity, uphill drains stamina,
   surface favors certain species).
