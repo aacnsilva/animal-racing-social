@@ -89,7 +89,7 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
   const attempts = options.attempts ?? 5;
   await consumer.run({
     partitionsConsumedConcurrently: options.concurrency ?? 1,
-    eachMessage: async ({ topic, partition, message }) => {
+    eachMessage: async ({ topic, partition, message, heartbeat }) => {
       const meta: MessageMeta = { topic, partition, offset: message.offset, key: message.key?.toString() ?? null };
       if (!message.value) return;
       let envelope: Envelope;
@@ -109,7 +109,9 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
             return;
           }
           log.warn('handler failed, retrying', { group: options.groupId, type: envelope.type, attempt, ...errorFields(error) });
-          await sleep(250 * 2 ** attempt);
+          await heartbeat().catch(() => undefined);
+          await sleep(Math.min(250 * 2 ** attempt, 5000));
+          await heartbeat().catch(() => undefined);
         }
       }
     },
