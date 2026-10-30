@@ -2005,6 +2005,12 @@ table.table {
 .bet-status-LOST,
 .bet-status-REJECTED {
   color: var(--danger);
+  border-color: rgba(255, 107, 107, 0.4);
+  background: var(--danger-soft);
+}
+
+.bet-card.lost {
+  border-color: rgba(255, 107, 107, 0.35);
 }
 
 .bet-status-VOID,

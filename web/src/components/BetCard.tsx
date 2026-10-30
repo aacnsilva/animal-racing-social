@@ -186,8 +186,9 @@ export function BetCard({
       : firstLeg
         ? selectionLabel(firstLeg.selection, races[firstLeg.raceId]?.entrants)
         : 'Bet';
+  const dead = bet.status === 'LOST' || bet.status === 'REJECTED';
   return (
-    <div className="bet-card" data-testid="my-bet" data-bet-id={bet.id} data-bet-status={bet.status}>
+    <div className={`bet-card${dead ? ' lost' : ''}`} data-testid="my-bet" data-bet-id={bet.id} data-bet-status={bet.status}>
       <div className="top">
         <b title={title}>{title}</b>
         <span className={`chip bet-status-${bet.status}`}>{STATUS_LABEL[bet.status] ?? bet.status}</span>
@@ -197,7 +198,7 @@ export function BetCard({
           const race = races[leg.raceId];
           return (
             <div className="leg" key={leg.legId}>
-              <span className={`dot ${leg.status}`} />
+              <span className={`dot ${dead && leg.status === 'OPEN' ? 'LOST' : leg.status}`} />
               <span style={{ minWidth: 0, flex: 1 }}>
                 {bet.type === 'COMBO' && <b>{selectionLabel(leg.selection, race?.entrants)} · </b>}
                 {marketLabel(leg.marketType, leg.marketParams)}
@@ -225,6 +226,11 @@ export function BetCard({
         {bet.status === 'WON' && (
           <span>
             Paid <b style={{ color: 'var(--accent)' }}>{fmtPoints(bet.payout)}</b>
+          </span>
+        )}
+        {bet.status === 'LOST' && (
+          <span>
+            Lost <b style={{ color: 'var(--danger)' }}>{fmtPoints(bet.stake)}</b>
           </span>
         )}
         {bet.status === 'CASHED_OUT' && (
