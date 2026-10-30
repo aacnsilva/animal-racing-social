@@ -294,11 +294,13 @@ POST /v1/bets/combos/quote  { legs[] }   → { combinedPrice, legs[{price, price
 
 Rules:
 
-- **Legs** (2 to `COMBO_MAX_LEGS`, config) must be on **different races** in the
+- **Legs** (2 to `COMBO_MAX_LEGS`, config, default **8**) must be on **different races** in the
   **same season**. Any market type is allowed, including tricast and
   live markets.
-- **Price** = `Π leg.lockedPrice`, locked at acceptance. No extra bonus or
-  penalty in v1.
+- **Price** = `Π leg.lockedPrice`, locked at acceptance. **No combo bonus.**
+- **Same-race legs are blocked** (`COMBO_SAME_RACE`): outcomes in one race are
+  correlated, so multiplying prices would overpay. Possible later as a
+  separately priced same-race product.
 - **Acceptance**: if every leg is pre-race, it's accepted immediately. If any leg
   is in-running, the whole combo waits the live acceptance delay, and every
   leg is re-checked against its current `priceVersion` and the
