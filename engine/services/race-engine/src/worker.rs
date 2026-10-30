@@ -220,13 +220,6 @@ async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, comm
         .map_err(Failure::Transient)?;
     transaction.commit().await.context("commit seal").map_err(Failure::Transient)?;
     drop(conn);
-    log::info(format!(
-        "race {race_id} sealed: engine {} finishTick {} scriptHash {} ({} bytes, {} compressed)",
-        race.engine_version,
-        sealed.script.result.finish_tick,
-        sealed.script_hash,
-        sealed.json.len(),
-        compressed.len()
-    ));
+    log::info(format!("race {race_id} sealed: engine {} scriptHash {}", race.engine_version, sealed.script_hash));
     publish_sealed(producer, race_id, &race.engine_version, &seed_hash, &script_hash).await
 }

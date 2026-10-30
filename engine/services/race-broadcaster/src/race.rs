@@ -137,7 +137,7 @@ pub async fn run_race(ctx: Arc<Ctx>, race_id: i64, start_at: SystemTime, cancell
                 let started_at: SystemTime = row.get(0);
                 let payload = Payload::RaceStarted(RaceStarted { race_id, started_at: format_rfc3339(started_at) });
                 ctx.producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), payload).await?;
-                log::info(format!("race {race_id} LIVE ({} ticks, {} laps)", finish_tick, script.track.laps));
+                log::info(format!("race {race_id} LIVE ({} laps)", script.track.laps));
             }
             None => match current_status(&ctx, race_id).await?.map(|(status, _)| status).as_deref() {
                 Some("LIVE") => resuming = true,
