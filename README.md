@@ -50,6 +50,7 @@ API ─bet.commands─► Bet worker ─debit─► Wallet ─wallet.events─�
 | [`docs/db`](docs/db) | Data model and the original DDL |
 | [`docs/implementation.md`](docs/implementation.md) | Contracts between services, engine and web (what the code implements) |
 | [`docs/deployment.md`](docs/deployment.md) | CI/CD and VPS operations |
+| [`docs/observability.md`](docs/observability.md) | Observability design: traces, logs, metrics, SLOs, alerts |
 | `proto/` | Protobuf event schemas (single source of truth for Rust and TypeScript) |
 | `engine/` | Rust: `race-engine-core`, `race-engine`, `race-broadcaster`, `odds-engine` |
 | `server/` | TypeScript services on Node 22 (`api`, `sse`, `scheduler`, `stable`, `market-manager`, `bet-worker`, `settlement`, `combo-aggregator`, `wallet`, `season`, `notification`, `migrate`) |
