@@ -314,3 +314,22 @@ events only. Events (`event:` name, `data:` JSON):
 | `cashout.updated` | `{ betId, amount, quoteId, expiresAtTick }` |
 | `notification` | `{ notification: Notification, unreadCount }` |
 | `ping` | `{}` |
+
+## 11. Decisions and deviations from the design docs
+
+| Topic | What the code does | Why |
+|---|---|---|
+| Kafka partitioning | Rust producers use librdkafka's `murmur2_random` partitioner (Java-compatible, same as kafkajs) | Otherwise the scheduler's and broadcaster's events for one race land on different `race.lifecycle` partitions and lose their order |
+| Ledger | Extra entry type `BET_LOST` (amount 0) when a bet loses | Every wallet change emits `LedgerEntryAppended` with `balanceAfter` and `openStakeAfter`, so leaderboards can track `rankScore = balance + open_stake` from one topic |
+| Live ticks | `GET /races/{id}/ticks` and `/script` serve only FINISHED/SETTLED races (409 before) | `platform.md` §6: no catch-up for live races; late joiners get the SSE snapshot |
+| Pre-race markets at lock | FINISH_POSITION / TOP_N are `SUSPENDED` (reason `LOCK`) between `startAt − 60 s` and the start, then resume in-running; TRICAST closes at lock | Makes the betting window visible in market state as well as race state |
+| Suspensions | Any incident suspends open in-running markets for 4 ticks; an overtake by a top-3 runner for 2 ticks; leader-at-lap markets close 6 ticks before their checkpoint | `betting-design.md` §5 |
+| Final lap | The engine emits `LAP` and the broadcaster `LapCompleted` for the final lap too | Its leader is the as-run winner; leader-at-lap markets never use it |
+| Engine params hash | SHA-256 of the canonical params JSON (sorted keys, compact) | The file and the JSONB copy hash identically |
+| Animal stats | Base stats within ≈ ±3 % per species and ageing within ≈ ±2.5 % (`shared/species.json`) | A 5 % top-speed edge already gives ≈ 40 % win share in an 8-runner field |
+| Broadcaster discovery | Polls Postgres (1 Hz) with an advisory-lock leader instead of consuming `race.lifecycle` | Standby takeover and wall-clock resume without partition-assignment coupling |
+| Admin commands | Schedule, cancel and market suspend/resume/void are commands on `race.commands`; the API answers 202 | Owning services stay the only writers of their state |
+| Unread counter | `notif:unread:{userId}` is maintained, but the API returns exact counts from Postgres | Counts never drift; Redis stays rebuildable |
+| Scheduler horizon | `SCHEDULER_MAX_HORIZON_HOURS` caps the programme horizon (dev compose: 2 h, CI: 1 h, production: the programme's 24 h) | Keeps local and CI start-up light |
+| SSE extras | `race.lifecycle` adds `order` on FINISHED and `reason` on CANCELLED | Lets the client render results without a refetch |
+| Odds env | `ODDS_STALE_MS` (default 2500) drops stale ticks after a restart; live repricing is coalesced per race | Keeps the odds engine current under load |
