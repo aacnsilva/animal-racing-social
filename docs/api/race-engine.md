@@ -173,8 +173,15 @@ programme.
 - **3 races per hour, 24/7** (= 72/day), alternating species
   (≈ 36 horse + 36 giraffe races/day). Class mix per hour configurable
   (default: 1 SPRINT, 1 STANDARD, 1 SPRINT/ENDURANCE alternating).
-- Cadence per race: scheduled & sealed → **OPEN ~10 min** → LIVE 2–10 min.
-  Races overlap, so at most ~3 are LIVE at once.
-- Roster sizing: ~36 races × ~8 entrants ≈ 290 starts/species/day. With
-  each animal racing roughly once a day (fatigue rule TBD) → **~300 active
-  animals per species**, ~2 retirements + recruits per species per day.
+- Cadence per race: scheduled & sealed (up to 24 h ahead) → OPEN until
+  `startAt − 60 s` → LIVE 2–10 min. Races overlap; at most ~3 are LIVE at once.
+- **Recovery, not daily caps.** Animals may race any number of times per day
+  but never concurrently. After a race an animal is `RESTING` for
+  **1–2 h** (SPRINT 60 min, STANDARD 90 min, ENDURANCE 120 min; config).
+  The Scheduler books an animal only if
+  `prevStartAt + 10 min (max race) + recovery ≤ nextStartAt`.
+- Roster sizing: a species races every ~40 min → ~36 races × ~8 entrants
+  ≈ 290 starts/day. An animal can do a race every ~2 h → up to ~12/day, so the
+  hard minimum is **~25 animals per species**. For variety and fresh
+  match-ups the target pool is **~60 per species** (each races ~5×/day).
+  With 140-day careers that's ~0.4 retirements + recruits per species per day.

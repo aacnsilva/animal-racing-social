@@ -18,6 +18,32 @@ paths:
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RacePage' } } } }
+  /schedule:
+    get:
+      summary: Upcoming race card (≤ SCHEDULE_HORIZON_HOURS ahead)
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: species, in: query, schema: { type: string, enum: [HORSE, GIRAFFE] } }
+        - { name: class, in: query, schema: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RacePage' } } } }
+  /races/{raceId}/result:
+    get:
+      summary: Official result, incidents, market payouts, seed, replay availability
+      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      responses:
+        '200': { description: OK }
+        '409': { $ref: '#/components/responses/Error' }
+  /me/rewards/daily:
+    get:
+      summary: Daily reward status
+      responses: { '200': { description: OK } }
+    post:
+      summary: Claim daily reward (50 points, once per UTC day)
+      responses:
+        '200': { description: Claimed }
+        '409': { $ref: '#/components/responses/Error' }
   /races/{raceId}:
     get:
       summary: Race detail with entrants
@@ -215,7 +241,7 @@ components:
               code:
                 type: string
                 enum: [BETTING_CLOSED, MARKET_SUSPENDED, PRICE_CHANGED, INSUFFICIENT_FUNDS,
-                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED, REPLAY_EXPIRED]
+                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED, REPLAY_EXPIRED, ALREADY_CLAIMED, RATE_LIMITED]
               message: { type: string }
   schemas:
     Venue:
@@ -256,7 +282,7 @@ components:
         userId: { type: string }
         displayName: { type: string }
         score: { type: number }
-    RaceStatus: { type: string, enum: [SCHEDULED, OPEN, LIVE, FINISHED, SETTLED, CANCELLED] }
+    RaceStatus: { type: string, enum: [SCHEDULED, OPEN, LOCKED, LIVE, FINISHED, SETTLED, CANCELLED] }
     MarketStatus: { type: string, enum: [OPEN, SUSPENDED, CLOSED, RESULTED] }
     MarketType: { type: string, enum: [FINISH_POSITION, TOP_N, TRICAST, LEADER_AT_LAP] }
     BetStatus: { type: string, enum: [PENDING, ACCEPTED, REJECTED, WON, LOST, VOID, CASHED_OUT] }
@@ -309,6 +335,8 @@ components:
         id: { type: string }
         status: { $ref: '#/components/schemas/RaceStatus' }
         class: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] }
+        species: { type: string, enum: [HORSE, GIRAFFE] }
+        bettingClosesAt: { type: string, format: date-time, description: "startAt − 60 s" }
         startAt: { type: string, format: date-time }
         venueId: { type: string }
         venueVersion: { type: integer }

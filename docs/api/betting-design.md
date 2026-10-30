@@ -60,15 +60,27 @@ Scheduler ──► Race Engine ──(sealed script)──► Script Store
 ## 3. Race lifecycle
 
 ```
-SCHEDULED ─► OPEN ─► LIVE ─► FINISHED ─► SETTLED
- (entrants,   (pre-race   (ticks broadcasting,   (seed+script   (all markets
-  seedHash,    markets)    in-running markets,    revealed)      resulted)
-  scriptHash)              cash-out)
+SCHEDULED ─► OPEN ─► LOCKED ─► LIVE ─► FINISHED ─► SETTLED
+ (entrants,   (pre-race   (startAt−60s:   (ticks, in-running   (seed+script   (all markets
+  script       markets)    pre-race        markets, cash-out)   revealed)      resulted)
+  sealed)                  bets closed)
 ```
 
-A script is generated **just before** the race moves to `OPEN`; the daily
-programme is controlled by us, so there is no queue of pre-built secret races.
-Multiple races may be `LIVE` simultaneously.
+- The script is generated and sealed **at scheduling**, so `seedHash` /
+  `scriptHash` are committed before the first bet is accepted.
+- Pre-race betting is open from scheduling until **`startAt − 60 s`**
+  (`LOCKED`). In-running markets and cash-out open at `startAt`.
+- Scheduling horizon is config (`SCHEDULE_HORIZON_HOURS`, default 24); the
+  race card is visible that far ahead.
+- Multiple races may be `LIVE` simultaneously.
+
+### Finish order: no ties, ever
+
+Finish order is decided by exact crossing time, interpolated inside the
+tick (`t = tick + (lineDist − dist₀)/(dist₁ − dist₀)`). If two crossing times
+are bit-for-bit equal, the engine breaks the tie with the race's incident
+RNG stream ("photo finish", emitted as a `PHOTO_FINISH` event). The same
+rule applies to `LEADER_AT_LAP` checkpoints. Settlement never handles dead heats.
 
 ### Duration
 
@@ -204,7 +216,26 @@ The Odds Engine's pre-race prices use current stats; form is informational
 
 `FINISH_POSITION{position:1}` is the plain win market.
 `LEADER_AT_LAP` markets are generated from the lap count (every 2–3 laps, never
-the final lap).
+the final lap) and are **not offered for SPRINT** races.
+
+### Market templates (configurable)
+
+Which markets a race gets comes from admin-editable templates per race
+class, not code:
+
+```jsonc
+{ "class": "STANDARD", "markets": [
+  { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+  { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
+  { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
+  { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+  { "type": "TRICAST", "closes": { "at": "LOCK" } },
+  { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" },
+    "closes": { "ticksBeforeCheckpoint": 6 } } ] }
+```
+
+Default: all classes share the same template; SPRINT omits `LEADER_AT_LAP`.
+Template changes apply to races scheduled afterwards.
 
 **Tricast** has N×(N−1)×(N−2) combinations, so it isn't listed; clients request a
 quote: `POST /markets/{id}/quotes { order: [a,b,c] }`.
@@ -235,7 +266,7 @@ POST /v1/markets/{marketId}/bets   Idempotency-Key: <uuid>
   allowed). The balance check and stake debit are one atomic ledger write
   (`SELECT … FOR UPDATE` on the user's wallet row or a conditional insert), so
   concurrent bets across races can't overspend.
-- Pre-race (`OPEN` race): validated immediately, delay 0.
+- Pre-race (`OPEN` race, until `startAt − 60 s`): validated immediately, delay 0.
 - In-running: accepted after `acceptDelayTicks`, re-priced against the then
   current version and the `acceptPriceChanges` policy.
 - On accept, stake is debited (`BET_STAKE`). Price is **locked** at acceptance.
@@ -280,6 +311,8 @@ players back in the game.
 
 - A **season** is a fixed calendar window (default 4 weeks) with status
   `UPCOMING | ACTIVE | ENDED`. Every ledger entry carries `seasonId`.
+- **No race spans two seasons.** The Scheduler's last race of a season
+  starts at `endsAt − 1 h`, so every bet is placed and settled inside one season.
 - At season start each user gets a fresh season wallet (`SEASON_GRANT`);
   the previous season's balance is frozen as its final score.
 - **Leaderboard** (per season) ranks by season balance; secondary boards for
