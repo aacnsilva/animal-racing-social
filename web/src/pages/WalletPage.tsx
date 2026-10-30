@@ -123,9 +123,9 @@ export function WalletPage() {
                   <tr key={entry.entryId} data-testid="ledger-row" data-type={entry.type}>
                     <td className="small">{fmtDateTime(entry.createdAt)}</td>
                     <td>
-                      <span className={`chip ${entry.amount >= 0 ? 'green' : 'red'}`}>{LEDGER_LABEL[entry.type] ?? entry.type}</span>
+                      <span className={`chip ${entry.amount > 0 ? 'green' : 'red'}`}>{LEDGER_LABEL[entry.type] ?? entry.type}</span>
                     </td>
-                    <td className="right num" style={{ color: entry.amount >= 0 ? 'var(--turf)' : 'var(--danger)', fontWeight: 800 }}>
+                    <td className="right num" style={{ color: entry.amount > 0 ? 'var(--turf)' : 'var(--danger)', fontWeight: 800 }}>
                       {fmtSigned(entry.amount)}
                     </td>
                     <td className="right num">{fmtPoints(entry.balanceAfter)}</td>
