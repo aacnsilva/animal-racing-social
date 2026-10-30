@@ -24,6 +24,7 @@ export function envBool(name: string, fallback: boolean): boolean {
 export const settings = {
   get tickMs() { return envInt('TICK_MS', 500); },
   get acceptDelayTicks() { return envInt('ACCEPT_DELAY_TICKS', 2); },
+  get livePriceTolerance() { return envFloat('LIVE_PRICE_TOLERANCE', 0.1); },
   get oddsMargin() { return envFloat('ODDS_MARGIN', 0.05); },
   get cashOutMargin() { return envFloat('CASHOUT_MARGIN', 0.05); },
   get comboMaxLegs() { return envInt('COMBO_MAX_LEGS', 8); },

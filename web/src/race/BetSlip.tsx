@@ -214,8 +214,8 @@ export function BetSlip({
         <label className="field">
           <span>If price changes</span>
           <select className="select" data-testid="accept-changes-select" value={policy} onChange={(e) => setPolicy(e.target.value as PricePolicy)}>
-            <option value="NONE">Exact price</option>
-            <option value="BETTER">Better only</option>
+            <option value="NONE">Small changes only</option>
+            <option value="BETTER">Better or small drops</option>
             <option value="ANY">Any price</option>
           </select>
         </label>

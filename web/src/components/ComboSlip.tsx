@@ -225,8 +225,8 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
             <label className="field">
               <span>Price changes</span>
               <select className="select" value={combo.policy} onChange={(e) => patchCombo({ policy: e.target.value as PricePolicy })}>
-                <option value="NONE">Exact price</option>
-                <option value="BETTER">Better only</option>
+                <option value="NONE">Small changes only</option>
+                <option value="BETTER">Better or small drops</option>
                 <option value="ANY">Any price</option>
               </select>
             </label>

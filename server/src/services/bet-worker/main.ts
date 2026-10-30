@@ -51,7 +51,7 @@ async function legDecision(runtime: Runtime, db: Queryable, leg: LegRow, request
     if (!selection) return { ok: false, reason: 'MARKET_CLOSED' };
     current = selection.price;
   }
-  const decision = decidePrice(policy, leg.accepted_price, current);
+  const decision = decidePrice(policy, leg.accepted_price, current, acceptableLive ? settings.livePriceTolerance : 0);
   if (!decision.ok) return decision;
   return { ok: true, lockedPrice: decision.lockedPrice, tick: market.race_status === 'LIVE' ? await currentTick(runtime, leg.race_id) : null };
 }

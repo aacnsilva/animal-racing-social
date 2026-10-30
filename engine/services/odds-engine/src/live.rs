@@ -138,6 +138,17 @@ async fn write_price(app: &Shared, market_id: i64, version: u32, tick: u32, sele
         .context("redis price write")
 }
 
+/// Fixed Monte Carlo seed per race (common random numbers): consecutive ticks
+/// reuse the same random draws, so prices move with the revealed race state
+/// instead of jittering with sampling noise, and live bets can be matched.
+fn race_seed(race_id: i64) -> [u8; 32] {
+    let mut seed = *b"ars-odds-engine-live-pricing-crn";
+    for (byte, id) in seed.iter_mut().zip(race_id.to_le_bytes()) {
+        *byte ^= id;
+    }
+    seed
+}
+
 async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
     let prepared = prepare(app, race_id).await?;
     let (revealed, markets) = {
@@ -154,7 +165,7 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
     let threads = app.settings.threads;
     let permit = app.compute.acquire().await.map_err(|err| err.to_string())?;
     let started = Instant::now();
-    let seed: [u8; 32] = ars_infra::ids::random_bytes();
+    let seed = race_seed(race_id);
     let table = tokio::task::spawn_blocking(move || estimate_probabilities(&prepared, Some(&revealed), runs, threads, seed))
         .await
         .context("pricing task")?

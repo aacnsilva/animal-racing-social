@@ -268,7 +268,16 @@ POST /v1/markets/{marketId}/bets   Idempotency-Key: <uuid>
   concurrent bets across races can't overspend.
 - Pre-race (`OPEN` race, until `startAt − 60 s`): validated immediately, delay 0.
 - In-running: accepted after `acceptDelayTicks`, re-priced against the then
-  current version and the `acceptPriceChanges` policy.
+  current version and the `acceptPriceChanges` policy. Live prices move every
+  tick, so in-running bets allow a relative drift of `LIVE_PRICE_TOLERANCE`
+  (default 10%): `NONE` accepts the current price within ±10% of the quoted
+  one, `BETTER` accepts any longer price or a drop of up to 10%, `ANY` accepts
+  any price. The bet locks the price current at acceptance. Pre-race bets keep
+  the exact match.
+- The Odds Engine reuses one Monte Carlo seed per race (common random numbers),
+  so tick-to-tick price moves come from race state rather than sampling noise.
+- Cash-out quotes are not invalidated by a price version bump; the worker
+  re-values at acceptance and rejects below the user's `minAmount`.
 - On accept, stake is debited (`BET_STAKE`). Price is **locked** at acceptance.
 
 Bet states: `PENDING → ACCEPTED → (WON | LOST | VOID | CASHED_OUT)` or `PENDING → REJECTED`.

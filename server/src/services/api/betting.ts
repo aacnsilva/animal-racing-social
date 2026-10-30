@@ -277,7 +277,7 @@ export function bettingRoutes(router: Router, deps: Deps): void {
       if (bet.status !== 'ACCEPTED') throw new ApiError(409, 'NOT_CASHABLE', 'Only open accepted bets can be cashed out');
       const pending = await one(deps.pool, `SELECT 1 FROM betting.cashouts WHERE user_id = $1 AND bet_id = $2 AND status = 'PENDING'`, [user.userId, betId]);
       if (pending) throw new ApiError(409, 'CONFLICT', 'A cash-out is already pending for this bet');
-      const quote = await quoteStillValid(deps.redis, deps.pool, quoteId, betId, user.userId);
+      const quote = await quoteStillValid(deps.redis, quoteId, betId, user.userId);
       if (!quote) throw new ApiError(409, 'QUOTE_EXPIRED', 'Prices moved; request a new cash-out quote');
       const legs = await loadLegs(deps.pool, user.userId, betId);
       const cashoutId = newId(shardOf(user.userId));

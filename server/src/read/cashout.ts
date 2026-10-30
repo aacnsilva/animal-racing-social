@@ -96,13 +96,12 @@ export async function issueQuote(redis: Redis, db: Queryable, bet: { userId: str
   };
 }
 
-export async function quoteStillValid(redis: Redis, db: Queryable, quoteId: string, betId: string, userId: string): Promise<StoredQuote | null> {
+// Live prices bump their version every tick, so requiring an unchanged version
+// expired nearly every in-running quote. The bet worker re-values the cash-out at
+// acceptance and enforces the user's minAmount, which is the real price guard.
+export async function quoteStillValid(redis: Redis, quoteId: string, betId: string, userId: string): Promise<StoredQuote | null> {
   const stored = await getJson<StoredQuote>(redis, `cashout:quote:${quoteId}`);
   if (!stored || stored.betId !== betId || stored.userId !== userId) return null;
-  for (const [marketId, version] of Object.entries(stored.versions)) {
-    const current = await readPrice(redis, db, marketId);
-    if (!current || current.version !== version) return null;
-  }
   return stored;
 }
 
