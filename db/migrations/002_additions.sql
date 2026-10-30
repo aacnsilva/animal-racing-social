@@ -64,8 +64,3 @@ CREATE TABLE notification.daily_ready_runs (
   day         DATE PRIMARY KEY,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE TABLE notification.race_starting_runs (
-  race_id     BIGINT PRIMARY KEY,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);

@@ -1,0 +1,282 @@
+name: ars
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-server: &server
+  image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/server:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  mem_limit: 192m
+  <<: *logging
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+x-engine: &engine
+  image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/engine:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  mem_limit: 192m
+  <<: *logging
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+x-env: &env
+  KAFKA_BROKERS: kafka:9092
+  REDIS_URL: redis://redis:6379
+  RACE_ENGINE_URL: http://race-engine:7001
+  ODDS_ENGINE_URL: http://odds-engine:7003
+  WALLET_URL: http://wallet:3002
+  REPLAY_RETENTION_HOURS: ${REPLAY_RETENTION_HOURS:-24}
+
+x-script-keys: &script-keys
+  SCRIPT_KEYS: ${SCRIPT_KEYS:?set SCRIPT_KEYS in .env}
+  SCRIPT_KEY_ID: ${SCRIPT_KEY_ID:-k1}
+
+x-health: &health
+  test: ["CMD-SHELL", "wget -qO- http://localhost:$$PORT/healthz > /dev/null"]
+  interval: 10s
+  timeout: 3s
+  retries: 12
+
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    <<: *logging
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "work_mem=8MB", "-c", "max_connections=200"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ars
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ars"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  kafka:
+    image: apache/kafka:3.9.1
+    restart: unless-stopped
+    mem_limit: 900m
+    <<: *logging
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    volumes: [kafkadata:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    <<: *logging
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/server:${IMAGE_TAG:-latest}
+    command: ["migrate"]
+    <<: *logging
+    environment:
+      MIGRATE_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ars
+      DB_SERVICE_PASSWORD: ${DB_SERVICE_PASSWORD:?set DB_SERVICE_PASSWORD in .env}
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  api:
+    <<: *server
+    command: ["api"]
+    environment:
+      <<: *env
+      NODE_ID: "1"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_api:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+      PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      BOOTSTRAP_ADMINS: ${BOOTSTRAP_ADMINS:-}
+      OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      OAUTH_GITHUB_CLIENT_ID: ${OAUTH_GITHUB_CLIENT_ID:-}
+      OAUTH_GITHUB_CLIENT_SECRET: ${OAUTH_GITHUB_CLIENT_SECRET:-}
+    healthcheck: *health
+
+  sse:
+    <<: *server
+    command: ["sse"]
+    environment:
+      <<: *env
+      NODE_ID: "2"
+      PORT: "3001"
+      DATABASE_URL: postgres://ars_sse:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  wallet:
+    <<: *server
+    command: ["wallet"]
+    environment:
+      <<: *env
+      NODE_ID: "3"
+      PORT: "3002"
+      DATABASE_URL: postgres://ars_wallet:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  scheduler:
+    <<: *server
+    command: ["scheduler"]
+    environment:
+      <<: *env
+      NODE_ID: "4"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_scheduler:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  stable:
+    <<: *server
+    command: ["stable"]
+    environment:
+      <<: *env
+      NODE_ID: "5"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_stable:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  market-manager:
+    <<: *server
+    command: ["market-manager"]
+    environment:
+      <<: *env
+      NODE_ID: "6"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_market:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  bet-worker:
+    <<: *server
+    command: ["bet-worker"]
+    environment:
+      <<: *env
+      NODE_ID: "7"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_betting:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  settlement:
+    <<: *server
+    command: ["settlement"]
+    environment:
+      <<: *env
+      NODE_ID: "8"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_betting:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  combo-aggregator:
+    <<: *server
+    command: ["combo-aggregator"]
+    environment:
+      <<: *env
+      NODE_ID: "9"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_betting:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  season:
+    <<: *server
+    command: ["season"]
+    environment:
+      <<: *env
+      NODE_ID: "10"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_season:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  notification:
+    <<: *server
+    command: ["notification"]
+    environment:
+      <<: *env
+      NODE_ID: "11"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_notification:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+    healthcheck: *health
+
+  race-engine:
+    <<: *engine
+    command: ["race-engine"]
+    environment:
+      <<: [*env, *script-keys]
+      PORT: "7001"
+      DATABASE_URL: postgres://ars_race_engine:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+
+  race-broadcaster:
+    <<: *engine
+    command: ["race-broadcaster"]
+    environment:
+      <<: [*env, *script-keys]
+      PORT: "7002"
+      DATABASE_URL: postgres://ars_broadcaster:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+
+  odds-engine:
+    <<: *engine
+    command: ["odds-engine"]
+    mem_limit: 384m
+    environment:
+      <<: *env
+      PORT: "7003"
+      DATABASE_URL: postgres://ars_odds:${DB_SERVICE_PASSWORD}@postgres:5432/ars
+      ODDS_RUNS_PRERACE: ${ODDS_RUNS_PRERACE:-3000}
+      ODDS_RUNS_LIVE: ${ODDS_RUNS_LIVE:-1500}
+      ODDS_THREADS: ${ODDS_THREADS:-2}
+
+  web:
+    image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    mem_limit: 128m
+    <<: *logging
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SITE_ADDRESS: ${DOMAIN}
+      API_UPSTREAM: api:3000
+      SSE_UPSTREAM: sse:3001
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api, sse]
+
+volumes:
+  pgdata:
+  kafkadata:
+  caddy_data:
+  caddy_config:

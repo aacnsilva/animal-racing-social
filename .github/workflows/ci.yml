@@ -1,0 +1,141 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            web/package-lock.json
+            e2e/package-lock.json
+      - run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler
+      - name: Server typecheck, unit tests, generated code in sync
+        working-directory: server
+        run: |
+          npm ci
+          npm run gen
+          git diff --exit-code src/gen
+          npm run typecheck
+          npm test
+      - name: Mock OAuth tests
+        working-directory: mock-oauth
+        run: npm test
+      - name: Web build
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: E2E typecheck
+        working-directory: e2e
+        run: |
+          npm ci
+          npm run typecheck
+
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler cmake
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Engine tests
+        working-directory: engine
+        run: cargo test --workspace --release
+
+  e2e:
+    needs: [unit, engine]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ARS_SERVER_IMAGE: ghcr.io/${{ github.repository }}/server:sha-${{ github.sha }}
+      ARS_ENGINE_IMAGE: ghcr.io/${{ github.repository }}/engine:sha-${{ github.sha }}
+      ARS_WEB_IMAGE: ghcr.io/${{ github.repository }}/web:sha-${{ github.sha }}
+      SCHEDULER_MAX_HORIZON_HOURS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose build
+      - name: Start the stack
+        run: docker compose up -d --wait --wait-timeout 300
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Playwright UI tests
+        working-directory: e2e
+        env:
+          CI: "true"
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test
+      - name: Collect logs
+        if: failure()
+        run: docker compose logs --no-color > e2e/compose.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            e2e/compose.log
+          retention-days: 7
+      - name: Publish images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          for image in server engine web; do
+            docker push "$REGISTRY/$image:sha-$GITHUB_SHA"
+            docker tag "$REGISTRY/$image:sha-$GITHUB_SHA" "$REGISTRY/$image:latest"
+            docker push "$REGISTRY/$image:latest"
+          done
+
+  deploy:
+    needs: e2e
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        run: |
+          install -d -m 700 ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Copy deployment files
+        run: scp -i ~/.ssh/id_deploy deploy/compose.prod.yml deploy/deploy.sh deploy/backup.sh "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/ars/"
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/id_deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin \
+             && /opt/ars/deploy.sh sha-${{ github.sha }}"

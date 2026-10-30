@@ -106,24 +106,22 @@ async function onEvent(runtime: Runtime, envelope: { eventId: string; payload?: 
 async function raceStartingAlerts(runtime: Runtime): Promise<void> {
   const races = await many(
     runtime.pool,
-    `SELECT r.race_id FROM racing.races r
-     WHERE r.status IN ('OPEN', 'LOCKED') AND r.start_at <= now() + interval '2 minutes' AND r.start_at > now()
-       AND NOT EXISTS (SELECT 1 FROM notification.race_starting_runs s WHERE s.race_id = r.race_id)`,
+    `SELECT race_id FROM racing.races WHERE status IN ('OPEN', 'LOCKED') AND start_at <= now() + interval '2 minutes' AND start_at > now()`,
   );
   for (const race of races) {
+    const users = await many(
+      runtime.pool,
+      `SELECT DISTINCT l.user_id FROM betting.bet_legs l JOIN betting.bets b USING (user_id, bet_id)
+       WHERE l.race_id = $1 AND b.status IN ('PENDING', 'ACCEPTED')
+         AND NOT EXISTS (SELECT 1 FROM notification.notifications n WHERE n.user_id = l.user_id AND n.dedupe_key = 'RACE_STARTING:' || l.race_id)`,
+      [race.race_id],
+    );
+    if (users.length === 0) continue;
     const context = await raceLabel(runtime, race.race_id);
     await tx(runtime.pool, async (client) => {
-      const claimed = await client.query('INSERT INTO notification.race_starting_runs (race_id) VALUES ($1) ON CONFLICT DO NOTHING', [race.race_id]);
-      if (claimed.rowCount === 0) return;
-      const users = await many(
-        client,
-        `SELECT DISTINCT l.user_id FROM betting.bet_legs l JOIN betting.bets b USING (user_id, bet_id)
-         WHERE l.race_id = $1 AND b.status IN ('PENDING', 'ACCEPTED')`,
-        [race.race_id],
-      );
       for (const user of users) await notify(runtime, client, user.user_id, 'RACE_STARTING', `RACE_STARTING:${race.race_id}`, context);
-      if (users.length) log.info('race starting alerts', { raceId: race.race_id, users: users.length });
     });
+    log.info('race starting alerts', { raceId: race.race_id, users: users.length });
   }
 }
 

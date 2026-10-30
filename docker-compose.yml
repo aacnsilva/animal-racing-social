@@ -1,5 +1,37 @@
 name: ars
 
+x-server: &server
+  image: ${ARS_SERVER_IMAGE:-ars-server:dev}
+  build:
+    context: .
+    dockerfile: server/Dockerfile
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+x-engine: &engine
+  image: ${ARS_ENGINE_IMAGE:-ars-engine:dev}
+  build:
+    context: .
+    dockerfile: engine/Dockerfile
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+x-env: &env
+  KAFKA_BROKERS: kafka:9092
+  REDIS_URL: redis://redis:6379
+  RACE_ENGINE_URL: http://race-engine:7001
+  ODDS_ENGINE_URL: http://odds-engine:7003
+  WALLET_URL: http://wallet:3002
+  REPLAY_RETENTION_HOURS: "24"
+
+x-script-keys: &script-keys
+  SCRIPT_KEYS: k1:5f3a0c2e9b8d7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d
+  SCRIPT_KEY_ID: k1
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -49,6 +81,195 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  migrate:
+    image: ${ARS_SERVER_IMAGE:-ars-server:dev}
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    command: ["migrate"]
+    environment:
+      MIGRATE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/ars
+      DB_SERVICE_PASSWORD: ars
+      KAFKA_BROKERS: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  api:
+    <<: *server
+    command: ["api"]
+    environment:
+      <<: *env
+      NODE_ID: "1"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_api:ars@postgres:5432/ars
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+      JWT_SECRET: dev-only-jwt-secret-not-for-production
+      BOOTSTRAP_ADMINS: google:admin1
+      OAUTH_GOOGLE_CLIENT_ID: ars-google
+      OAUTH_GOOGLE_CLIENT_SECRET: ars-google-secret
+      OAUTH_GOOGLE_AUTHORIZE_URL: http://localhost:9000/google/authorize
+      OAUTH_GOOGLE_TOKEN_URL: http://mock-oauth:9000/google/token
+      OAUTH_GOOGLE_USERINFO_URL: http://mock-oauth:9000/google/userinfo
+      OAUTH_GITHUB_CLIENT_ID: ars-github
+      OAUTH_GITHUB_CLIENT_SECRET: ars-github-secret
+      OAUTH_GITHUB_AUTHORIZE_URL: http://localhost:9000/github/login/oauth/authorize
+      OAUTH_GITHUB_TOKEN_URL: http://mock-oauth:9000/github/login/oauth/access_token
+      OAUTH_GITHUB_USERINFO_URL: http://mock-oauth:9000/github/user
+    healthcheck: &health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:$$PORT/healthz > /dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  sse:
+    <<: *server
+    command: ["sse"]
+    environment:
+      <<: *env
+      NODE_ID: "2"
+      PORT: "3001"
+      DATABASE_URL: postgres://ars_sse:ars@postgres:5432/ars
+    healthcheck: *health
+
+  wallet:
+    <<: *server
+    command: ["wallet"]
+    environment:
+      <<: *env
+      NODE_ID: "3"
+      PORT: "3002"
+      DATABASE_URL: postgres://ars_wallet:ars@postgres:5432/ars
+    healthcheck: *health
+
+  scheduler:
+    <<: *server
+    command: ["scheduler"]
+    environment:
+      <<: *env
+      NODE_ID: "4"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_scheduler:ars@postgres:5432/ars
+      SCHEDULER_MAX_HORIZON_HOURS: ${SCHEDULER_MAX_HORIZON_HOURS:-2}
+    healthcheck: *health
+
+  stable:
+    <<: *server
+    command: ["stable"]
+    environment:
+      <<: *env
+      NODE_ID: "5"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_stable:ars@postgres:5432/ars
+    healthcheck: *health
+
+  market-manager:
+    <<: *server
+    command: ["market-manager"]
+    environment:
+      <<: *env
+      NODE_ID: "6"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_market:ars@postgres:5432/ars
+    healthcheck: *health
+
+  bet-worker:
+    <<: *server
+    command: ["bet-worker"]
+    environment:
+      <<: *env
+      NODE_ID: "7"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_betting:ars@postgres:5432/ars
+    healthcheck: *health
+
+  settlement:
+    <<: *server
+    command: ["settlement"]
+    environment:
+      <<: *env
+      NODE_ID: "8"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_betting:ars@postgres:5432/ars
+    healthcheck: *health
+
+  combo-aggregator:
+    <<: *server
+    command: ["combo-aggregator"]
+    environment:
+      <<: *env
+      NODE_ID: "9"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_betting:ars@postgres:5432/ars
+    healthcheck: *health
+
+  season:
+    <<: *server
+    command: ["season"]
+    environment:
+      <<: *env
+      NODE_ID: "10"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_season:ars@postgres:5432/ars
+    healthcheck: *health
+
+  notification:
+    <<: *server
+    command: ["notification"]
+    environment:
+      <<: *env
+      NODE_ID: "11"
+      PORT: "3000"
+      DATABASE_URL: postgres://ars_notification:ars@postgres:5432/ars
+    healthcheck: *health
+
+  race-engine:
+    <<: *engine
+    command: ["race-engine"]
+    environment:
+      <<: [*env, *script-keys]
+      PORT: "7001"
+      DATABASE_URL: postgres://ars_race_engine:ars@postgres:5432/ars
+
+  race-broadcaster:
+    <<: *engine
+    command: ["race-broadcaster"]
+    environment:
+      <<: [*env, *script-keys]
+      PORT: "7002"
+      DATABASE_URL: postgres://ars_broadcaster:ars@postgres:5432/ars
+
+  odds-engine:
+    <<: *engine
+    command: ["odds-engine"]
+    environment:
+      <<: *env
+      PORT: "7003"
+      DATABASE_URL: postgres://ars_odds:ars@postgres:5432/ars
+      ODDS_RUNS_PRERACE: ${ODDS_RUNS_PRERACE:-3000}
+      ODDS_RUNS_LIVE: ${ODDS_RUNS_LIVE:-1500}
+
+  mock-oauth:
+    image: ${ARS_MOCK_OAUTH_IMAGE:-ars-mock-oauth:dev}
+    build: mock-oauth
+    restart: unless-stopped
+    ports: ["9000:9000"]
+    environment:
+      PORT: "9000"
+
+  web:
+    image: ${ARS_WEB_IMAGE:-ars-web:dev}
+    build: web
+    restart: unless-stopped
+    ports: ["8080:80"]
+    environment:
+      SITE_ADDRESS: ":80"
+      API_UPSTREAM: api:3000
+      SSE_UPSTREAM: sse:3001
+    depends_on: [api, sse]
 
 volumes:
   pgdata:

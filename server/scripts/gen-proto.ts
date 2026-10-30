@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +10,11 @@ mkdirSync(out, { recursive: true });
 execFileSync('protoc', [
   `--plugin=protoc-gen-ts_proto=${join(root, 'node_modules', '.bin', 'protoc-gen-ts_proto')}`,
   `--ts_proto_out=${out}`,
-  '--ts_proto_opt=forceLong=string,oneof=unions-value,esModuleInterop=true,importSuffix=.ts,outputServices=false,env=node,outputJsonMethods=false,useOptionals=none',
+  '--ts_proto_opt=forceLong=string,oneof=unions-value,esModuleInterop=true,importSuffix=.ts,outputServices=false,env=node,outputJsonMethods=false,useOptionals=none,comments=false',
   `-I${protoRoot}`,
   join(protoRoot, 'ars', 'v1', 'events.proto'),
 ], { stdio: 'inherit' });
+const file = join(out, 'ars', 'v1', 'events.ts');
+const lines = readFileSync(file, 'utf8').split('\n');
+const firstCode = lines.findIndex((line) => line.trim() !== '' && !line.startsWith('//') && !line.startsWith('/*'));
+writeFileSync(file, lines.slice(firstCode).join('\n'));
