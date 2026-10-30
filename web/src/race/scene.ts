@@ -53,8 +53,10 @@ function stripGeometry(track: TrackPath, a: number, b: number, yA: number, yB: n
     positions.push(p.x, (sideways ? p.y : p.y) + yB, p.z);
     uvs.push(0, s / 4, 1, s / 4);
     if (i > 0) {
+      // Wind the faces so they point up whichever way the track turns; otherwise they are back-face culled.
       const base = (i - 1) * 2;
-      indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      if (track.winding > 0) indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+      else indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
     }
   });
   const geometry = new THREE.BufferGeometry();
