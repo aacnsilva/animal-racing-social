@@ -98,6 +98,8 @@ export class MarketManager {
   }
 
   async createMarkets(scheduled: PayloadOf<'raceScheduled'>): Promise<void> {
+    const race = await one(this.pool, 'SELECT status FROM racing.races WHERE race_id = $1', [scheduled.raceId]);
+    if (!race || race.status === 'CANCELLED') return;
     const existing = await one(this.pool, 'SELECT 1 FROM market.markets WHERE race_id = $1 LIMIT 1', [scheduled.raceId]);
     if (existing) return;
     const template = await one(this.pool, 'SELECT version, definition FROM market.market_templates WHERE race_class = $1 AND is_active', [scheduled.raceClass]);

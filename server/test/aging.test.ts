@@ -14,6 +14,12 @@ describe('aging', () => {
     assert.ok(ageFactor(horse, 130) < ageFactor(horse, 95));
   });
 
+  it('keeps age effects within a few percent so fields stay competitive', () => {
+    for (const config of [horse, giraffe]) {
+      for (let day = 0; day < config.maxCareerDays; day++) assert.ok(ageFactor(config, day) >= 0.95);
+    }
+  });
+
   it('applies a per-animal decline rate only in the veteran stage', () => {
     assert.equal(ageFactor(horse, 50, 1.3), ageFactor(horse, 50, 1));
     assert.ok(ageFactor(horse, 120, 1.3) < ageFactor(horse, 120, 1));
@@ -28,7 +34,8 @@ describe('aging', () => {
 
   it('retires at max age or when declining below threshold', () => {
     assert.equal(retirementReason(horse, 140, 0.9), 'AGE');
-    assert.equal(retirementReason(horse, 120, 0.86), 'DECLINE');
+    assert.equal(retirementReason(horse, 120, 0.95), 'DECLINE');
+    assert.equal(retirementReason(horse, 120, 0.97), null);
     assert.equal(retirementReason(horse, 60, 0.5), null);
   });
 
@@ -36,8 +43,8 @@ describe('aging', () => {
     assert.deepEqual(currentStats({ velocity: 15, stamina: 80, acceleration: 3, consistency: 0.8 }, 0.9), { velocity: 13.5, stamina: 72, acceleration: 2.7, consistency: 0.72 });
     for (let i = 0; i < 50; i++) {
       const base = randomBase(giraffe);
-      assert.ok(base.velocity >= 12.5 && base.velocity <= 15.5);
-      assert.ok(base.consistency >= 0.55 && base.consistency <= 0.92);
+      assert.ok(base.velocity >= 13.6 && base.velocity <= 14.4);
+      assert.ok(base.consistency >= 0.6 && base.consistency <= 0.92);
     }
   });
 

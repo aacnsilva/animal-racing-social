@@ -3,28 +3,28 @@
     "species": "HORSE",
     "maxCareerDays": 140,
     "lifeStages": { "ROOKIE": [0, 25], "PRIME": [25, 95], "VETERAN": [95, 140] },
-    "ageCurve": [[0, 0.88], [25, 0.97], [60, 1.0], [95, 0.97], [140, 0.85]],
-    "retireThreshold": 0.87,
+    "ageCurve": [[0, 0.965], [25, 0.99], [60, 1.0], [95, 0.99], [140, 0.955]],
+    "retireThreshold": 0.96,
     "targetPoolSize": 60,
     "baseRanges": {
-      "velocity": [14.0, 17.0],
-      "stamina": [55, 95],
-      "acceleration": [2.5, 4.5],
-      "consistency": [0.6, 0.95]
+      "velocity": [15.2, 16.1],
+      "stamina": [60, 95],
+      "acceleration": [2.8, 4.2],
+      "consistency": [0.65, 0.95]
     }
   },
   {
     "species": "GIRAFFE",
     "maxCareerDays": 140,
     "lifeStages": { "ROOKIE": [0, 35], "PRIME": [35, 110], "VETERAN": [110, 140] },
-    "ageCurve": [[0, 0.86], [35, 0.96], [75, 1.0], [110, 0.97], [140, 0.88]],
-    "retireThreshold": 0.89,
+    "ageCurve": [[0, 0.96], [35, 0.99], [75, 1.0], [110, 0.99], [140, 0.96]],
+    "retireThreshold": 0.965,
     "targetPoolSize": 60,
     "baseRanges": {
-      "velocity": [12.5, 15.5],
+      "velocity": [13.6, 14.4],
       "stamina": [65, 98],
-      "acceleration": [1.8, 3.5],
-      "consistency": [0.55, 0.92]
+      "acceleration": [2.0, 3.2],
+      "consistency": [0.6, 0.92]
     }
   }
 ]

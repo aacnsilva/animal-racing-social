@@ -67,7 +67,9 @@ async function seed(client: pg.Client): Promise<void> {
     await client.query(
       `INSERT INTO stable.species (species, max_career_days, life_stages, age_curve, surface_affinity, segment_affinity, retire_threshold, target_pool_size, base_ranges)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (species) DO UPDATE SET surface_affinity = EXCLUDED.surface_affinity, segment_affinity = EXCLUDED.segment_affinity`,
+       ON CONFLICT (species) DO UPDATE SET max_career_days = EXCLUDED.max_career_days, life_stages = EXCLUDED.life_stages,
+         age_curve = EXCLUDED.age_curve, surface_affinity = EXCLUDED.surface_affinity, segment_affinity = EXCLUDED.segment_affinity,
+         retire_threshold = EXCLUDED.retire_threshold, base_ranges = EXCLUDED.base_ranges`,
       [species.species, species.maxCareerDays, JSON.stringify(species.lifeStages), JSON.stringify(species.ageCurve),
         JSON.stringify(affinity.surfaceAffinity ?? {}), JSON.stringify(affinity.segmentAffinity ?? {}), species.retireThreshold,
         species.targetPoolSize, JSON.stringify(species.baseRanges)],
