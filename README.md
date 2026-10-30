@@ -61,7 +61,9 @@ API ─bet.commands─► Bet worker ─debit─► Wallet ─wallet.events─�
 | `shared/` | Venues, species, market templates, programme, engine params |
 | `deploy/` | Production compose, VPS setup, deploy and backup scripts |
 
-Stack: Kafka 3.9 (KRaft), PostgreSQL 16, Redis 7, Rust, Node 22 (TypeScript run directly, no build step), React, three.js, Caddy. Runtime npm dependencies of the services: `pg`, `kafkajs`, `@redis/client`, `@bufbuild/protobuf`.
+Stack: Kafka 3.9 (KRaft), PostgreSQL 16, Redis 7, Rust, Node 22 (TypeScript run directly, no build step), React, three.js, Caddy. Runtime npm dependencies of the services: `pg`, `kafkajs`, `@redis/client`, `@bufbuild/protobuf` and the OpenTelemetry SDK.
+
+Observability: OpenTelemetry traces and metrics from every service, JSON logs with trace ids, collected by Grafana Alloy into VictoriaMetrics, VictoriaLogs and Jaeger, with Grafana dashboards and alerts to Discord. See [`docs/observability.md`](docs/observability.md).
 
 ## Run it locally
 
@@ -72,6 +74,8 @@ docker compose up -d --build --wait
 ```
 
 Open http://localhost:8080 and sign in with Google or GitHub. Locally both point at the mock provider on http://localhost:9000, where you can type any account id. The account id `admin1` is an admin: the Admin page can schedule a one-off race a minute or two ahead, so you don't have to wait for the programme (3 races per hour).
+
+Grafana runs at http://localhost:8080/grafana (user `admin`, password `admin`) with the same dashboards, alerts and datasources as production. The stores' own UIs are on localhost only: Jaeger http://localhost:16686, VictoriaMetrics http://localhost:8428/vmui, VictoriaLogs http://localhost:9428/select/vmui. Alerts go to a fake Discord webhook on the mock server: http://localhost:9000/webhooks/discord lists what was posted.
 
 ```bash
 docker compose down -v
@@ -86,7 +90,7 @@ That stops everything and wipes the data.
 | TypeScript unit tests | `cd server && npm ci && npm test` |
 | Mock OAuth tests | `cd mock-oauth && npm test` |
 | Engine tests | `cd engine && cargo test --workspace` |
-| Playwright UI tests (stack running on :8080) | `cd e2e && npm ci && npx playwright install chromium && npx playwright test` |
+| Playwright UI and observability tests (stack running on :8080) | `cd e2e && npm ci && npx playwright install chromium && npx playwright test` |
 
 After changing `proto/`, regenerate the TypeScript types with `cd server && npm run gen` (needs `protoc`); CI fails if they are stale.
 

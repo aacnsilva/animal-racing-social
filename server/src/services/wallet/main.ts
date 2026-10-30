@@ -2,10 +2,12 @@ import { envInt } from '../../lib/config.ts';
 import { one, tx } from '../../lib/db.ts';
 import { ApiError, Router, serve, v } from '../../lib/http.ts';
 import { runConsumer, Topics } from '../../lib/kafka.ts';
-import { bootstrap } from '../../lib/runtime.ts';
+import { log } from '../../lib/log.ts';
+import { bootstrap, every } from '../../lib/runtime.ts';
+import { gauge, withSpan } from '../../lib/telemetry.ts';
 import { activeSeason } from '../../lib/seasons.ts';
 import { addDays, utcDay } from '../../lib/time.ts';
-import { applyChange, ensureWallet } from './ledger.ts';
+import { applyChange, ensureWallet, RECONCILIATION_SQL } from './ledger.ts';
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('wallet', { outbox: ['wallet'], health: false });
@@ -73,6 +75,31 @@ export async function start(): Promise<void> {
     });
   const server = serve(router, envInt('PORT', 3002));
   runtime.onStop(() => void server.close());
+
+  const reconciliation = { mismatched: 0, openStakeDrift: 0, balanceDrift: 0, checkedAt: 0 };
+  every(envInt('RECONCILE_INTERVAL_MS', 300_000), () => withSpan('wallet.reconcile', { root: true, attributes: { 'ars.flow': 'reconciliation' } }, async (span) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const { rows } = await client.query(RECONCILIATION_SQL);
+      await client.query('COMMIT');
+      reconciliation.mismatched = rows[0].mismatched;
+      reconciliation.openStakeDrift = Number(rows[0].open_stake_drift);
+      reconciliation.balanceDrift = Number(rows[0].balance_drift);
+      reconciliation.checkedAt = Date.now();
+      span.setAttributes({ 'ars.mismatched_wallets': reconciliation.mismatched, 'ars.open_stake_drift': reconciliation.openStakeDrift });
+      if (reconciliation.mismatched > 0) log.error('ledger reconciliation mismatch', reconciliation);
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }), runtime, 'ledger reconciliation');
+  gauge('ars.ledger.mismatched_wallets', 'Wallets whose cached balance or open stake disagrees with the ledger', '', async () => [{ value: reconciliation.mismatched }]);
+  gauge('ars.ledger.open_stake_drift', 'Points of open stake not explained by the ledger', '', async () => [{ value: reconciliation.openStakeDrift }]);
+  gauge('ars.ledger.balance_drift', 'Points of balance not explained by the ledger', '', async () => [{ value: reconciliation.balanceDrift }]);
+  gauge('ars.ledger.reconciled_age', 'Seconds since the last successful reconciliation', 's', async () => [{ value: reconciliation.checkedAt ? (Date.now() - reconciliation.checkedAt) / 1000 : 0 }]);
 
   runtime.consumers.push(await runConsumer({
     kafka: runtime.kafka,

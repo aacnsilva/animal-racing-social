@@ -35,7 +35,7 @@ pub async fn connect(url: &str) -> Res<Client> {
     let (client, connection) = tokio_postgres::connect(url, NoTls).await.map_err(|err| format!("postgres connect: {err}"))?;
     tokio::spawn(async move {
         if let Err(err) = connection.await {
-            crate::log::warn(format!("postgres connection closed: {err}"));
+            tracing::warn!("postgres connection closed: {err}");
         }
     });
     Ok(client)
@@ -77,9 +77,9 @@ impl Db {
             match self.acquire().await {
                 Ok(conn) => match conn.simple_query("SELECT 1").await {
                     Ok(_) => return,
-                    Err(err) => crate::log::warn(format!("database not ready: {err}")),
+                    Err(err) => tracing::warn!("database not ready: {err}"),
                 },
-                Err(err) => crate::log::warn(format!("database not ready: {err}")),
+                Err(err) => tracing::warn!("database not ready: {err}"),
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
         }

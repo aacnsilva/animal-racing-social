@@ -333,3 +333,33 @@ events only. Events (`event:` name, `data:` JSON):
 | Scheduler horizon | `SCHEDULER_MAX_HORIZON_HOURS` caps the programme horizon (dev compose: 2 h, CI: 1 h, production: the programme's 24 h) | Keeps local and CI start-up light |
 | SSE extras | `race.lifecycle` adds `order` on FINISHED and `reason` on CANCELLED | Lets the client render results without a refetch |
 | Odds env | `ODDS_STALE_MS` (default 2500) drops stale ticks after a restart; live repricing is coalesced per race | Keeps the odds engine current under load |
+| Engine logging | The Rust services log through `tracing` with a hand-written JSON layer instead of the old `log` module | Same field names and order as the TypeScript services, plus trace ids |
+| Broadcaster resume log | "resumed at tick N" logs the wall-clock tick, not one capped at the finish tick | The capped value revealed the finish tick after a late restart |
+
+## 12. Telemetry
+
+Design and operations: [`observability.md`](./observability.md).
+
+- **Environment:** `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://alloy:4318`,
+  OTLP/HTTP protobuf), `OTEL_SERVICE_NAME` (defaults to the service command),
+  `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_METRIC_EXPORT_INTERVAL` (ms, default
+  15000), `OTEL_SDK_DISABLED`. Without an endpoint nothing is exported, but
+  trace context still propagates and log lines keep their ids.
+- **Logs:** one JSON object per line on stdout. The first fields are always
+  `t`, `level`, `service`, `msg`; inside a span they are followed by
+  `trace_id` and `span_id`. Extra fields are camelCase and ids are strings
+  (`betId`, `raceId`).
+- **Propagation:** W3C `traceparent`/`tracestate` on HTTP requests and on
+  Kafka record headers. Every response carries `x-trace-id`. The outbox
+  stores the enqueuing context in `<schema>.outbox.headers` (migration
+  `004_trace_headers.sql`); `admin.dlq.headers` keeps it for replays.
+- **Spans:** HTTP SERVER `METHOD /route/template`, CLIENT `METHOD /path`,
+  PRODUCER `publish <topic> <EventType>`, CONSUMER `process <topic>
+  <EventType>`, DB CLIENT `<OPERATION> <schema.table>`. Ticks, lap events and
+  price updates are not traced. Ids go in `ars.race_id`, `ars.bet_id`,
+  `ars.market_id`, `ars.user_id`; the flow in `ars.flow`.
+- **Sealed information:** nothing derived from a race's script (seed, finish
+  tick, order, positions, script size) appears in logs, spans or metrics
+  before the race is FINISHED.
+- **Database role:** `ars_monitor` (member of `pg_monitor`) for the Postgres
+  exporter; its password is `DB_PASSWORD_MONITOR` or `DB_SERVICE_PASSWORD`.

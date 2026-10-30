@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ars_infra::kafka::MARKET_EVENTS;
-use ars_infra::{Context, Res, log};
+use ars_infra::{Context, Res};
 use ars_proto::envelope::Payload;
 use ars_proto::{PriceUpdated, SelectionPrice};
 use race_engine_core::{PreparedRace, ProbabilityTable, estimate_probabilities};
@@ -33,7 +33,7 @@ pub fn request(app: &Shared, race_id: i64) {
         tokio::spawn(async move {
             loop {
                 if let Err(err) = price_once(&app, race_id).await {
-                    log::warn(format!("race {race_id}: live pricing failed: {err}"));
+                    tracing::warn!(raceId = %race_id, "race {race_id}: live pricing failed: {err}");
                 }
                 let again = match app.registry.lock() {
                     Ok(mut registry) => match registry.races.get_mut(&race_id) {
@@ -57,14 +57,14 @@ pub fn request(app: &Shared, race_id: i64) {
     }
 }
 
-pub async fn prepare(app: &Shared, race_id: i64) -> Res<Arc<PreparedRace>> {
+pub async fn prepare(app: &Shared, race_id: i64) -> Res<(Arc<PreparedRace>, String)> {
     let (info, prepared) = {
         let registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
         let entry = registry.races.get(&race_id).context("race not registered")?;
         (entry.info.clone(), entry.prepared.clone())
     };
-    if let Some(prepared) = prepared {
-        return Ok(prepared);
+    if let (Some(prepared), Some(info)) = (&prepared, &info) {
+        return Ok((prepared.clone(), info.race_class.clone()));
     }
     let info = match info {
         Some(info) => info,
@@ -90,7 +90,7 @@ pub async fn prepare(app: &Shared, race_id: i64) -> Res<Arc<PreparedRace>> {
         && let Some(entry) = registry.races.get_mut(&race_id) {
             entry.prepared = Some(prepared.clone());
         }
-    Ok(prepared)
+    Ok((prepared, info.race_class))
 }
 
 pub fn selections_for(market: &Market, table: &ProbabilityTable, margin: f64) -> Vec<SelectionPrice> {
@@ -150,7 +150,7 @@ fn race_seed(race_id: i64) -> [u8; 32] {
 }
 
 async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
-    let prepared = prepare(app, race_id).await?;
+    let (prepared, race_class) = prepare(app, race_id).await?;
     let (revealed, markets) = {
         let registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
         let entry = registry.races.get(&race_id).context("race dropped")?;
@@ -172,6 +172,7 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
         .map_err(|err| err.to_string())?;
     drop(permit);
     let elapsed = started.elapsed();
+    crate::metrics::monte_carlo("live", &race_class, elapsed);
     let mut published = 0;
     for market in markets {
         let selections = selections_for(&market, &table, app.settings.margin);
@@ -189,24 +190,37 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
             }
         };
         if let Err(err) = write_price(app, market.market_id, version, tick, &selections).await {
-            log::warn(err);
+            tracing::warn!(marketId = %market.market_id, "{err}");
         }
         let payload = Payload::PriceUpdated(PriceUpdated { market_id: market.market_id, race_id, tick, price_version: version, selections });
         app.producer.publish_payload(MARKET_EVENTS, &race_id.to_string(), payload).await?;
         published += 1;
     }
-    let count = {
+    let published_at = Instant::now();
+    let (count, previous) = {
         let mut registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
-        registry.races.get_mut(&race_id).map(|entry| {
-            entry.priced += 1;
-            entry.priced
-        })
+        match registry.races.get_mut(&race_id) {
+            Some(entry) => {
+                entry.priced += 1;
+                let previous = if published > 0 { entry.last_reprice.replace(published_at) } else { None };
+                (Some(entry.priced), previous)
+            }
+            None => (None, None),
+        }
     };
+    if let Some(previous) = previous {
+        crate::metrics::reprice_interval(&race_class, published_at.duration_since(previous));
+    }
     if count.is_some_and(|count| count == 1 || count % 20 == 0) {
-        log::info(format!(
+        tracing::info!(
+            raceId = %race_id,
+            tick,
+            markets = published,
+            runs,
+            elapsedMs = elapsed.as_millis() as u64,
             "race {race_id} tick {tick}: priced {published} markets from {runs} runs in {} ms",
             elapsed.as_millis()
-        ));
+        );
     }
     Ok(())
 }

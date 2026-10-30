@@ -8,7 +8,9 @@ import { ApiError, pathId, Router, serve } from '../../lib/http.ts';
 import { runConsumer, Topics } from '../../lib/kafka.ts';
 import { errorFields, log } from '../../lib/log.ts';
 import type { Redis } from '../../lib/redis.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap } from '../../lib/runtime.ts';
+import { gauge } from '../../lib/telemetry.ts';
 import { betsOnRace, loadBet } from '../../read/bets.ts';
 import { issueQuote, loadLegs } from '../../read/cashout.ts';
 import { loadMarket, marketsForRace } from '../../read/markets.ts';
@@ -38,6 +40,7 @@ export class Gateway {
 
   send(connection: Connection, event: string, data: unknown): void {
     connection.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    instruments.sseEvents().add(1, { event });
   }
 
   broadcast(raceId: string, event: string, data: unknown): void {
@@ -187,6 +190,12 @@ export class Gateway {
 export async function start(): Promise<void> {
   const runtime = await bootstrap('sse', { health: false });
   const gateway = new Gateway(runtime.pool, runtime.redis);
+  gauge('ars.sse.connections', 'Open race streams', '', async () => {
+    let users = 0;
+    let anonymous = 0;
+    for (const connections of gateway.byRace.values()) for (const connection of connections) connection.userId ? users++ : anonymous++;
+    return [{ value: users, attributes: { auth: 'user' } }, { value: anonymous, attributes: { auth: 'anonymous' } }];
+  });
   const router = new Router()
     .get('/healthz', async () => ({ ok: true, connections: [...gateway.byRace.values()].reduce((n, set) => n + set.size, 0) }))
     .get('/v1/races/:raceId/stream', async (ctx) => {
@@ -225,6 +234,7 @@ export async function start(): Promise<void> {
     fromBeginning: false,
     concurrency: 6,
     attempts: 1,
+    traced: false,
     handler: async (envelope) => {
       try {
         await gateway.onEvent(envelope);

@@ -1,5 +1,6 @@
 import { env } from './config.ts';
 import { ApiError } from './http.ts';
+import { BUCKETS, histogram, injectHeaders, SpanKind, SpanStatusCode, withSpan } from './telemetry.ts';
 
 export type EntrantInput = {
   entrantId: string;
@@ -9,16 +10,39 @@ export type EntrantInput = {
   stats: { velocity: number; stamina: number; acceleration: number; consistency: number };
 };
 
-async function call<T>(base: string, path: string, body?: unknown, timeoutMs = 15_000): Promise<T> {
-  const response = await fetch(`${base}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
+const clientDuration = () => histogram('http.client.request.duration', 's', 'Duration of internal HTTP client requests', BUCKETS.http);
+
+export async function callRaw(base: string, path: string, body?: unknown, timeoutMs = 15_000): Promise<{ status: number; text: string; bytes: Buffer }> {
+  const method = body === undefined ? 'GET' : 'POST';
+  const peer = new URL(base).hostname;
+  return withSpan(`${method} ${path}`, {
+    kind: SpanKind.CLIENT,
+    attributes: { 'http.request.method': method, 'server.address': peer, 'url.path': path },
+  }, async (span) => {
+    const started = performance.now();
+    let status = 0;
+    try {
+      const response = await fetch(`${base}${path}`, {
+        method,
+        headers: { ...injectHeaders(), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      status = response.status;
+      span.setAttribute('http.response.status_code', status);
+      if (status >= 500) span.setStatus({ code: SpanStatusCode.ERROR });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      return { status, text: bytes.toString('utf8'), bytes };
+    } finally {
+      clientDuration().record((performance.now() - started) / 1000, { 'server.address': peer, 'url.path': path, 'http.response.status_code': status });
+    }
   });
-  const text = await response.text();
-  const parsed = text ? JSON.parse(text) : undefined;
-  if (!response.ok) {
+}
+
+async function call<T>(base: string, path: string, body?: unknown, timeoutMs = 15_000): Promise<T> {
+  const response = await callRaw(base, path, body, timeoutMs);
+  const parsed = response.text ? JSON.parse(response.text) : undefined;
+  if (response.status < 200 || response.status >= 300) {
     throw new ApiError(response.status, parsed?.code ?? 'UPSTREAM_ERROR', parsed?.message ?? `${path} failed with ${response.status}`, parsed?.details);
   }
   return parsed as T;

@@ -3,7 +3,9 @@ import { entrantKey } from '../../lib/ids.ts';
 import { payload, runConsumer, Topics } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, type Runtime } from '../../lib/runtime.ts';
+import { activeSpan, gauge } from '../../lib/telemetry.ts';
 import { legWins, type MarketType } from '../../domain/markets.ts';
 import { singleOutcome } from '../../domain/settlement.ts';
 
@@ -23,6 +25,9 @@ type OpenLeg = {
 };
 
 async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: OpenLeg) => 'WON' | 'LOST' | 'VOID'): Promise<void> {
+  const race = await one(runtime.pool, 'SELECT r.finished_at FROM market.markets m JOIN racing.races r USING (race_id) WHERE m.market_id = $1', [marketId]);
+  const finishedAt: Date | null = race?.finished_at ?? null;
+  activeSpan()?.setAttribute('ars.flow', 'settlement');
   const legs = await many<OpenLeg>(
     runtime.pool,
     `SELECT l.*, b.type AS bet_type, b.status AS bet_status, b.stake, b.season_id
@@ -54,6 +59,8 @@ async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: Op
       await enqueue(client, 'betting', Topics.betEvents, leg.user_id, payload('betSettled', {
         betId: leg.bet_id, userId: leg.user_id, outcome: result.status, payout: String(result.payout), stake: leg.stake, seasonId: leg.season_id, betType: 'SINGLE',
       }));
+      if (finishedAt) instruments.settlementLag().record(Math.max(0, (Date.now() - finishedAt.getTime()) / 1000), { bet_type: 'SINGLE', outcome: result.status });
+      if (result.payout > 0) instruments.pointsReturned().add(result.payout, { bet_type: 'SINGLE', kind: result.status === 'VOID' ? 'refund' : 'payout' });
       settled++;
     });
   }
@@ -62,6 +69,13 @@ async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: Op
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('settlement', { outbox: ['betting'] });
+  gauge('ars.legs.unsettled_on_finished_races', 'Open bet legs on races that finished more than 30 s ago', '', async () => {
+    const { rows } = await runtime.pool.query(
+      `SELECT count(*)::int AS n FROM betting.bet_legs l JOIN betting.bets b USING (user_id, bet_id) JOIN racing.races r ON r.race_id = l.race_id
+       WHERE l.status = 'OPEN' AND b.status = 'ACCEPTED' AND r.status IN ('FINISHED', 'SETTLED') AND r.finished_at < now() - interval '30 seconds'`,
+    );
+    return [{ value: rows[0].n }];
+  });
   runtime.consumers.push(await runConsumer({
     kafka: runtime.kafka,
     groupId: 'settlement',

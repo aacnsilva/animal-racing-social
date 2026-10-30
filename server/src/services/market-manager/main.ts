@@ -6,7 +6,9 @@ import { oddsEngine } from '../../lib/internal.ts';
 import { payload, runConsumer, Topics, type Payload, type PayloadOf } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
+import { marketTransition } from '../../lib/instruments.ts';
 import { bootstrap, type Runtime } from '../../lib/runtime.ts';
+import { withSpan } from '../../lib/telemetry.ts';
 import { DAY_MS } from '../../lib/time.ts';
 import { dbPrice, readPrice, writePrice } from '../../read/prices.ts';
 import {
@@ -26,7 +28,7 @@ type MarketState = {
 
 type RaceState = { raceId: string; laps: number; lapLength: number; tickMs: number; markets: Map<string, MarketState> };
 
-type MarketRow = { market_id: string; type: MarketType; params: Record<string, number> };
+type MarketRow = { market_id: string; type: MarketType; params: Record<string, number>; status: string };
 
 type MarketEventKind = 'marketOpened' | 'marketSuspended' | 'marketResumed' | 'marketClosed' | 'marketResulted' | 'marketVoided';
 
@@ -84,8 +86,9 @@ export class MarketManager {
     );
   }
 
-  async openMarket(client: Client, raceId: string, marketId: string): Promise<void> {
+  async openMarket(client: Client, raceId: string, marketId: string, reason = 'open'): Promise<void> {
     const row = (await one(client, `UPDATE market.markets SET status = 'OPEN', opened_at = now(), suspend_reason = NULL WHERE market_id = $1 RETURNING *`, [marketId]))!;
+    marketTransition(row.type, 'PENDING', 'OPEN', reason);
     const price = (await dbPrice(client, marketId))!;
     await writePrice(this.runtime.redis, marketId, price);
     await this.publishMarket(client, raceId, marketId, {
@@ -162,9 +165,11 @@ export class MarketManager {
         await this.snapshot(client, market.market_id, 'AT_LOCK');
         if (market.closes_rule?.at === 'LOCK') {
           await client.query(`UPDATE market.markets SET status = 'CLOSED', closed_at = now() WHERE market_id = $1`, [market.market_id]);
+          marketTransition(market.type, 'OPEN', 'CLOSED', 'lock');
           await this.publishMarket(client, raceId, market.market_id, { tick: 0 }, 'marketClosed');
         } else if (!started) {
           await client.query(`UPDATE market.markets SET status = 'SUSPENDED', suspend_reason = 'LOCK' WHERE market_id = $1`, [market.market_id]);
+          marketTransition(market.type, 'OPEN', 'SUSPENDED', 'lock');
           await this.publishMarket(client, raceId, market.market_id, { tick: 0, reason: 'LOCK' }, 'marketSuspended');
         }
       }
@@ -177,15 +182,17 @@ export class MarketManager {
       const locked = await many(client, `SELECT * FROM market.markets WHERE race_id = $1 AND status = 'SUSPENDED' AND suspend_reason = 'LOCK' FOR UPDATE`, [raceId]);
       for (const market of locked) {
         await client.query(`UPDATE market.markets SET status = 'OPEN', suspend_reason = NULL WHERE market_id = $1`, [market.market_id]);
+        marketTransition(market.type, 'SUSPENDED', 'OPEN', 'start');
         const price = await readPrice(this.runtime.redis, client, market.market_id);
         await this.publishMarket(client, raceId, market.market_id, { tick: 0, priceVersion: price?.version ?? market.price_version }, 'marketResumed');
       }
-      const pending = await many(client, `SELECT market_id, closes_rule FROM market.markets WHERE race_id = $1 AND status = 'PENDING' FOR UPDATE`, [raceId]);
+      const pending = await many(client, `SELECT market_id, type, closes_rule FROM market.markets WHERE race_id = $1 AND status = 'PENDING' FOR UPDATE`, [raceId]);
       for (const market of pending) {
         if (market.closes_rule?.at === 'LOCK') {
           await client.query(`UPDATE market.markets SET status = 'CLOSED', closed_at = now() WHERE market_id = $1`, [market.market_id]);
+          marketTransition(market.type, 'PENDING', 'CLOSED', 'late');
         } else {
-          await this.openMarket(client, raceId, market.market_id);
+          await this.openMarket(client, raceId, market.market_id, 'start');
         }
       }
       const open = await many(client, `SELECT market_id FROM market.markets WHERE race_id = $1 AND status = 'OPEN'`, [raceId]);
@@ -213,9 +220,11 @@ export class MarketManager {
       }
     }
     if (changes.length === 0) return;
-    await tx(this.pool, async (client) => {
+    await withSpan('market.tick_transition', { root: true, attributes: { 'ars.race_id': tick.raceId, 'ars.tick': tick.tick, 'ars.changes': changes.length } }, () => tx(this.pool, async (client) => {
       for (const change of changes) {
         const { market } = change;
+        const reason = change.to === 'CLOSED' ? (market.type === 'LEADER_AT_LAP' ? 'checkpoint' : 'final_lap') : change.to === 'SUSPENDED' ? 'incident' : 'incident_cleared';
+        marketTransition(market.type, market.status, change.to, reason);
         if (change.to === 'CLOSED') {
           await client.query(`UPDATE market.markets SET status = 'CLOSED', closed_at = now(), suspend_reason = NULL WHERE market_id = $1 AND status IN ('OPEN', 'SUSPENDED')`, [market.id]);
           await this.publishMarket(client, tick.raceId, market.id, { tick: tick.tick }, 'marketClosed');
@@ -233,7 +242,7 @@ export class MarketManager {
           market.suspendReason = null;
         }
       }
-    });
+    }));
   }
 
   async resultMarket(client: Client, raceId: string, market: MarketRow, order: readonly string[], lapLeaders: ReadonlyMap<number, string>): Promise<void> {
@@ -250,12 +259,15 @@ export class MarketManager {
       `UPDATE market.markets SET status = 'RESULTED', result = $2, closed_at = coalesce(closed_at, now()), resulted_at = now(), suspend_reason = NULL WHERE market_id = $1`,
       [market.market_id, JSON.stringify({ winning, order: resultOrder, winningEntrants: winners })],
     );
+    marketTransition(market.type, market.status, 'RESULTED', 'result');
     await this.publishMarket(client, raceId, market.market_id, { winning, order: resultOrder }, 'marketResulted');
     await this.writeHistory(client, raceId, market.market_id);
   }
 
   async voidMarket(client: Client, raceId: string, marketId: string, reason: string): Promise<void> {
+    const before = await one(client, 'SELECT type, status FROM market.markets WHERE market_id = $1', [marketId]);
     await client.query(`UPDATE market.markets SET status = 'VOID', closed_at = coalesce(closed_at, now()), suspend_reason = NULL WHERE market_id = $1`, [marketId]);
+    if (before) marketTransition(before.type, before.status, 'VOID', reason.toLowerCase());
     await this.publishMarket(client, raceId, marketId, { reason }, 'marketVoided');
   }
 
@@ -335,9 +347,11 @@ export class MarketManager {
       if (!market) return;
       if (command.action === 'SUSPEND' && market.status === 'OPEN') {
         await client.query(`UPDATE market.markets SET status = 'SUSPENDED', suspend_reason = 'MANUAL' WHERE market_id = $1`, [market.market_id]);
+        marketTransition(market.type, 'OPEN', 'SUSPENDED', 'manual');
         await this.publishMarket(client, market.race_id, market.market_id, { tick: 0, reason: 'MANUAL' }, 'marketSuspended');
       } else if (command.action === 'RESUME' && market.status === 'SUSPENDED') {
         await client.query(`UPDATE market.markets SET status = 'OPEN', suspend_reason = NULL WHERE market_id = $1`, [market.market_id]);
+        marketTransition(market.type, 'SUSPENDED', 'OPEN', 'manual');
         const price = await readPrice(this.runtime.redis, client, market.market_id);
         await this.publishMarket(client, market.race_id, market.market_id, { tick: 0, priceVersion: price?.version ?? market.price_version }, 'marketResumed');
       } else if (command.action === 'VOID' && !['RESULTED', 'VOID'].includes(market.status)) {

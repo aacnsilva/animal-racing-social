@@ -1,3 +1,7 @@
+{
+	metrics
+}
+
 {$SITE_ADDRESS::80} {
 	handle /v1/races/*/stream {
 		reverse_proxy {$SSE_UPSTREAM:sse:3001} {
@@ -6,8 +10,15 @@
 	}
 
 	handle /v1/* {
+		tracing {
+			span edge
+		}
 		encode zstd gzip
 		reverse_proxy {$API_UPSTREAM:api:3000}
+	}
+
+	handle /grafana* {
+		reverse_proxy {$GRAFANA_UPSTREAM:grafana:3000}
 	}
 
 	handle /assets/* {
@@ -24,4 +35,8 @@
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+:2020 {
+	metrics /metrics
 }

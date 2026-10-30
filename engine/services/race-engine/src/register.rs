@@ -1,5 +1,5 @@
 use ars_infra::db::Db;
-use ars_infra::{Context, Res, log};
+use ars_infra::{Context, Res};
 use race_engine_core::{ENGINE_VERSION, LoadedParams, core_version, default_params};
 
 pub async fn register_engine_version(db: &Db) -> Res<()> {
@@ -18,7 +18,7 @@ pub async fn register_engine_version(db: &Db) -> Res<()> {
         Err(_) => conn.execute(insert, &[&ENGINE_VERSION, &value, &hash, &false]).await.context("register engine version")?,
     };
     if inserted > 0 {
-        log::info(format!("registered engine version {ENGINE_VERSION} paramsHash {}", params.hash));
+        tracing::info!(engineVersion = ENGINE_VERSION, paramsHash = %params.hash, "registered engine version {ENGINE_VERSION} paramsHash {}", params.hash);
     }
     let rows = conn
         .query("SELECT engine_version, params, params_hash, replayable FROM racing.engine_versions", &[])
@@ -33,13 +33,15 @@ pub async fn register_engine_version(db: &Db) -> Res<()> {
         if version == ENGINE_VERSION {
             if let Ok(loaded) = &loaded
                 && loaded.hash != params.hash {
-                    log::warn(format!(
+                    tracing::warn!(
+                        engineVersion = %version,
                         "engine version {version} in the database has params {} but the binary embeds {}; the database copy is used",
-                        loaded.hash, params.hash
-                    ));
+                        loaded.hash,
+                        params.hash
+                    );
                 }
             if hex::encode(&stored_hash) != params.hash && inserted > 0 {
-                log::warn(format!("engine version {version} stored params_hash differs from canonical hash"));
+                tracing::warn!(engineVersion = %version, "engine version {version} stored params_hash differs from canonical hash");
             }
         }
         let replayable = core_version(&version) == ENGINE_VERSION && loaded.is_ok();
@@ -47,7 +49,7 @@ pub async fn register_engine_version(db: &Db) -> Res<()> {
             conn.execute("UPDATE racing.engine_versions SET replayable = $2 WHERE engine_version = $1", &[&version, &replayable])
                 .await
                 .context("update replayable")?;
-            log::info(format!("engine version {version} replayable={replayable}"));
+            tracing::info!(engineVersion = %version, replayable, "engine version {version} replayable={replayable}");
         }
     }
     Ok(())

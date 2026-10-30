@@ -14,6 +14,14 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 systemctl enable --now docker
 
+if [ -z "$(swapon --show --noheadings)" ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash "$DEPLOY_USER"
 fi
@@ -35,6 +43,7 @@ install -d -m 750 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR" "$APP_DIR/backu
 
 if [ ! -f "$APP_DIR/.env" ]; then
   : "${DOMAIN:?set DOMAIN, e.g. DOMAIN=racing.example.com}"
+  : "${DISCORD_WEBHOOK_URL:?set DISCORD_WEBHOOK_URL to the Discord channel webhook that receives alerts}"
   cat > "$APP_DIR/.env" <<ENV
 DOMAIN=$DOMAIN
 IMAGE_TAG=latest
@@ -56,10 +65,17 @@ REPLAY_RETENTION_HOURS=24
 ODDS_RUNS_PRERACE=3000
 ODDS_RUNS_LIVE=1500
 ODDS_THREADS=2
+
+GRAFANA_ADMIN_PASSWORD=$(openssl rand -hex 16)
+DISCORD_WEBHOOK_URL=$DISCORD_WEBHOOK_URL
+TRACE_SAMPLE_PERCENT=25
+METRICS_RETENTION=30d
+LOGS_RETENTION=14d
+TRACE_RETENTION=168h
 ENV
   chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/.env"
   chmod 600 "$APP_DIR/.env"
-  echo "Wrote $APP_DIR/.env with generated secrets. Add OAuth client ids/secrets and BOOTSTRAP_ADMINS."
+  echo "Wrote $APP_DIR/.env with generated secrets. Add OAuth client ids/secrets and BOOTSTRAP_ADMINS. Grafana: https://$DOMAIN/grafana (user admin, password GRAFANA_ADMIN_PASSWORD)."
 fi
 
 CRON_LINE="17 3 * * * cd $APP_DIR && ./backup.sh >> $APP_DIR/backups/backup.log 2>&1"

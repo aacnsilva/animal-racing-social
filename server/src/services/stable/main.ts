@@ -4,7 +4,9 @@ import { entrantNumber, newId } from '../../lib/ids.ts';
 import { payload, runConsumer, Topics, type PayloadOf } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, every, type Runtime } from '../../lib/runtime.ts';
+import { gauge } from '../../lib/telemetry.ts';
 import { DAY_MS, MINUTE_MS, utcDay } from '../../lib/time.ts';
 import {
   ageFactor, currentStats, formToken, lifeStage, pushForm, randomBase, retirementReason, type SpeciesConfig, type Stats,
@@ -78,6 +80,7 @@ async function recruit(client: Client, config: SpeciesConfig, initial: boolean):
     'INSERT INTO stable.animal_daily_stats (animal_id, day, career_day, life_stage, stats) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
     [animalId, utcDay(), careerDay, lifeStage(config, careerDay), JSON.stringify(current)],
   );
+  instruments.stableChanges().add(1, { species: config.species, kind: 'recruited' });
   await enqueue(client, 'stable', Topics.stableEvents, animalId, payload('animalRecruited', {
     animalId, species: config.species, name, base, temperament,
   }));
@@ -103,8 +106,9 @@ async function ageAnimal(client: Client, config: SpeciesConfig, animal: AnimalRo
   if (reason) await retire(client, animal, reason);
 }
 
-export async function retire(client: Client, animal: Pick<AnimalRow, 'animal_id' | 'races' | 'wins' | 'podiums'>, reason: 'AGE' | 'DECLINE' | 'ADMIN'): Promise<void> {
+export async function retire(client: Client, animal: Pick<AnimalRow, 'animal_id' | 'races' | 'wins' | 'podiums' | 'species'>, reason: 'AGE' | 'DECLINE' | 'ADMIN'): Promise<void> {
   await client.query(`UPDATE stable.animals SET status = 'RETIRED', retired_at = now(), retire_reason = $2 WHERE animal_id = $1 AND status = 'ACTIVE'`, [animal.animal_id, reason]);
+  instruments.stableChanges().add(1, { species: animal.species, kind: `retired_${reason.toLowerCase()}` });
   await enqueue(client, 'stable', Topics.stableEvents, animal.animal_id, payload('animalRetired', {
     animalId: animal.animal_id, reason, careerStats: { races: animal.races, wins: animal.wins, podiums: animal.podiums },
   }));
@@ -167,6 +171,14 @@ async function onRaceFinished(runtime: Runtime, eventId: string, finished: Paylo
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('stable', { outbox: ['stable'] });
+  gauge('ars.stable.pool', 'Active animals by species and life stage', '', async () => {
+    const { rows } = await runtime.pool.query(`SELECT species, life_stage, count(*)::int AS n FROM stable.animals WHERE status = 'ACTIVE' GROUP BY species, life_stage`);
+    return rows.map((row) => ({ value: row.n, attributes: { species: row.species, life_stage: row.life_stage } }));
+  });
+  gauge('ars.stable.pool_target', 'Target active pool size by species', '', async () => {
+    const { rows } = await runtime.pool.query('SELECT species, target_pool_size FROM stable.species');
+    return rows.map((row) => ({ value: row.target_pool_size, attributes: { species: row.species } }));
+  });
   every(10 * MINUTE_MS, () => maintainStable(runtime), runtime, 'stable maintenance');
   runtime.consumers.push(await runConsumer({
     kafka: runtime.kafka,

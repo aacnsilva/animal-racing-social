@@ -1,45 +1,97 @@
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
+use ars_infra::Res;
 use ars_infra::kafka::{MARKET_EVENTS, RACE_LIFECYCLE, RACE_TICKS};
-use ars_infra::{Res, log};
 use ars_proto::envelope::Payload;
 use ars_proto::{EntrantInfo, Envelope, RaceTick};
 use race_engine_core::{EntrantState, RevealedEntrant};
 use rdkafka::Message;
 use rdkafka::consumer::Consumer;
+use rdkafka::message::BorrowedMessage;
 
 use crate::pricing::MarketKind;
 use crate::registry::{Market, MarketStatus, RaceInfo};
 use crate::state::Shared;
 
+const GROUP: &str = "odds-engine";
+
+fn traced(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "RaceScheduled"
+            | "RaceFinished"
+            | "RaceCancelled"
+            | "MarketOpened"
+            | "MarketSuspended"
+            | "MarketResumed"
+            | "MarketClosed"
+            | "MarketResulted"
+            | "MarketVoided"
+    )
+}
+
+fn flow(event_type: &str) -> Option<&'static str> {
+    match event_type {
+        "RaceScheduled" => Some("race-scheduling"),
+        "RaceFinished" | "MarketResulted" => Some("settlement"),
+        "RaceCancelled" | "MarketVoided" => Some("cancellation"),
+        _ => None,
+    }
+}
+
 pub async fn run(app: Shared, brokers: &str) -> Res<()> {
-    let consumer = ars_infra::kafka::consumer(brokers, "odds-engine", &[RACE_LIFECYCLE, MARKET_EVENTS, RACE_TICKS], "latest")?;
-    log::info("consuming race.lifecycle, market.events, race.ticks as group odds-engine");
+    let consumer = ars_infra::kafka::consumer(brokers, GROUP, &[RACE_LIFECYCLE, MARKET_EVENTS, RACE_TICKS], "latest")?;
+    tracing::info!("consuming race.lifecycle, market.events, race.ticks as group odds-engine");
     loop {
         let message = match consumer.recv().await {
             Ok(message) => message,
             Err(err) => {
-                log::warn(format!("kafka receive error: {err}"));
+                tracing::warn!("kafka receive error: {err}");
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
         };
-        if let Some(bytes) = message.payload() {
-            match ars_infra::envelope::decode(bytes) {
-                Ok(envelope) => handle(&app, envelope),
-                Err(err) => log::warn(format!("skipping undecodable message on {}: {err}", message.topic())),
-            }
-        }
+        let started = Instant::now();
+        let (event_type, ok) = process(&app, &message);
+        ars_infra::kafka::record_processed(GROUP, message.topic(), event_type, ok, started.elapsed());
         if let Err(err) = consumer.store_offset_from_message(&message) {
-            log::warn(format!("store offset failed: {err}"));
+            tracing::warn!("store offset failed: {err}");
         }
     }
+}
+
+fn process(app: &Shared, message: &BorrowedMessage<'_>) -> (&'static str, bool) {
+    let Some(bytes) = message.payload() else { return ("unknown", false) };
+    let envelope = match ars_infra::envelope::decode(bytes) {
+        Ok(envelope) => envelope,
+        Err(err) => {
+            tracing::warn!("skipping undecodable message on {}: {err}", message.topic());
+            return ("unknown", false);
+        }
+    };
+    let event_type = ars_infra::envelope::event_type(&envelope);
+    if !traced(event_type) {
+        return (event_type, handle(app, envelope));
+    }
+    let span = ars_infra::kafka::process_span(GROUP, message, &envelope);
+    if let Some(flow) = flow(event_type) {
+        span.record("ars.flow", flow);
+    }
+    if let Some(Payload::RaceScheduled(scheduled)) = &envelope.payload {
+        span.record("race_class", scheduled.race_class.as_str());
+    }
+    let ok = span.in_scope(|| handle(app, envelope));
+    if !ok {
+        span.record("otel.status_code", "error");
+    }
+    (event_type, ok)
 }
 
 fn race_info(entrants: &[EntrantInfo], scheduled: &ars_proto::RaceScheduled) -> Option<RaceInfo> {
     let entrants = ars_infra::convert::entrants_from_proto(entrants).ok()?;
     Some(RaceInfo {
         species: scheduled.species.clone(),
+        race_class: scheduled.race_class.clone(),
         venue_id: scheduled.venue_id.clone(),
         venue_version: scheduled.venue_version,
         laps: scheduled.laps,
@@ -58,10 +110,10 @@ fn age_ms(envelope: &Envelope) -> i64 {
     }
 }
 
-fn handle(app: &Shared, envelope: Envelope) {
+fn handle(app: &Shared, envelope: Envelope) -> bool {
     let age = age_ms(&envelope);
-    let Some(payload) = envelope.payload else { return };
-    let Ok(mut registry) = app.registry.lock() else { return };
+    let Some(payload) = envelope.payload else { return false };
+    let Ok(mut registry) = app.registry.lock() else { return false };
     match payload {
         Payload::RaceScheduled(scheduled) => {
             if let Some(info) = race_info(&scheduled.entrants, &scheduled) {
@@ -69,7 +121,8 @@ fn handle(app: &Shared, envelope: Envelope) {
                 entry.info = Some(info);
                 entry.prepared = None;
             } else {
-                log::warn(format!("race {}: RaceScheduled with invalid entrants", scheduled.race_id));
+                tracing::warn!(raceId = %scheduled.race_id, "race {}: RaceScheduled with invalid entrants", scheduled.race_id);
+                return false;
             }
         }
         Payload::RaceFinished(finished) => registry.drop_race(finished.race_id),
@@ -96,7 +149,10 @@ fn handle(app: &Shared, envelope: Envelope) {
                     );
                     registry.races.entry(opened.race_id).or_default();
                 }
-                Err(err) => log::warn(format!("market {}: {err}", opened.market_id)),
+                Err(err) => {
+                    tracing::warn!(marketId = %opened.market_id, "market {}: {err}", opened.market_id);
+                    return false;
+                }
             }
         }
         Payload::PriceUpdated(updated) => {
@@ -131,7 +187,11 @@ fn handle(app: &Shared, envelope: Envelope) {
         }
         Payload::RaceTick(tick) => {
             let race_id = tick.race_id;
-            let should_price = apply_tick(&mut registry, &tick) && age <= app.settings.stale_ms;
+            let stale = age > app.settings.stale_ms;
+            if stale {
+                crate::metrics::stale_tick();
+            }
+            let should_price = apply_tick(&mut registry, &tick) && !stale;
             let has_markets = registry.markets.values().any(|market| market.race_id == race_id && market.kind != MarketKind::Tricast);
             drop(registry);
             if should_price && has_markets {
@@ -140,6 +200,7 @@ fn handle(app: &Shared, envelope: Envelope) {
         }
         _ => {}
     }
+    true
 }
 
 fn apply_tick(registry: &mut crate::registry::Registry, tick: &RaceTick) -> bool {

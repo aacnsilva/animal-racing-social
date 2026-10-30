@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use ars_infra::{Context, Res, log};
+use ars_infra::{Context, Res};
 use tokio::task::JoinHandle;
 
 use crate::Ctx;
@@ -26,18 +26,18 @@ pub async fn run(ctx: Arc<Ctx>) -> Res<()> {
         running.retain(|_, race| !race.handle.is_finished());
         ctx.live.store(running.len(), Ordering::Relaxed);
         if let Err(err) = poll(&ctx, &mut running, &mut backoff).await {
-            log::warn(format!("poll failed: {err}"));
+            tracing::warn!("poll failed: {err}");
             continue;
         }
         if let Err(err) = check_finished_publication(&ctx, &running, &mut confirmed_finished).await {
-            log::warn(format!("finish publication check failed: {err}"));
+            tracing::warn!("finish publication check failed: {err}");
         }
         if Instant::now() >= next_retention {
             next_retention = Instant::now() + Duration::from_secs(3600);
             let retention_ctx = ctx.clone();
             tokio::spawn(async move {
                 if let Err(err) = retention(&retention_ctx).await {
-                    log::warn(format!("retention job failed: {err}"));
+                    tracing::warn!("retention job failed: {err}");
                 }
             });
         }
@@ -68,7 +68,7 @@ async fn poll(ctx: &Arc<Ctx>, running: &mut HashMap<i64, Running>, backoff: &mut
         let race_id: i64 = row.get(0);
         if let Some(race) = running.get(&race_id)
             && !race.cancelled.swap(true, Ordering::Relaxed) {
-                log::info(format!("race {race_id} CANCELLED; stopping broadcast"));
+                tracing::info!(raceId = %race_id, "race {race_id} CANCELLED; stopping broadcast");
             }
     }
     let now = Instant::now();
@@ -86,7 +86,7 @@ async fn poll(ctx: &Arc<Ctx>, running: &mut HashMap<i64, Running>, backoff: &mut
         let task_cancelled = cancelled.clone();
         let handle = tokio::spawn(async move {
             if let Err(err) = run_race(task_ctx, race_id, start_at, task_cancelled).await {
-                log::error(format!("race {race_id} broadcast failed: {err}"));
+                tracing::error!(raceId = %race_id, "race {race_id} broadcast failed: {err}");
             }
         });
         backoff.insert(race_id, now + Duration::from_secs(30));
@@ -136,6 +136,6 @@ async fn retention(ctx: &Ctx) -> Res<()> {
         )
         .await
         .context("delete cancelled scripts")?;
-    log::info(format!("retention: deleted {replays} replays, {scripts} revealed scripts, {cancelled} cancelled-race scripts"));
+    tracing::info!(replays, scripts, cancelled, "retention: deleted {replays} replays, {scripts} revealed scripts, {cancelled} cancelled-race scripts");
     Ok(())
 }

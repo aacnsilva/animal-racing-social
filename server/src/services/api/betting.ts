@@ -8,6 +8,8 @@ import { enqueue } from '../../lib/outbox.ts';
 import { getJson, setJson } from '../../lib/redis.ts';
 import { comboViolation } from '../../domain/combo.ts';
 import { combinedPrice, harvilleProbability, priceFromProbability, tricastPrice } from '../../domain/pricing.ts';
+import { instruments } from '../../lib/instruments.ts';
+import { activeSpan } from '../../lib/telemetry.ts';
 import { loadBet } from '../../read/bets.ts';
 import { issueQuote, loadLegs, quoteStillValid } from '../../read/cashout.ts';
 import { loadMarket } from '../../read/markets.ts';
@@ -160,6 +162,8 @@ async function insertBet(deps: Deps, userId: string, key: string, stake: number,
     if (existing) return accepted(existing);
     throw error;
   }
+  activeSpan()?.setAttributes({ 'ars.bet_id': betId, 'ars.bet_type': type, 'ars.race_id': legs[0]!.raceId });
+  instruments.betsPlaced().add(1, { bet_type: type, phase: anyLive ? 'live' : 'pre', market_type: type === 'SINGLE' ? legs[0]!.type : 'COMBO' });
   return accepted(await loadBet(deps.pool, userId, betId));
 }
 

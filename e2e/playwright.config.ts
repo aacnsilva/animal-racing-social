@@ -15,5 +15,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', testIgnore: /observability\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    { name: 'observability', testMatch: /observability\.spec\.ts/, dependencies: ['chromium'] },
+  ],
 });

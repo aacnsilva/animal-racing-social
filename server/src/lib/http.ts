@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { errorFields, log } from './log.ts';
+import { BUCKETS, extractContext, failSpan, histogram, SpanKind, SpanStatusCode, withSpan, type Span } from './telemetry.ts';
 
 export class ApiError extends Error {
   status: number;
@@ -47,7 +48,7 @@ export type Ctx = {
 export type Handler = (ctx: Ctx) => Promise<unknown>;
 export type Middleware = (ctx: Ctx) => Promise<void>;
 
-type Route = { method: string; parts: string[]; handler: Handler };
+type Route = { method: string; path: string; parts: string[]; handler: Handler };
 
 export class Router {
   routes: Route[] = [];
@@ -59,7 +60,7 @@ export class Router {
   }
 
   add(method: string, path: string, handler: Handler): this {
-    this.routes.push({ method, parts: path.split('/').filter(Boolean), handler });
+    this.routes.push({ method, path, parts: path.split('/').filter(Boolean), handler });
     return this;
   }
 
@@ -69,7 +70,7 @@ export class Router {
   patch(path: string, handler: Handler) { return this.add('PATCH', path, handler); }
   delete(path: string, handler: Handler) { return this.add('DELETE', path, handler); }
 
-  match(method: string, pathname: string): { handler: Handler; params: Record<string, string> } | null {
+  match(method: string, pathname: string): { handler: Handler; params: Record<string, string>; path: string } | null {
     const parts = pathname.split('/').filter(Boolean);
     for (const route of this.routes) {
       if (route.method !== method || route.parts.length !== parts.length) continue;
@@ -83,7 +84,7 @@ export class Router {
           break;
         }
       }
-      if (matched) return { handler: route.handler, params };
+      if (matched) return { handler: route.handler, params, path: route.path };
     }
     return null;
   }
@@ -144,9 +145,60 @@ export function sendJson(res: ServerResponse, status: number, body: unknown, hea
   res.end(payload);
 }
 
+const FLOWS: [RegExp, string][] = [
+  [/^\/v1\/admin\/races\/:raceId\/cancel$/, 'cancellation'],
+  [/^\/v1\/admin\//, 'admin'],
+  [/^\/v1\/bets\/:betId\/cashout$/, 'cashout'],
+  [/^\/v1\/bets\/combos$/, 'combo'],
+  [/^\/v1\/markets\/:marketId\/bets$/, 'bet'],
+  [/^\/v1\/auth\//, 'auth'],
+  [/^\/v1\/me\/rewards\/daily$/, 'daily-reward'],
+  [/^\/internal\//, 'internal'],
+];
+
+function flowOf(method: string, path: string): string | undefined {
+  if (method === 'GET' && !path.startsWith('/v1/admin/')) return undefined;
+  return FLOWS.find(([pattern]) => pattern.test(path))?.[1];
+}
+
+const requestDuration = () => histogram('http.server.request.duration', 's', 'Duration of HTTP server requests', BUCKETS.http);
+
+async function handle(router: Router, ctx: Ctx, route: ReturnType<Router['match']>, span: Span | null): Promise<void> {
+  const { res } = ctx;
+  try {
+    if (!route) throw new ApiError(404, 'NOT_FOUND', `No route for ${ctx.method} ${ctx.url.pathname}`);
+    ctx.params = route.params;
+    for (const middleware of router.middlewares) await middleware(ctx);
+    const result = await route.handler(ctx);
+    if (res.headersSent || res.writableEnded) return;
+    const reply = result instanceof Reply ? result : new Reply(200, result);
+    const cookies = [...ctx.setCookies, ...([] as string[]).concat(reply.headers['set-cookie'] ?? [])];
+    const headers = { ...reply.headers, ...(cookies.length ? { 'set-cookie': cookies } : {}) };
+    sendJson(res, reply.status, reply.body, headers);
+  } catch (error) {
+    if (res.headersSent) {
+      res.end();
+      return;
+    }
+    if (error instanceof ApiError) {
+      const headers: Record<string, string> = {};
+      if (error.status === 429 && typeof error.details === 'object' && error.details && 'retryAfter' in error.details) {
+        headers['retry-after'] = String((error.details as { retryAfter: number }).retryAfter);
+      }
+      if (span && error.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR, message: error.code });
+      if (span) span.setAttribute('ars.error_code', error.code);
+      sendJson(res, error.status, { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) }, headers);
+    } else {
+      if (span) failSpan(span, error);
+      log.error('unhandled error', { method: ctx.method, path: ctx.url.pathname, ...errorFields(error) });
+      sendJson(res, 500, { code: 'INTERNAL', message: 'Internal error' });
+    }
+  }
+}
+
 export function serve(router: Router, port: number): Server {
   const server = createServer(async (req, res) => {
-    const started = Date.now();
+    const started = performance.now();
     const url = new URL(req.url ?? '/', 'http://localhost');
     const method = req.method ?? 'GET';
     let parsedBody: Promise<any> | null = null;
@@ -163,35 +215,28 @@ export function serve(router: Router, port: number): Server {
       body: () => (parsedBody ??= readBody(req)),
       setCookies: [],
     };
-    try {
-      const route = router.match(method === 'HEAD' ? 'GET' : method, url.pathname);
-      if (!route) throw new ApiError(404, 'NOT_FOUND', `No route for ${method} ${url.pathname}`);
-      ctx.params = route.params;
-      for (const middleware of router.middlewares) await middleware(ctx);
-      const result = await route.handler(ctx);
-      if (res.headersSent || res.writableEnded) return;
-      const reply = result instanceof Reply ? result : new Reply(200, result);
-      const cookies = [...ctx.setCookies, ...([] as string[]).concat(reply.headers['set-cookie'] ?? [])];
-      const headers = { ...reply.headers, ...(cookies.length ? { 'set-cookie': cookies } : {}) };
-      sendJson(res, reply.status, reply.body, headers);
-    } catch (error) {
-      if (res.headersSent) {
-        res.end();
-        return;
-      }
-      if (error instanceof ApiError) {
-        const headers: Record<string, string> = {};
-        if (error.status === 429 && typeof error.details === 'object' && error.details && 'retryAfter' in error.details) {
-          headers['retry-after'] = String((error.details as { retryAfter: number }).retryAfter);
-        }
-        sendJson(res, error.status, { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) }, headers);
-      } else {
-        log.error('unhandled error', { method, path: url.pathname, ...errorFields(error) });
-        sendJson(res, 500, { code: 'INTERNAL', message: 'Internal error' });
-      }
-    } finally {
-      if (url.pathname !== '/healthz') log.info('http', { method, path: url.pathname, status: res.statusCode, ms: Date.now() - started });
+    const route = router.match(method === 'HEAD' ? 'GET' : method, url.pathname);
+    if (url.pathname === '/healthz') {
+      await handle(router, ctx, route, null);
+      return;
     }
+    const template = route?.path ?? 'unmatched';
+    const flow = flowOf(method, template);
+    await withSpan(`${method} ${template}`, {
+      kind: SpanKind.SERVER,
+      parent: extractContext(req.headers),
+      attributes: { 'http.request.method': method, 'http.route': template, 'url.path': url.pathname, ...(flow ? { 'ars.flow': flow } : {}) },
+    }, async (span) => {
+      res.setHeader('x-trace-id', span.spanContext().traceId);
+      for (const [name, value] of Object.entries(route?.params ?? {})) {
+        if (/^\d{1,19}$/.test(value)) span.setAttribute(`ars.${name.replace(/Id$/, '_id').toLowerCase()}`, value);
+      }
+      await handle(router, ctx, route, span);
+      span.setAttribute('http.response.status_code', res.statusCode);
+      const seconds = (performance.now() - started) / 1000;
+      requestDuration().record(seconds, { 'http.route': template, 'http.request.method': method, 'http.response.status_code': res.statusCode });
+      log.info('http', { method, path: url.pathname, route: template, status: res.statusCode, ms: Math.round(seconds * 1000) });
+    });
   });
   server.listen(port);
   return server;

@@ -7,7 +7,9 @@ import { payload, runConsumer, Topics } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
 import { getJson } from '../../lib/redis.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, type Runtime } from '../../lib/runtime.ts';
+import { activeSpan, gauge } from '../../lib/telemetry.ts';
 import { sleep } from '../../lib/time.ts';
 import { decidePrice, type PricePolicy } from '../../domain/acceptance.ts';
 import { combinedPrice, harvilleProbability, priceFromProbability } from '../../domain/pricing.ts';
@@ -56,7 +58,17 @@ async function legDecision(runtime: Runtime, db: Queryable, leg: LegRow, request
   return { ok: true, lockedPrice: decision.lockedPrice, tick: market.race_status === 'LIVE' ? await currentTick(runtime, leg.race_id) : null };
 }
 
-async function reject(runtime: Runtime, userId: string, betId: string, reason: Rejection): Promise<void> {
+type BetFacts = { betType: string; phase: 'pre' | 'live'; requestedAt: Date };
+
+function recordDecision(facts: BetFacts, outcome: 'accepted' | 'rejected', reason: string): void {
+  const labels = { bet_type: facts.betType, phase: facts.phase };
+  instruments.betsDecided().add(1, { ...labels, outcome, reason });
+  instruments.acceptanceDuration().record((Date.now() - facts.requestedAt.getTime()) / 1000, labels);
+  activeSpan()?.setAttributes({ 'ars.bet_outcome': outcome, 'ars.reject_reason': reason });
+}
+
+async function reject(runtime: Runtime, userId: string, betId: string, reason: Rejection, facts?: BetFacts): Promise<void> {
+  if (facts) recordDecision(facts, 'rejected', reason);
   await tx(runtime.pool, async (client) => {
     const updated = await client.query(`UPDATE betting.bets SET status = 'REJECTED', reject_reason = $3 WHERE user_id = $1 AND bet_id = $2 AND status = 'PENDING'`, [userId, betId, reason]);
     if (updated.rowCount === 0) return;
@@ -68,13 +80,15 @@ async function reject(runtime: Runtime, userId: string, betId: string, reason: R
 export async function processBet(runtime: Runtime, userId: string, betId: string, acceptAtMs: number): Promise<void> {
   const bet = await one(runtime.pool, 'SELECT * FROM betting.bets WHERE user_id = $1 AND bet_id = $2', [userId, betId]);
   if (!bet || bet.status !== 'PENDING') return;
+  const facts: BetFacts = { betType: bet.type, phase: acceptAtMs > 0 ? 'live' : 'pre', requestedAt: bet.requested_at };
+  activeSpan()?.setAttributes({ 'ars.bet_type': bet.type, 'ars.phase': facts.phase });
   await waitUntil(acceptAtMs);
   let legs = await loadLegs(runtime.pool, userId, betId);
   if (legs.some((leg) => leg.locked_price === null)) {
     const decisions: { leg: LegRow; lockedPrice: number; tick: number | null }[] = [];
     for (const leg of legs) {
       const decision = await legDecision(runtime, runtime.pool, leg, bet.requested_at, bet.accept_price_changes);
-      if (!decision.ok) return reject(runtime, userId, betId, decision.reason);
+      if (!decision.ok) return reject(runtime, userId, betId, decision.reason, facts);
       decisions.push({ leg, lockedPrice: decision.lockedPrice, tick: decision.tick });
     }
     await tx(runtime.pool, async (client) => {
@@ -90,7 +104,7 @@ export async function processBet(runtime: Runtime, userId: string, betId: string
   try {
     await walletApi.debit(userId, bet.season_id, betId, Number(bet.stake));
   } catch (error) {
-    if (error instanceof ApiError && error.code === 'INSUFFICIENT_FUNDS') return reject(runtime, userId, betId, 'INSUFFICIENT_FUNDS');
+    if (error instanceof ApiError && error.code === 'INSUFFICIENT_FUNDS') return reject(runtime, userId, betId, 'INSUFFICIENT_FUNDS', facts);
     throw error;
   }
   const lockedPrice = combinedPrice(legs.map((leg) => leg.locked_price ?? leg.accepted_price));
@@ -114,10 +128,13 @@ export async function processBet(runtime: Runtime, userId: string, betId: string
       seasonId: bet.season_id,
     }));
   });
+  recordDecision(facts, 'accepted', 'none');
+  instruments.pointsStaked().add(Number(bet.stake), { bet_type: facts.betType, phase: facts.phase });
   log.info('bet accepted', { betId, lockedPrice });
 }
 
-async function rejectCashout(runtime: Runtime, userId: string, betId: string, cashoutId: string, reason: string): Promise<void> {
+async function rejectCashout(runtime: Runtime, userId: string, betId: string, cashoutId: string, reason: string, phase: 'pre' | 'live' = 'pre'): Promise<void> {
+  instruments.cashouts().add(1, { phase, outcome: 'rejected', reason });
   await tx(runtime.pool, async (client) => {
     const updated = await client.query(
       `UPDATE betting.cashouts SET status = 'REJECTED', reject_reason = $3, decided_at = now() WHERE user_id = $1 AND cashout_id = $2 AND status = 'PENDING'`,
@@ -133,12 +150,14 @@ export async function processCashout(runtime: Runtime, userId: string, betId: st
   const cashout = await one(runtime.pool, 'SELECT * FROM betting.cashouts WHERE user_id = $1 AND cashout_id = $2', [userId, cashoutId]);
   if (!cashout || cashout.status !== 'PENDING') return;
   await waitUntil(acceptAtMs);
+  const phase = acceptAtMs > 0 ? 'live' : 'pre';
+  activeSpan()?.setAttributes({ 'ars.flow': 'cashout', 'ars.phase': phase });
   const bet = await one(runtime.pool, 'SELECT * FROM betting.bets WHERE user_id = $1 AND bet_id = $2', [userId, betId]);
-  if (!bet || bet.status !== 'ACCEPTED') return rejectCashout(runtime, userId, betId, cashoutId, 'ALREADY_SETTLED');
+  if (!bet || bet.status !== 'ACCEPTED') return rejectCashout(runtime, userId, betId, cashoutId, 'ALREADY_SETTLED', phase);
   const legs = await loadLegs(runtime.pool, userId, betId);
   const value = await cashOutValue(runtime.redis, runtime.pool, Number(bet.stake), legs);
-  if (!value.ok) return rejectCashout(runtime, userId, betId, cashoutId, value.reason === 'MARKET_SUSPENDED' ? 'MARKET_SUSPENDED' : 'ALREADY_SETTLED');
-  if (value.amount < Number(cashout.min_amount)) return rejectCashout(runtime, userId, betId, cashoutId, 'BELOW_MIN');
+  if (!value.ok) return rejectCashout(runtime, userId, betId, cashoutId, value.reason === 'MARKET_SUSPENDED' ? 'MARKET_SUSPENDED' : 'ALREADY_SETTLED', phase);
+  if (value.amount < Number(cashout.min_amount)) return rejectCashout(runtime, userId, betId, cashoutId, 'BELOW_MIN', phase);
   const accepted = await tx(runtime.pool, async (client) => {
     const updated = await client.query(
       `UPDATE betting.bets SET status = 'CASHED_OUT', cashout_amount = $3, settled_at = now() WHERE user_id = $1 AND bet_id = $2 AND status = 'ACCEPTED'`,
@@ -154,12 +173,18 @@ export async function processCashout(runtime: Runtime, userId: string, betId: st
     }));
     return true;
   });
-  if (!accepted) return rejectCashout(runtime, userId, betId, cashoutId, 'ALREADY_SETTLED');
+  if (!accepted) return rejectCashout(runtime, userId, betId, cashoutId, 'ALREADY_SETTLED', phase);
+  instruments.cashouts().add(1, { phase, outcome: 'accepted', reason: 'none' });
+  instruments.pointsReturned().add(value.amount, { bet_type: bet.type, kind: 'cashout' });
   log.info('cash-out accepted', { betId, amount: value.amount });
 }
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('bet-worker', { outbox: ['betting'] });
+  gauge('ars.bets.pending_oldest_age', 'Age of the oldest bet still waiting for a decision', 's', async () => {
+    const { rows } = await runtime.pool.query(`SELECT coalesce(extract(epoch from now() - min(requested_at)), 0) AS age FROM betting.bets WHERE status = 'PENDING'`);
+    return [{ value: Number(rows[0].age) }];
+  });
   runtime.consumers.push(await runConsumer({
     kafka: runtime.kafka,
     groupId: 'bet-worker',

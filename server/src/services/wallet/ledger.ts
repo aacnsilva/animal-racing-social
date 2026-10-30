@@ -2,6 +2,7 @@ import { one, type Client } from '../../lib/db.ts';
 import { ApiError } from '../../lib/http.ts';
 import { newId, shardOf } from '../../lib/ids.ts';
 import { payload, Topics } from '../../lib/kafka.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { enqueue } from '../../lib/outbox.ts';
 
 export type LedgerType = 'SEASON_GRANT' | 'DAILY_GRANT' | 'BET_STAKE' | 'BET_PAYOUT' | 'BET_REFUND' | 'BET_LOST' | 'CASHOUT' | 'ADMIN_ADJUST';
@@ -20,6 +21,7 @@ async function appendEntry(client: Client, userId: string, seasonId: string, typ
     [userId, entryId, seasonId, type, amount, refId, after.balance],
   );
   if (inserted.rowCount === 0) return false;
+  instruments.ledgerEntries().add(1, { type });
   await enqueue(client, 'wallet', Topics.walletEvents, userId, payload('ledgerEntryAppended', {
     entryId, userId, seasonId, type, amount: String(amount), refId, balanceAfter: String(after.balance), openStakeAfter: String(after.openStake),
   }));
@@ -59,3 +61,24 @@ export async function applyChange(
   await appendEntry(client, change.userId, change.seasonId, change.type, change.balanceDelta, change.refId, next);
   return { applied: true, state: next };
 }
+
+export const RECONCILIATION_SQL = `
+  WITH per_bet AS (
+    SELECT user_id, season_id, ref_id,
+      sum(CASE WHEN type = 'BET_STAKE' THEN -amount ELSE 0 END) AS staked,
+      bool_or(type IN ('BET_PAYOUT', 'BET_LOST', 'BET_REFUND', 'CASHOUT')) AS closed
+    FROM wallet.ledger_entries
+    WHERE type IN ('BET_STAKE', 'BET_PAYOUT', 'BET_LOST', 'BET_REFUND', 'CASHOUT')
+    GROUP BY user_id, season_id, ref_id
+  ),
+  expected AS (
+    SELECT w.user_id, w.season_id, w.balance, w.open_stake,
+      (SELECT coalesce(sum(l.amount), 0) FROM wallet.ledger_entries l WHERE l.user_id = w.user_id AND l.season_id = w.season_id) AS ledger_balance,
+      (SELECT coalesce(sum(b.staked), 0) FROM per_bet b WHERE b.user_id = w.user_id AND b.season_id = w.season_id AND NOT b.closed) AS ledger_open_stake
+    FROM wallet.wallets w
+  )
+  SELECT
+    count(*) FILTER (WHERE balance <> ledger_balance OR open_stake <> ledger_open_stake)::int AS mismatched,
+    coalesce(sum(abs(open_stake - ledger_open_stake)), 0)::bigint AS open_stake_drift,
+    coalesce(sum(abs(balance - ledger_balance)), 0)::bigint AS balance_drift
+  FROM expected`;

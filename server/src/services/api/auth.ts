@@ -7,6 +7,7 @@ import { walletApi } from '../../lib/internal.ts';
 import { errorFields, log } from '../../lib/log.ts';
 import { activeSeason } from '../../lib/seasons.ts';
 import { DAY_MS } from '../../lib/time.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { jwtSecret, publicUrl, requireUser, secureCookies, userJson, type Deps } from './context.ts';
 
 type ProviderId = 'google' | 'github';
@@ -143,7 +144,10 @@ export function authRoutes(router: Router, deps: Deps): void {
     const p = provider(ctx.params.provider);
     const stored = unseal<{ state: string; verifier: string; provider: string; redirect: string; linkUserId: string | null }>(ctx.cookies[OAUTH_COOKIE], jwtSecret());
     const clearOauth = serializeCookie(OAUTH_COOKIE, '', { path: '/v1/auth', maxAge: 0, secure: secureCookies() });
-    const fail = (code: string, target = '/') => redirect(withParam(target, 'authError', code), [clearOauth]);
+    const fail = (code: string, target = '/') => {
+      instruments.authLogins().add(1, { provider: p.id, outcome: code.toLowerCase() });
+      return redirect(withParam(target, 'authError', code), [clearOauth]);
+    };
     if (ctx.query.get('error')) return fail('PROVIDER_DENIED', stored?.redirect);
     if (!stored || stored.state !== ctx.query.get('state') || stored.provider !== p.id) return fail('STATE_MISMATCH');
     let profile: Profile;
@@ -177,6 +181,7 @@ export function authRoutes(router: Router, deps: Deps): void {
     if ('error' in outcome) return fail(outcome.error!, stored.redirect);
     const season = await activeSeason(deps.pool);
     if (season) walletApi.ensure(outcome.userId, season.season_id).catch((error) => log.warn('wallet ensure failed', errorFields(error)));
+    instruments.authLogins().add(1, { provider: p.id, outcome: stored.linkUserId ? 'linked' : 'ok' });
     return redirect(stored.redirect, [refreshCookie(outcome.token), clearOauth]);
   });
 
@@ -185,13 +190,21 @@ export function authRoutes(router: Router, deps: Deps): void {
     if (!token) throw new ApiError(401, 'UNAUTHORIZED', 'No session');
     const result = await tx(deps.pool, async (client) => {
       const row = await one(client, 'SELECT * FROM identity.refresh_tokens WHERE token_hash = $1 FOR UPDATE', [sha256(token)]);
-      if (!row || row.expires_at < new Date()) return { error: 'UNAUTHORIZED' as const };
-      if (row.revoked_at) {
-        if (Date.now() - row.revoked_at.getTime() < 30_000) return { userId: row.user_id as string, cookie: null };
-        await client.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [row.family_id]);
-        log.warn('refresh token reuse detected', { userId: row.user_id });
+      if (!row || row.expires_at < new Date()) {
+        instruments.authRefresh().add(1, { outcome: 'expired' });
         return { error: 'UNAUTHORIZED' as const };
       }
+      if (row.revoked_at) {
+        if (Date.now() - row.revoked_at.getTime() < 30_000) {
+          instruments.authRefresh().add(1, { outcome: 'grace' });
+          return { userId: row.user_id as string, cookie: null };
+        }
+        await client.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [row.family_id]);
+        log.warn('refresh token reuse detected', { userId: row.user_id });
+        instruments.authRefresh().add(1, { outcome: 'reuse_detected' });
+        return { error: 'UNAUTHORIZED' as const };
+      }
+      instruments.authRefresh().add(1, { outcome: 'rotated' });
       await client.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND token_id = $2', [row.user_id, row.token_id]);
       return { userId: row.user_id as string, cookie: refreshCookie(await issueRefresh(client, row.user_id, row.family_id)) };
     });

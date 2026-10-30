@@ -4,20 +4,55 @@ use std::time::{Duration, SystemTime};
 
 use ars_infra::kafka::{RACE_LIFECYCLE, RACE_TICKS};
 use ars_infra::sealing::decompress;
+use ars_infra::telemetry::traced;
 use ars_infra::time::{format_rfc3339, unix_millis};
-use ars_infra::{Context, Res, log};
+use ars_infra::{Context, Res};
 use ars_proto::envelope::Payload;
 use ars_proto::{LapCompleted, RaceStarted};
 use race_engine_core::{EventKind, RaceScript, ScriptTick};
 use redis::AsyncCommands;
+use tracing::field::Empty;
 
 use crate::Ctx;
+use crate::metrics;
 use crate::publish::{entrant_number, finished_message, standings, state_json, tick_message};
 
 pub const STATE_TTL_SECONDS: u64 = 7200;
 
 pub fn state_key(race_id: i64) -> String {
     format!("race:{race_id}:state")
+}
+
+fn root_span(name: &'static str, flow: &'static str, race_id: i64) -> tracing::Span {
+    tracing::info_span!(
+        parent: None,
+        "broadcaster",
+        "otel.name" = name,
+        "otel.status_code" = Empty,
+        "ars.flow" = flow,
+        "ars.race_id" = %race_id,
+        "race_class" = Empty,
+    )
+}
+
+struct Clock {
+    race_id: i64,
+    race_class: String,
+    start_at: SystemTime,
+    start_text: String,
+    tick_ms: u32,
+}
+
+impl Clock {
+    fn tick_time(&self, tick: u32) -> SystemTime {
+        self.start_at + Duration::from_millis(tick as u64 * self.tick_ms as u64)
+    }
+}
+
+enum Start {
+    Live,
+    AlreadyLive,
+    Skipped,
 }
 
 pub async fn sleep_until(target: SystemTime) {
@@ -59,6 +94,15 @@ async fn load_script(ctx: &Ctx, race_id: i64) -> Res<Loaded> {
     Ok(Loaded { script, compressed, key_id, seed_ciphertext })
 }
 
+async fn race_header(ctx: &Ctx, race_id: i64) -> Res<Option<(String, String)>> {
+    let conn = ctx.db.acquire().await?;
+    let row = conn
+        .query_opt("SELECT status, race_class FROM racing.races WHERE race_id = $1", &[&race_id])
+        .await
+        .context("load race status")?;
+    Ok(row.map(|row| (row.get(0), row.get(1))))
+}
+
 async fn current_status(ctx: &Ctx, race_id: i64) -> Res<Option<(String, Option<SystemTime>)>> {
     let conn = ctx.db.acquire().await?;
     let row = conn
@@ -80,7 +124,7 @@ async fn write_state(ctx: &Ctx, race_id: i64, status: &str, tick: &ScriptTick, t
     let body = state_json(race_id, status, tick, tick_ms, start_at);
     let result: redis::RedisResult<()> = redis.set_ex(state_key(race_id), body, STATE_TTL_SECONDS).await;
     if let Err(err) = result {
-        log::warn(format!("race {race_id}: redis state write failed: {err}"));
+        tracing::warn!(raceId = %race_id, "race {race_id}: redis state write failed: {err}");
     }
 }
 
@@ -98,71 +142,95 @@ async fn publish_lap_events(ctx: &Ctx, race_id: i64, tick: &ScriptTick) -> Res<(
     Ok(())
 }
 
-async fn publish_tick(ctx: &Ctx, race_id: i64, tick: &ScriptTick, tick_ms: u32, start_at: &str) -> Res<()> {
-    let key = race_id.to_string();
+async fn publish_tick(ctx: &Ctx, clock: &Clock, tick: &ScriptTick) -> Res<()> {
+    let race_id = clock.race_id;
     let message = Payload::RaceTick(tick_message(race_id, tick));
-    if let Err(err) = ctx.producer.publish_payload(RACE_TICKS, &key, message).await {
-        log::warn(format!("race {race_id}: tick {} not published: {err}", tick.tick));
+    match ctx.producer.publish_payload(RACE_TICKS, &race_id.to_string(), message).await {
+        Ok(()) => metrics::tick_drift(&clock.race_class, clock.tick_time(tick.tick), SystemTime::now()),
+        Err(err) => tracing::warn!(raceId = %race_id, tick = tick.tick, "race {race_id}: tick {} not published: {err}", tick.tick),
     }
     publish_lap_events(ctx, race_id, tick).await?;
-    write_state(ctx, race_id, "LIVE", tick, tick_ms, start_at).await;
+    write_state(ctx, race_id, "LIVE", tick, clock.tick_ms, &clock.start_text).await;
+    Ok(())
+}
+
+async fn start_race(ctx: &Ctx, clock: &Clock, laps: u32) -> Res<Start> {
+    let race_id = clock.race_id;
+    let started = {
+        let conn = ctx.db.acquire().await?;
+        conn.query_opt(
+            "UPDATE racing.races SET status = 'LIVE', started_at = now()
+             WHERE race_id = $1 AND status IN ('OPEN', 'LOCKED') RETURNING started_at",
+            &[&race_id],
+        )
+        .await
+        .context("set LIVE")?
+    };
+    match started {
+        Some(row) => {
+            let started_at: SystemTime = row.get(0);
+            let payload = Payload::RaceStarted(RaceStarted { race_id, started_at: format_rfc3339(started_at) });
+            ctx.producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), payload).await?;
+            metrics::start_delay(&clock.race_class, clock.start_at, SystemTime::now());
+            tracing::info!(raceId = %race_id, laps, "race {race_id} LIVE ({laps} laps)");
+            Ok(Start::Live)
+        }
+        None => match current_status(ctx, race_id).await?.map(|(status, _)| status).as_deref() {
+            Some("LIVE") => Ok(Start::AlreadyLive),
+            other => {
+                tracing::info!(raceId = %race_id, "race {race_id} not started (status {other:?})");
+                Ok(Start::Skipped)
+            }
+        },
+    }
+}
+
+async fn republish_started(ctx: &Ctx, clock: &Clock) -> Res<()> {
+    let race_id = clock.race_id;
+    let started_at = current_status(ctx, race_id).await?.and_then(|(_, started_at)| started_at).unwrap_or(clock.start_at);
+    let payload = Payload::RaceStarted(RaceStarted { race_id, started_at: format_rfc3339(started_at) });
+    ctx.producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), payload).await?;
+    tracing::info!(raceId = %race_id, "race {race_id}: re-published RaceStarted");
     Ok(())
 }
 
 pub async fn run_race(ctx: Arc<Ctx>, race_id: i64, start_at: SystemTime, cancelled: Arc<AtomicBool>) -> Res<()> {
-    let start_text = format_rfc3339(start_at);
-    let (initial_status, _) = current_status(&ctx, race_id).await?.context("RACE_NOT_FOUND")?;
+    let (initial_status, race_class) = race_header(&ctx, race_id).await?.context("RACE_NOT_FOUND")?;
     let loaded = load_script(&ctx, race_id).await?;
     let script = &loaded.script;
     let tick_ms = script.tick_ms.max(1);
     let finish_tick = script.result.finish_tick;
+    let clock = Clock { race_id, race_class, start_at, start_text: format_rfc3339(start_at), tick_ms };
     let mut resuming = initial_status == "LIVE";
     if !resuming {
         sleep_until(start_at).await;
         if cancelled.load(Ordering::Relaxed) {
             return Ok(());
         }
-        let started = {
-            let conn = ctx.db.acquire().await?;
-            conn.query_opt(
-                "UPDATE racing.races SET status = 'LIVE', started_at = now()
-                 WHERE race_id = $1 AND status IN ('OPEN', 'LOCKED') RETURNING started_at",
-                &[&race_id],
-            )
-            .await
-            .context("set LIVE")?
-        };
-        match started {
-            Some(row) => {
-                let started_at: SystemTime = row.get(0);
-                let payload = Payload::RaceStarted(RaceStarted { race_id, started_at: format_rfc3339(started_at) });
-                ctx.producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), payload).await?;
-                log::info(format!("race {race_id} LIVE ({} laps)", script.track.laps));
-            }
-            None => match current_status(&ctx, race_id).await?.map(|(status, _)| status).as_deref() {
-                Some("LIVE") => resuming = true,
-                other => {
-                    log::info(format!("race {race_id} not started (status {other:?})"));
-                    return Ok(());
-                }
-            },
+        let span = root_span("broadcaster.start_race", "race-start", race_id);
+        span.record("race_class", clock.race_class.as_str());
+        match traced(&span, start_race(&ctx, &clock, script.track.laps)).await? {
+            Start::Live => {}
+            Start::AlreadyLive => resuming = true,
+            Start::Skipped => return Ok(()),
         }
     }
     let elapsed_ms = (unix_millis(SystemTime::now()) - unix_millis(start_at)).max(0);
-    let wall_tick = ((elapsed_ms / tick_ms as i64) as u32).min(finish_tick);
+    let elapsed_tick = elapsed_ms / tick_ms as i64;
+    let wall_tick = (elapsed_tick as u32).min(finish_tick);
     let mut next_tick = 0;
     if resuming {
         let last = last_published_tick(&ctx, race_id).await;
         if last.is_none() {
-            let started_at = current_status(&ctx, race_id).await?.and_then(|(_, started_at)| started_at).unwrap_or(start_at);
-            let payload = Payload::RaceStarted(RaceStarted { race_id, started_at: format_rfc3339(started_at) });
-            ctx.producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), payload).await?;
+            let span = root_span("broadcaster.republish_started", "race-start", race_id);
+            span.record("race_class", clock.race_class.as_str());
+            traced(&span, republish_started(&ctx, &clock)).await?;
         }
         let gap_from = last.map(|tick| tick + 1).unwrap_or(0);
         for tick in script.ticks.iter().filter(|tick| tick.tick >= gap_from && tick.tick < wall_tick) {
             publish_lap_events(&ctx, race_id, tick).await?;
         }
-        log::info(format!("race {race_id} resumed at tick {wall_tick} (last published {last:?})"));
+        tracing::info!(raceId = %race_id, "race {race_id} resumed at tick {elapsed_tick} (last published {last:?})");
         next_tick = wall_tick;
     } else if wall_tick > 10 {
         for tick in script.ticks.iter().filter(|tick| tick.tick < wall_tick) {
@@ -171,15 +239,17 @@ pub async fn run_race(ctx: Arc<Ctx>, race_id: i64, start_at: SystemTime, cancell
         next_tick = wall_tick;
     }
     for tick in script.ticks.iter().filter(|tick| tick.tick >= next_tick) {
-        sleep_until(start_at + Duration::from_millis(tick.tick as u64 * tick_ms as u64)).await;
+        sleep_until(clock.tick_time(tick.tick)).await;
         if cancelled.load(Ordering::Relaxed) {
-            write_state(&ctx, race_id, "CANCELLED", tick, tick_ms, &start_text).await;
-            log::info(format!("race {race_id} cancelled at tick {}", tick.tick));
+            write_state(&ctx, race_id, "CANCELLED", tick, tick_ms, &clock.start_text).await;
+            tracing::info!(raceId = %race_id, "race {race_id} cancelled at tick {}", tick.tick);
             return Ok(());
         }
-        publish_tick(&ctx, race_id, tick, tick_ms, &start_text).await?;
+        publish_tick(&ctx, &clock, tick).await?;
     }
-    finish(&ctx, race_id, &loaded, &start_text).await
+    let span = root_span("broadcaster.reveal", "settlement", race_id);
+    span.record("race_class", clock.race_class.as_str());
+    traced(&span, finish(&ctx, race_id, &loaded, &clock.start_text)).await
 }
 
 async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> Res<()> {
@@ -201,7 +271,7 @@ async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> R
         .context("set FINISHED")?;
     let Some(row) = finished else {
         drop(transaction);
-        log::warn(format!("race {race_id} was no longer LIVE at its final tick; nothing revealed"));
+        tracing::warn!(raceId = %race_id, "race {race_id} was no longer LIVE at its final tick; nothing revealed");
         return Ok(());
     };
     let finished_at: SystemTime = row.get(0);
@@ -275,15 +345,21 @@ async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> R
     if let Some(last) = script.ticks.last() {
         write_state(ctx, race_id, "FINISHED", last, script.tick_ms, start_text).await;
     }
-    log::info(format!("race {race_id} FINISHED: winner {} order {:?}", result.order.first().cloned().unwrap_or_default(), result.order));
+    let winner = result.order.first().cloned().unwrap_or_default();
+    tracing::info!(raceId = %race_id, winner = %winner, "race {race_id} FINISHED: winner {winner} order {:?}", result.order);
     Ok(())
 }
 
 pub async fn republish_finished(ctx: &Ctx, race_id: i64) -> Res<()> {
+    let span = root_span("broadcaster.republish_finished", "settlement", race_id);
+    traced(&span, republish_finished_in_span(ctx, race_id)).await
+}
+
+async fn republish_finished_in_span(ctx: &Ctx, race_id: i64) -> Res<()> {
     let row = {
         let conn = ctx.db.acquire().await?;
         conn.query_opt(
-            "SELECT r.seed, r.finished_at, r.start_at, p.script FROM racing.races r
+            "SELECT r.seed, r.finished_at, r.start_at, p.script, r.race_class FROM racing.races r
                JOIN racing.race_replays p USING (race_id)
               WHERE r.race_id = $1 AND r.status IN ('FINISHED', 'SETTLED')",
             &[&race_id],
@@ -296,13 +372,15 @@ pub async fn republish_finished(ctx: &Ctx, race_id: i64) -> Res<()> {
     let finished_at: SystemTime = row.get(1);
     let start_at: SystemTime = row.get(2);
     let compressed: Vec<u8> = row.get(3);
+    let race_class: String = row.get(4);
+    tracing::Span::current().record("race_class", race_class.as_str());
     let script = RaceScript::from_json_bytes(&decompress(&compressed)?).map_err(|err| err.to_string())?;
     let message = finished_message(race_id, &script, &hex::encode(&seed), &format_rfc3339(finished_at));
     ctx.producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), Payload::RaceFinished(message)).await?;
     if let Some(last) = script.ticks.last() {
         write_state(ctx, race_id, "FINISHED", last, script.tick_ms, &format_rfc3339(start_at)).await;
     }
-    log::info(format!("race {race_id}: re-published RaceFinished"));
+    tracing::info!(raceId = %race_id, "race {race_id}: re-published RaceFinished");
     Ok(())
 }
 

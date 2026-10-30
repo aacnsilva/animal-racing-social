@@ -490,7 +490,7 @@ export function adminRoutes(router: Router, deps: Deps): void {
     return tx(deps.pool, async (client) => {
       const row = await one(client, 'SELECT * FROM admin.dlq WHERE dlq_id = $1 FOR UPDATE', [dlqId]);
       if (!row) throw new ApiError(404, 'NOT_FOUND', 'Unknown DLQ entry');
-      await enqueueRaw(client, 'admin', row.topic, row.msg_key ?? dlqId, row.event_type ?? 'Unknown', row.payload);
+      await enqueueRaw(client, 'admin', row.topic, row.msg_key ?? dlqId, row.event_type ?? 'Unknown', row.payload, row.headers ?? {});
       await client.query('UPDATE admin.dlq SET replayed_at = now(), replayed_by = $2 WHERE dlq_id = $1', [dlqId, userId]);
       await audit(client, userId, 'dlq.replay', 'dlq', dlqId, null, { topic: row.topic });
       return { id: dlqId, replayed: true };

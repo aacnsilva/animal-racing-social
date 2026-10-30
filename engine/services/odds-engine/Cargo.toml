@@ -16,3 +16,5 @@ tokio-postgres.workspace = true
 rdkafka.workspace = true
 redis.workspace = true
 axum.workspace = true
+tracing.workspace = true
+opentelemetry.workspace = true

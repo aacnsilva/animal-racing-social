@@ -1,17 +1,22 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ars_infra::convert::{ENTRANT_COLUMNS, entrant_from_row, entrants_from_proto};
 use ars_infra::kafka::{Producer, RACE_COMMANDS, RACE_LIFECYCLE};
 use ars_infra::sealing::{Keyring, compress};
-use ars_infra::{Context, Res, log};
+use ars_infra::{Context, Res};
 use ars_proto::envelope::Payload;
 use ars_proto::{GenerateScript, ScriptFailed, ScriptSealed};
-use race_engine_core::{RaceInputs, simulate};
+use race_engine_core::{LoadedParams, RaceInputs, Venue, simulate};
 use rdkafka::Message;
 use rdkafka::consumer::{CommitMode, Consumer};
+use rdkafka::message::BorrowedMessage;
+use tracing::Instrument;
+use tracing::field::Empty;
 
 use crate::AppState;
+
+const GROUP: &str = "race-engine";
 
 enum Failure {
     Permanent(String),
@@ -29,59 +34,79 @@ impl From<String> for Failure {
 }
 
 pub async fn run(state: Arc<AppState>, producer: Producer, keyring: Keyring, brokers: &str) -> Res<()> {
-    let consumer = ars_infra::kafka::consumer(brokers, "race-engine", &[RACE_COMMANDS], "earliest")?;
-    log::info("consuming race.commands as group race-engine");
+    let consumer = ars_infra::kafka::consumer(brokers, GROUP, &[RACE_COMMANDS], "earliest")?;
+    tracing::info!("consuming race.commands as group race-engine");
     loop {
         let message = match consumer.recv().await {
             Ok(message) => message,
             Err(err) => {
-                log::warn(format!("kafka receive error: {err}"));
+                tracing::warn!("kafka receive error: {err}");
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
         };
-        if let Some(bytes) = message.payload() {
-            match ars_infra::envelope::decode(bytes) {
-                Ok(envelope) => {
-                    if let Some(Payload::GenerateScript(command)) = envelope.payload {
-                        handle_with_retry(&state, &producer, &keyring, &command).await;
-                    }
-                }
-                Err(err) => log::warn(format!("skipping undecodable race.commands message: {err}")),
-            }
-        }
+        let started = Instant::now();
+        let (event_type, ok) = process(&state, &producer, &keyring, &message).await;
+        ars_infra::kafka::record_processed(GROUP, message.topic(), event_type, ok, started.elapsed());
         if let Err(err) = consumer.store_offset_from_message(&message) {
-            log::warn(format!("store offset failed: {err}"));
+            tracing::warn!("store offset failed: {err}");
         }
         let _ = consumer.commit_consumer_state(CommitMode::Async);
     }
 }
 
-async fn handle_with_retry(state: &AppState, producer: &Producer, keyring: &Keyring, command: &GenerateScript) {
+async fn process(state: &AppState, producer: &Producer, keyring: &Keyring, message: &BorrowedMessage<'_>) -> (&'static str, bool) {
+    let Some(bytes) = message.payload() else { return ("unknown", false) };
+    let envelope = match ars_infra::envelope::decode(bytes) {
+        Ok(envelope) => envelope,
+        Err(err) => {
+            tracing::warn!("skipping undecodable race.commands message: {err}");
+            return ("unknown", false);
+        }
+    };
+    let event_type = ars_infra::envelope::event_type(&envelope);
+    let Some(Payload::GenerateScript(command)) = &envelope.payload else { return (event_type, true) };
+    let span = ars_infra::kafka::process_span(GROUP, message, &envelope);
+    span.record("ars.flow", "race-scheduling");
+    let ok = handle_with_retry(state, producer, keyring, command).instrument(span.clone()).await;
+    if !ok {
+        span.record("otel.status_code", "error");
+    }
+    (event_type, ok)
+}
+
+async fn handle_with_retry(state: &AppState, producer: &Producer, keyring: &Keyring, command: &GenerateScript) -> bool {
+    let race_id = command.race_id;
     let mut delay = Duration::from_millis(500);
     loop {
         match generate(state, producer, keyring, command).await {
-            Ok(()) => return,
+            Ok(outcome) => {
+                crate::metrics::script(outcome);
+                return true;
+            }
             Err(Failure::Permanent(reason)) if reason == "RACE_NOT_FOUND" => {
-                log::warn(format!("race {}: GenerateScript for a race that is not in racing.races; skipped", command.race_id));
-                return;
+                tracing::warn!(raceId = %race_id, "race {race_id}: GenerateScript for a race that is not in racing.races; skipped");
+                return false;
             }
             Err(Failure::Permanent(reason)) => {
-                log::warn(format!("race {} script failed: {reason}", command.race_id));
-                let failed = Payload::ScriptFailed(ScriptFailed { race_id: command.race_id, reason: reason.clone() });
-                let key = command.race_id.to_string();
+                tracing::warn!(raceId = %race_id, reason = %reason, "race {race_id} script failed: {reason}");
+                let failed = Payload::ScriptFailed(ScriptFailed { race_id, reason: reason.clone() });
+                let key = race_id.to_string();
                 loop {
                     match producer.publish_payload(RACE_LIFECYCLE, &key, failed.clone()).await {
-                        Ok(()) => return,
+                        Ok(()) => {
+                            crate::metrics::script("failed");
+                            return false;
+                        }
                         Err(err) => {
-                            log::warn(err);
+                            tracing::warn!(raceId = %race_id, "{err}");
                             tokio::time::sleep(delay).await;
                         }
                     }
                 }
             }
             Err(Failure::Transient(reason)) => {
-                log::warn(format!("race {} script generation retrying: {reason}", command.race_id));
+                tracing::warn!(raceId = %race_id, reason = %reason, "race {race_id} script generation retrying: {reason}");
                 tokio::time::sleep(delay).await;
                 delay = (delay * 2).min(Duration::from_secs(30));
             }
@@ -91,6 +116,7 @@ async fn handle_with_retry(state: &AppState, producer: &Producer, keyring: &Keyr
 
 struct RaceRow {
     status: String,
+    race_class: String,
     species: String,
     venue_id: String,
     venue_version: i32,
@@ -103,7 +129,7 @@ struct RaceRow {
 async fn load_race(client: &tokio_postgres::Client, race_id: i64) -> Result<Option<RaceRow>, String> {
     let row = client
         .query_opt(
-            "SELECT status, species, venue_id, venue_version, laps, engine_version, seed_hash, script_hash
+            "SELECT status, species, venue_id, venue_version, laps, engine_version, seed_hash, script_hash, race_class
              FROM racing.races WHERE race_id = $1",
             &[&race_id],
         )
@@ -118,6 +144,7 @@ async fn load_race(client: &tokio_postgres::Client, race_id: i64) -> Result<Opti
         engine_version: row.get(5),
         seed_hash: row.get(6),
         script_hash: row.get(7),
+        race_class: row.get(8),
     }))
 }
 
@@ -131,13 +158,21 @@ async fn publish_sealed(producer: &Producer, race_id: i64, engine_version: &str,
     producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), payload).await.map_err(Failure::Transient)
 }
 
-async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, command: &GenerateScript) -> Result<(), Failure> {
+struct Sealed {
+    seed_hash: Vec<u8>,
+    script_hash: Vec<u8>,
+    script_hash_hex: String,
+}
+
+async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, command: &GenerateScript) -> Result<&'static str, Failure> {
     let race_id = command.race_id;
     let mut conn = state.db.acquire().await.map_err(Failure::Transient)?;
     let race = load_race(&conn, race_id).await.map_err(Failure::Transient)?.ok_or_else(|| Failure::Permanent("RACE_NOT_FOUND".into()))?;
+    tracing::Span::current().record("race_class", race.race_class.as_str());
     if let (Some(seed_hash), Some(script_hash)) = (&race.seed_hash, &race.script_hash) {
-        log::info(format!("race {race_id} already sealed; re-publishing ScriptSealed"));
-        return publish_sealed(producer, race_id, &race.engine_version, seed_hash, script_hash).await;
+        tracing::info!(raceId = %race_id, "race {race_id} already sealed; re-publishing ScriptSealed");
+        publish_sealed(producer, race_id, &race.engine_version, seed_hash, script_hash).await?;
+        return Ok("republished");
     }
     if race.status == "CANCELLED" {
         return Err(Failure::Permanent("RACE_CANCELLED".into()));
@@ -180,6 +215,46 @@ async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, comm
         laps: race.laps as u32,
         entrants,
     };
+    let span = tracing::info_span!(
+        "engine.seal",
+        "ars.race_id" = %race_id,
+        "ars.engine_version" = race.engine_version.as_str(),
+        "otel.status_code" = Empty,
+    );
+    let started = Instant::now();
+    let sealed = ars_infra::telemetry::traced(&span, seal(&mut conn, keyring, race_id, params, venue, inputs)).await?;
+    let Some(sealed) = sealed else {
+        let race = load_race(&conn, race_id).await.map_err(Failure::Transient)?.ok_or_else(|| Failure::Permanent("RACE_NOT_FOUND".into()))?;
+        return match (&race.seed_hash, &race.script_hash) {
+            (Some(seed_hash), Some(script_hash)) => {
+                publish_sealed(producer, race_id, &race.engine_version, seed_hash, script_hash).await?;
+                Ok("republished")
+            }
+            _ => Err(Failure::Transient("race hashes changed concurrently".into())),
+        };
+    };
+    crate::metrics::seal_duration(&race.race_class, started.elapsed());
+    drop(conn);
+    tracing::info!(
+        raceId = %race_id,
+        engineVersion = %race.engine_version,
+        scriptHash = %sealed.script_hash_hex,
+        "race {race_id} sealed: engine {} scriptHash {}",
+        race.engine_version,
+        sealed.script_hash_hex
+    );
+    publish_sealed(producer, race_id, &race.engine_version, &sealed.seed_hash, &sealed.script_hash).await?;
+    Ok("sealed")
+}
+
+async fn seal(
+    client: &mut tokio_postgres::Client,
+    keyring: &Keyring,
+    race_id: i64,
+    params: Arc<LoadedParams>,
+    venue: Venue,
+    inputs: RaceInputs,
+) -> Result<Option<Sealed>, Failure> {
     let seed: [u8; 32] = ars_infra::ids::random_bytes();
     let sealed = tokio::task::spawn_blocking(move || simulate(&params, &venue, &inputs, &seed))
         .await
@@ -191,7 +266,7 @@ async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, comm
     let script_ciphertext = keyring.seal(&aad, &compressed).map_err(Failure::Permanent)?;
     let seed_hash = hex::decode(&sealed.seed_hash).map_err(|err| Failure::Permanent(err.to_string()))?;
     let script_hash = hex::decode(&sealed.script_hash).map_err(|err| Failure::Permanent(err.to_string()))?;
-    let transaction = conn.transaction().await.context("begin").map_err(Failure::Transient)?;
+    let transaction = client.transaction().await.context("begin").map_err(Failure::Transient)?;
     let updated = transaction
         .execute(
             "UPDATE racing.races SET seed_hash = $2, script_hash = $3
@@ -202,12 +277,7 @@ async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, comm
         .context("set hashes")
         .map_err(Failure::Transient)?;
     if updated == 0 {
-        drop(transaction);
-        let race = load_race(&conn, race_id).await.map_err(Failure::Transient)?.ok_or_else(|| Failure::Permanent("RACE_NOT_FOUND".into()))?;
-        return match (&race.seed_hash, &race.script_hash) {
-            (Some(seed_hash), Some(script_hash)) => publish_sealed(producer, race_id, &race.engine_version, seed_hash, script_hash).await,
-            _ => Err(Failure::Transient("race hashes changed concurrently".into())),
-        };
+        return Ok(None);
     }
     transaction
         .execute(
@@ -219,7 +289,5 @@ async fn generate(state: &AppState, producer: &Producer, keyring: &Keyring, comm
         .context("insert sealed script")
         .map_err(Failure::Transient)?;
     transaction.commit().await.context("commit seal").map_err(Failure::Transient)?;
-    drop(conn);
-    log::info(format!("race {race_id} sealed: engine {} scriptHash {}", race.engine_version, sealed.script_hash));
-    publish_sealed(producer, race_id, &race.engine_version, &seed_hash, &script_hash).await
+    Ok(Some(Sealed { seed_hash, script_hash, script_hash_hex: sealed.script_hash }))
 }

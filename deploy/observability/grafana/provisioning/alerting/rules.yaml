@@ -1,0 +1,1345 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: "racing"
+    folder: "ARS"
+    interval: "1m"
+    rules:
+      - uid: "tick-drift-high"
+        title: "TickDriftHigh"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "histogram_quantile(0.99, sum by (le) (rate(ars_broadcaster_tick_drift_seconds_bucket[5m])))"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0.25
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "5m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "p99 tick drift is above 250 ms: the race clock is not fair"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#tickdrifthigh"
+          __dashboardUid__: "ars-race-day"
+          __panelId__: "9"
+        isPaused: false
+      - uid: "race-overdue"
+        title: "RaceOverdue"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "sum(ars_races_overdue)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "1m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "A race has not started, finished or sealed on time"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#raceoverdue"
+          __dashboardUid__: "ars-race-day"
+          __panelId__: "3"
+        isPaused: false
+      - uid: "no-active-season"
+        title: "NoActiveSeason"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "max(ars_season_active)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "lt"
+                    params:
+                      - 1
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "5m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "No season is active: new players get no starting grant"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#noactiveseason"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "18"
+        isPaused: false
+      - uid: "scheduler-horizon-low"
+        title: "SchedulerHorizonLow"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "min(ars_scheduler_horizon_seconds) / max(ars_scheduler_horizon_target_seconds)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "lt"
+                    params:
+                      - 0.5
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "10m"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "Less than half of the scheduling horizon is filled"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#schedulerhorizonlow"
+          __dashboardUid__: "ars-race-day"
+          __panelId__: "4"
+        isPaused: false
+      - uid: "odds-reprice-slow"
+        title: "OddsRepriceSlow"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "histogram_quantile(0.95, sum by (le) (rate(ars_odds_reprice_interval_seconds_bucket[10m])))"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 1.5
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "10m"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "p95 live reprice interval is above 1.5 s"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#oddsrepriceslow"
+          __dashboardUid__: "ars-race-day"
+          __panelId__: "16"
+        isPaused: false
+      - uid: "script-failures"
+        title: "ScriptFailures"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "sum(increase_pure(ars_engine_scripts_total{outcome=\"failed\"}[10m]))"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "The race engine failed to generate a script"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#scriptfailures"
+          __dashboardUid__: "ars-race-day"
+          __panelId__: "14"
+        isPaused: false
+      - uid: "stable-pool-low"
+        title: "StablePoolLow"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "sum by (species) (ars_stable_pool) / sum by (species) (ars_stable_pool_target)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "lt"
+                    params:
+                      - 0.8
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "30m"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "A species' active pool is below 80% of its target"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#stablepoollow"
+          __dashboardUid__: "ars-race-day"
+          __panelId__: "22"
+        isPaused: false
+  - orgId: 1
+    name: "betting"
+    folder: "ARS"
+    interval: "1m"
+    rules:
+      - uid: "bets-stuck-pending"
+        title: "BetsStuckPending"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "max(ars_bets_pending_oldest_age_seconds)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 30
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "2m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "A bet has been pending for more than 30 s"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#betsstuckpending"
+          __dashboardUid__: "ars-betting"
+          __panelId__: "7"
+        isPaused: false
+      - uid: "settlement-backlog"
+        title: "SettlementBacklog"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "max(ars_legs_unsettled_on_finished_races)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "2m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "Legs on finished races are still unsettled"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#settlementbacklog"
+          __dashboardUid__: "ars-betting"
+          __panelId__: "7"
+        isPaused: false
+      - uid: "ledger-mismatch"
+        title: "LedgerMismatch"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "max(ars_ledger_mismatched_wallets) + max(abs(ars_ledger_open_stake_drift))"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "Cached wallet balances or open stakes disagree with the ledger"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#ledgermismatch"
+          __dashboardUid__: "ars-betting"
+          __panelId__: "15"
+        isPaused: false
+      - uid: "refresh-token-reuse"
+        title: "RefreshTokenReuse"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "sum(increase_pure(ars_auth_refresh_total{outcome=\"reuse_detected\"}[10m]))"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "A rotated refresh token was reused: a session may be stolen"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#refreshtokenreuse"
+          __dashboardUid__: "ars-betting"
+          __panelId__: "21"
+        isPaused: false
+  - orgId: 1
+    name: "pipeline"
+    folder: "ARS"
+    interval: "1m"
+    rules:
+      - uid: "dead-letter"
+        title: "DeadLetter"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "sum by (consumer_group) (ars_dlq_open)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "Messages are waiting in the dead-letter queue"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#deadletter"
+          __dashboardUid__: "ars-pipeline"
+          __panelId__: "9"
+        isPaused: false
+      - uid: "outbox-stalled"
+        title: "OutboxStalled"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "max by (schema) (ars_outbox_oldest_age_seconds)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 30
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "2m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "An outbox has unpublished rows older than 30 s"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#outboxstalled"
+          __dashboardUid__: "ars-pipeline"
+          __panelId__: "15"
+        isPaused: false
+      - uid: "consumer-lag-high"
+        title: "ConsumerLagHigh"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "sum by (consumergroup) (kafka_consumergroup_uncommitted_offsets_sum{consumergroup=~\"bet-worker|settlement|wallet|market-manager\"})"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 1000
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "5m"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "A critical consumer group is more than 1 000 messages behind"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#consumerlaghigh"
+          __dashboardUid__: "ars-pipeline"
+          __panelId__: "2"
+        isPaused: false
+  - orgId: 1
+    name: "platform"
+    folder: "ARS"
+    interval: "1m"
+    rules:
+      - uid: "service-down"
+        title: "ServiceDown"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "min by (probe) (probe_success)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "lt"
+                    params:
+                      - 1
+        noDataState: "Alerting"
+        execErrState: "Error"
+        for: "1m"
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "A health probe is failing"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#servicedown"
+          __dashboardUid__: "ars-platform"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "container-restarts"
+        title: "ContainerRestarts"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(sum by (name) (changes_prometheus(container_start_time_seconds{name=~\"ars-.*\"}[10m])) > 0) or (sum by (name) (increase(container_oom_events_total{name=~\"ars-.*\"}[10m])) > 0)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "A container restarted or was OOM-killed"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#containerrestarts"
+          __dashboardUid__: "ars-platform"
+          __panelId__: "10"
+        isPaused: false
+      - uid: "host-pressure"
+        title: "HostPressure"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "max(1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"} > 0.85) or max(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes > 0.9)"
+              instant: true
+              range: false
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "10m"
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "Disk above 85% or memory above 90%"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#hostpressure"
+          __dashboardUid__: "ars-platform"
+          __panelId__: "4"
+        isPaused: false
+  - orgId: 1
+    name: "slo"
+    folder: "ARS"
+    interval: "1m"
+    rules:
+      - uid: "slo-fast-fair-clock"
+        title: "SLOFastBurn Fair clock"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_broadcaster_tick_drift_seconds_bucket{le=\"0.25\"}[1h]))) / (sum(rate(ars_broadcaster_tick_drift_seconds_count[1h]))))) / 0.001"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_broadcaster_tick_drift_seconds_bucket{le=\"0.25\"}[5m]))) / (sum(rate(ars_broadcaster_tick_drift_seconds_count[5m]))))) / 0.001"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "fair-clock"
+        annotations:
+          summary: "Fair clock SLO is burning its error budget 14.4\u00d7 too fast (Ticks published within 250 ms of schedule, target 99.9%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-fair-clock"
+        title: "SLOSlowBurn Fair clock"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_broadcaster_tick_drift_seconds_bucket{le=\"0.25\"}[6h]))) / (sum(rate(ars_broadcaster_tick_drift_seconds_count[6h]))))) / 0.001"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_broadcaster_tick_drift_seconds_bucket{le=\"0.25\"}[30m]))) / (sum(rate(ars_broadcaster_tick_drift_seconds_count[30m]))))) / 0.001"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "fair-clock"
+        annotations:
+          summary: "Fair clock SLO is burning its error budget 6\u00d7 too fast (Ticks published within 250 ms of schedule, target 99.9%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-punctual-starts"
+        title: "SLOFastBurn Punctual starts"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_broadcaster_start_delay_seconds_bucket{le=\"2\"}[1h]))) / (sum(rate(ars_broadcaster_start_delay_seconds_count[1h]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_broadcaster_start_delay_seconds_bucket{le=\"2\"}[5m]))) / (sum(rate(ars_broadcaster_start_delay_seconds_count[5m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "punctual-starts"
+        annotations:
+          summary: "Punctual starts SLO is burning its error budget 14.4\u00d7 too fast (Races starting within 2 s of startAt, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-punctual-starts"
+        title: "SLOSlowBurn Punctual starts"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_broadcaster_start_delay_seconds_bucket{le=\"2\"}[6h]))) / (sum(rate(ars_broadcaster_start_delay_seconds_count[6h]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_broadcaster_start_delay_seconds_bucket{le=\"2\"}[30m]))) / (sum(rate(ars_broadcaster_start_delay_seconds_count[30m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "punctual-starts"
+        annotations:
+          summary: "Punctual starts SLO is burning its error budget 6\u00d7 too fast (Races starting within 2 s of startAt, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-bet-decisions"
+        title: "SLOFastBurn Bet decisions"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - (((sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"pre\",le=\"2\"}[1h])) or vector(0)) + (sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"live\",le=\"2.5\"}[1h])) or vector(0))) / (sum(rate(ars_bet_acceptance_duration_seconds_count[1h]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - (((sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"pre\",le=\"2\"}[5m])) or vector(0)) + (sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"live\",le=\"2.5\"}[5m])) or vector(0))) / (sum(rate(ars_bet_acceptance_duration_seconds_count[5m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "bet-decisions"
+        annotations:
+          summary: "Bet decisions SLO is burning its error budget 14.4\u00d7 too fast (Pre-race bets decided within 2 s, in-running within 2.5 s, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-bet-decisions"
+        title: "SLOSlowBurn Bet decisions"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - (((sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"pre\",le=\"2\"}[6h])) or vector(0)) + (sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"live\",le=\"2.5\"}[6h])) or vector(0))) / (sum(rate(ars_bet_acceptance_duration_seconds_count[6h]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - (((sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"pre\",le=\"2\"}[30m])) or vector(0)) + (sum(rate(ars_bet_acceptance_duration_seconds_bucket{phase=\"live\",le=\"2.5\"}[30m])) or vector(0))) / (sum(rate(ars_bet_acceptance_duration_seconds_count[30m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "bet-decisions"
+        annotations:
+          summary: "Bet decisions SLO is burning its error budget 6\u00d7 too fast (Pre-race bets decided within 2 s, in-running within 2.5 s, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-settlement"
+        title: "SLOFastBurn Settlement"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_bet_settlement_lag_seconds_bucket{le=\"60\"}[1h]))) / (sum(rate(ars_bet_settlement_lag_seconds_count[1h]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_bet_settlement_lag_seconds_bucket{le=\"60\"}[5m]))) / (sum(rate(ars_bet_settlement_lag_seconds_count[5m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "settlement"
+        annotations:
+          summary: "Settlement SLO is burning its error budget 14.4\u00d7 too fast (Bets settled within 60 s of the race finishing, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-settlement"
+        title: "SLOSlowBurn Settlement"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_bet_settlement_lag_seconds_bucket{le=\"60\"}[6h]))) / (sum(rate(ars_bet_settlement_lag_seconds_count[6h]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_bet_settlement_lag_seconds_bucket{le=\"60\"}[30m]))) / (sum(rate(ars_bet_settlement_lag_seconds_count[30m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "settlement"
+        annotations:
+          summary: "Settlement SLO is burning its error budget 6\u00d7 too fast (Bets settled within 60 s of the race finishing, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-api-availability"
+        title: "SLOFastBurn API availability"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(http_server_request_duration_seconds_count{job=\"api\",http_response_status_code!~\"5..\"}[1h]))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[1h]))))) / 0.005"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(http_server_request_duration_seconds_count{job=\"api\",http_response_status_code!~\"5..\"}[5m]))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[5m]))))) / 0.005"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "api-availability"
+        annotations:
+          summary: "API availability SLO is burning its error budget 14.4\u00d7 too fast (Non-5xx API responses, target 99.5%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-api-availability"
+        title: "SLOSlowBurn API availability"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(http_server_request_duration_seconds_count{job=\"api\",http_response_status_code!~\"5..\"}[6h]))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[6h]))))) / 0.005"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(http_server_request_duration_seconds_count{job=\"api\",http_response_status_code!~\"5..\"}[30m]))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[30m]))))) / 0.005"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "api-availability"
+        annotations:
+          summary: "API availability SLO is burning its error budget 6\u00d7 too fast (Non-5xx API responses, target 99.5%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-api-latency"
+        title: "SLOFastBurn API latency"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - (((sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method=\"GET\",le=\"0.3\"}[1h])) or vector(0)) + (sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method!=\"GET\",le=\"0.8\"}[1h])) or vector(0))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[1h]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - (((sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method=\"GET\",le=\"0.3\"}[5m])) or vector(0)) + (sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method!=\"GET\",le=\"0.8\"}[5m])) or vector(0))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[5m]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "api-latency"
+        annotations:
+          summary: "API latency SLO is burning its error budget 14.4\u00d7 too fast (Reads under 300 ms, writes under 800 ms, target 95%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-api-latency"
+        title: "SLOSlowBurn API latency"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - (((sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method=\"GET\",le=\"0.3\"}[6h])) or vector(0)) + (sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method!=\"GET\",le=\"0.8\"}[6h])) or vector(0))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[6h]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - (((sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method=\"GET\",le=\"0.3\"}[30m])) or vector(0)) + (sum(rate(http_server_request_duration_seconds_bucket{job=\"api\",http_request_method!=\"GET\",le=\"0.8\"}[30m])) or vector(0))) / (sum(rate(http_server_request_duration_seconds_count{job=\"api\"}[30m]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "api-latency"
+        annotations:
+          summary: "API latency SLO is burning its error budget 6\u00d7 too fast (Reads under 300 ms, writes under 800 ms, target 95%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-live-prices"
+        title: "SLOFastBurn Live prices"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_odds_reprice_interval_seconds_bucket{le=\"1.5\"}[1h]))) / (sum(rate(ars_odds_reprice_interval_seconds_count[1h]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_odds_reprice_interval_seconds_bucket{le=\"1.5\"}[5m]))) / (sum(rate(ars_odds_reprice_interval_seconds_count[5m]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "live-prices"
+        annotations:
+          summary: "Live prices SLO is burning its error budget 14.4\u00d7 too fast (Live reprice interval under 1.5 s, target 95%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-live-prices"
+        title: "SLOSlowBurn Live prices"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(rate(ars_odds_reprice_interval_seconds_bucket{le=\"1.5\"}[6h]))) / (sum(rate(ars_odds_reprice_interval_seconds_count[6h]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(rate(ars_odds_reprice_interval_seconds_bucket{le=\"1.5\"}[30m]))) / (sum(rate(ars_odds_reprice_interval_seconds_count[30m]))))) / 0.05"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "live-prices"
+        annotations:
+          summary: "Live prices SLO is burning its error budget 6\u00d7 too fast (Live reprice interval under 1.5 s, target 95%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-fast-event-pipeline"
+        title: "SLOFastBurn Event pipeline"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(sum_over_time((((max(ars_outbox_oldest_age_seconds) or vector(0)) < bool 10) * ((max(sum by (consumergroup) (kafka_consumergroup_uncommitted_offsets_sum{consumergroup=~\"bet-worker|settlement|wallet|market-manager\"})) or vector(0)) < bool 1000))[1h:1m]))) / (sum(count_over_time((max(ars_outbox_oldest_age_seconds) or vector(0))[1h:1m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(sum_over_time((((max(ars_outbox_oldest_age_seconds) or vector(0)) < bool 10) * ((max(sum by (consumergroup) (kafka_consumergroup_uncommitted_offsets_sum{consumergroup=~\"bet-worker|settlement|wallet|market-manager\"})) or vector(0)) < bool 1000))[5m:1m]))) / (sum(count_over_time((max(ars_outbox_oldest_age_seconds) or vector(0))[5m:1m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 14.4 && $B > 14.4"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "critical"
+          slo: "event-pipeline"
+        annotations:
+          summary: "Event pipeline SLO is burning its error budget 14.4\u00d7 too fast (Minutes with outbox age under 10 s and critical consumer lag under 1 000, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false
+      - uid: "slo-slow-event-pipeline"
+        title: "SLOSlowBurn Event pipeline"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "A"
+              expr: "(1 - ((sum(sum_over_time((((max(ars_outbox_oldest_age_seconds) or vector(0)) < bool 10) * ((max(sum by (consumergroup) (kafka_consumergroup_uncommitted_offsets_sum{consumergroup=~\"bet-worker|settlement|wallet|market-manager\"})) or vector(0)) < bool 1000))[6h:1m]))) / (sum(count_over_time((max(ars_outbox_oldest_age_seconds) or vector(0))[6h:1m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "B"
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: "vm"
+            model:
+              refId: "B"
+              expr: "(1 - ((sum(sum_over_time((((max(ars_outbox_oldest_age_seconds) or vector(0)) < bool 10) * ((max(sum by (consumergroup) (kafka_consumergroup_uncommitted_offsets_sum{consumergroup=~\"bet-worker|settlement|wallet|market-manager\"})) or vector(0)) < bool 1000))[30m:1m]))) / (sum(count_over_time((max(ars_outbox_oldest_age_seconds) or vector(0))[30m:1m]))))) / 0.01"
+              instant: true
+              range: false
+          - refId: "C"
+            datasourceUid: "__expr__"
+            model:
+              refId: "C"
+              type: "math"
+              expression: "$A > 6 && $B > 6"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "0s"
+        labels:
+          severity: "warning"
+          slo: "event-pipeline"
+        annotations:
+          summary: "Event pipeline SLO is burning its error budget 6\u00d7 too fast (Minutes with outbox age under 10 s and critical consumer lag under 1 000, target 99%)"
+          runbook_url: "https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#slo-burn-alerts"
+          __dashboardUid__: "ars-overview"
+          __panelId__: "11"
+        isPaused: false

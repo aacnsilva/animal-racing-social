@@ -1,3 +1,4 @@
+mod metrics;
 mod publish;
 mod race;
 mod scheduler;
@@ -9,7 +10,7 @@ use std::time::Duration;
 use ars_infra::db::Db;
 use ars_infra::kafka::Producer;
 use ars_infra::sealing::Keyring;
-use ars_infra::{Res, config, log};
+use ars_infra::{Res, config, telemetry};
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -34,7 +35,8 @@ USAGE:
   race-broadcaster            run (Postgres advisory-lock leadership; health HTTP on PORT, default 7002)
   race-broadcaster --help | --version
 
-ENV: DATABASE_URL KAFKA_BROKERS REDIS_URL PORT SCRIPT_KEYS SCRIPT_KEY_ID REPLAY_RETENTION_HOURS";
+ENV: DATABASE_URL KAFKA_BROKERS REDIS_URL PORT SCRIPT_KEYS SCRIPT_KEY_ID REPLAY_RETENTION_HOURS
+     RUST_LOG OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME OTEL_RESOURCE_ATTRIBUTES OTEL_SDK_DISABLED";
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
@@ -46,10 +48,13 @@ fn main() {
         }
         None => {
             let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
-            if let Err(err) = runtime.block_on(run()) {
-                log::error(err);
-                std::process::exit(1);
-            }
+            runtime.block_on(async {
+                telemetry::init("race-broadcaster");
+                if let Err(err) = run().await {
+                    tracing::error!("{err}");
+                    telemetry::exit(1).await;
+                }
+            });
         }
     }
 }
@@ -63,8 +68,7 @@ async fn healthz(State(ctx): State<Arc<Ctx>>) -> Json<serde_json::Value> {
 }
 
 async fn run() -> Res<()> {
-    log::init("race-broadcaster");
-    log::exit_on_signal();
+    telemetry::exit_on_signal();
     let keyring = Keyring::from_env()?;
     let port: u16 = config::number("PORT", 7002);
     let url = config::database_url();
@@ -74,7 +78,7 @@ async fn run() -> Res<()> {
         match ars_infra::redis_store::connect(&config::redis_url()).await {
             Ok(connection) => break connection,
             Err(err) => {
-                log::warn(err);
+                tracing::warn!("{err}");
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
@@ -91,20 +95,20 @@ async fn run() -> Res<()> {
     let router = Router::new().route("/healthz", get(healthz)).with_state(ctx.clone());
     tokio::spawn(async move {
         if let Err(err) = ars_infra::http::serve(port, router).await {
-            log::error(err);
-            std::process::exit(1);
+            tracing::error!("{err}");
+            telemetry::exit(1).await;
         }
     });
     ctx.db.wait_ready().await;
     let lock_client = acquire_leadership(&url).await;
     ctx.leader.store(true, Ordering::Relaxed);
-    log::info("leadership acquired");
+    tracing::info!("leadership acquired");
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
             if lock_client.simple_query("SELECT 1").await.is_err() {
-                log::error("leadership connection lost; exiting so a standby can take over");
-                std::process::exit(1);
+                tracing::error!("leadership connection lost; exiting so a standby can take over");
+                telemetry::exit(1).await;
             }
         }
     });
@@ -120,18 +124,18 @@ async fn acquire_leadership(url: &str) -> tokio_postgres::Client {
                     Ok(row) if row.get::<_, bool>(0) => return client,
                     Ok(_) => {
                         if !waiting_logged {
-                            log::info("standby: another broadcaster holds leadership");
+                            tracing::info!("standby: another broadcaster holds leadership");
                             waiting_logged = true;
                         }
                         tokio::time::sleep(Duration::from_secs(2)).await;
                     }
                     Err(err) => {
-                        log::warn(format!("leadership query failed: {err}"));
+                        tracing::warn!("leadership query failed: {err}");
                         break;
                     }
                 }
             },
-            Err(err) => log::warn(err),
+            Err(err) => tracing::warn!("{err}"),
         }
         tokio::time::sleep(Duration::from_secs(2)).await;
     }

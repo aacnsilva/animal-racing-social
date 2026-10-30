@@ -3,6 +3,7 @@ import { newId, shardOf } from '../../lib/ids.ts';
 import { payload, runConsumer, Topics, type PayloadOf } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, every, type Runtime } from '../../lib/runtime.ts';
 import { HOUR_MS, MINUTE_MS, utcDay } from '../../lib/time.ts';
 import { isEnabled, settledType, type NotificationSettings, type NotificationType } from '../../domain/notifications.ts';
@@ -20,6 +21,7 @@ async function notify(runtime: Runtime, client: Client, userId: string, type: No
     [userId, notificationId, type, dedupeKey, JSON.stringify(body)],
   );
   if (!inserted) return false;
+  instruments.notificationsCreated().add(1, { type });
   await enqueue(client, 'notification', Topics.notificationEvents, userId, payload('notificationCreated', {
     userId, notificationId, type, payloadJson: JSON.stringify(body), createdAt: inserted.created_at.toISOString(),
   }));

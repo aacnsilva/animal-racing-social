@@ -6,7 +6,9 @@ import { raceEngine, type EntrantInput } from '../../lib/internal.ts';
 import { payload, runConsumer, Topics, type PayloadOf } from '../../lib/kafka.ts';
 import { errorFields, log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, every, type Runtime } from '../../lib/runtime.ts';
+import { activeSpan, gauge, withSpan } from '../../lib/telemetry.ts';
 import { HOUR_MS, MINUTE_MS } from '../../lib/time.ts';
 import { isAvailable, shuffle, slotPlan, slotsBetween, type Booking, type Programme, type RaceClass, type Species } from '../../domain/scheduler.ts';
 
@@ -81,21 +83,25 @@ export async function scheduleRace(client: Client, request: ScheduleRequest, pro
   const season = await seasonFor(client, request.startAt);
   if (!season) {
     log.warn('no season accepts this start time', { startAt: request.startAt });
+    instruments.schedulerSkipped().add(1, { reason: 'no_season' });
     return null;
   }
   const engine = await one(client, 'SELECT engine_version FROM racing.engine_versions WHERE is_active');
   if (!engine) {
     log.warn('no active engine version yet');
+    instruments.schedulerSkipped().add(1, { reason: 'no_engine' });
     return null;
   }
   const venue = await pickVenue(client, request.raceClass, request.venueId);
   if (!venue) {
     log.warn('no active venue', { raceClass: request.raceClass, venueId: request.venueId });
+    instruments.schedulerSkipped().add(1, { reason: 'no_venue' });
     return null;
   }
   const animals = await pickEntrants(client, request, programme);
   if (animals.length < FIELD_MIN()) {
     log.warn('not enough available animals', { species: request.species, startAt: request.startAt, available: animals.length });
+    instruments.schedulerSkipped().add(1, { reason: 'not_enough_animals' });
     return null;
   }
   const lanes = shuffle(Array.from({ length: venue.lanes as number }, (_, i) => i + 1));
@@ -116,6 +122,7 @@ export async function scheduleRace(client: Client, request: ScheduleRequest, pro
     venueId: venue.venue_id, venueVersion: venue.version, species: request.species, raceClass: request.raceClass, engineVersion: engine.engine_version, entrants: inputs,
   });
   const raceId = request.raceId ?? newId(0);
+  activeSpan()?.setAttributes({ 'ars.race_id': raceId, 'ars.flow': 'race-scheduling', race_class: request.raceClass, species: request.species });
   await client.query(
     `INSERT INTO racing.races (race_id, season_id, species, race_class, venue_id, venue_version, engine_version, laps, estimated_duration_s,
        status, start_at, betting_closes_at)
@@ -162,10 +169,12 @@ async function fillHorizon(runtime: Runtime): Promise<void> {
     if (scheduled >= envInt('SCHEDULER_BATCH', 12)) break;
     const plan = slotPlan(slot, programme);
     try {
-      const raceId = await withSchedulingLock(runtime, (client) => scheduleRace(client, { startAt: slot, ...plan }, programme));
+      const raceId = await withSpan('scheduler.schedule_race', { root: true, attributes: { 'ars.flow': 'race-scheduling', race_class: plan.raceClass, species: plan.species } },
+        () => withSchedulingLock(runtime, (client) => scheduleRace(client, { startAt: slot, ...plan }, programme)));
       if (!raceId) break;
       scheduled++;
     } catch (error) {
+      instruments.schedulerSkipped().add(1, { reason: 'error' });
       log.warn('slot scheduling failed', { slot, ...errorFields(error) });
       break;
     }
@@ -173,7 +182,9 @@ async function fillHorizon(runtime: Runtime): Promise<void> {
 }
 
 async function lockAndExpire(runtime: Runtime): Promise<void> {
-  await tx(runtime.pool, async (client) => {
+  const due = await one(runtime.pool, `SELECT 1 FROM racing.races WHERE status IN ('OPEN', 'SCHEDULED') AND betting_closes_at <= now() LIMIT 1`);
+  if (!due) return;
+  await withSpan('scheduler.lock_races', { root: true, attributes: { 'ars.flow': 'race-lock' } }, () => tx(runtime.pool, async (client) => {
     const locked = await many(client, `UPDATE racing.races SET status = 'LOCKED' WHERE status = 'OPEN' AND betting_closes_at <= now() RETURNING race_id`);
     for (const row of locked) await enqueue(client, 'racing', Topics.raceLifecycle, row.race_id, payload('raceLocked', { raceId: row.race_id }));
     const unsealed = await many(
@@ -183,6 +194,38 @@ async function lockAndExpire(runtime: Runtime): Promise<void> {
     for (const row of unsealed) {
       await enqueue(client, 'racing', Topics.raceLifecycle, row.race_id, payload('raceCancelled', { raceId: row.race_id, reason: 'SCRIPT_NOT_SEALED' }));
     }
+    activeSpan()?.setAttributes({ 'ars.locked': locked.length, 'ars.unsealed_cancelled': unsealed.length });
+  }));
+}
+
+function registerGauges(runtime: Runtime): void {
+  gauge('ars.races', 'Races by status (active, plus finals of the last 24 h)', '', async () => {
+    const { rows } = await runtime.pool.query(
+      `SELECT status, race_class, species, count(*)::int AS n FROM racing.races
+       WHERE status IN ('SCHEDULED', 'OPEN', 'LOCKED', 'LIVE') OR start_at > now() - interval '24 hours'
+       GROUP BY status, race_class, species`,
+    );
+    return rows.map((row) => ({ value: row.n, attributes: { status: row.status, race_class: row.race_class, species: row.species } }));
+  });
+  gauge('ars.races.overdue', 'Races that should have started, finished or sealed by now', '', async () => {
+    const { rows } = await runtime.pool.query(
+      `SELECT
+         count(*) FILTER (WHERE status IN ('OPEN', 'LOCKED') AND start_at < now() - interval '30 seconds')::int AS start,
+         count(*) FILTER (WHERE status = 'LIVE' AND coalesce(started_at, start_at) + make_interval(secs => estimated_duration_s + 300) < now())::int AS finish,
+         count(*) FILTER (WHERE status = 'SCHEDULED' AND created_at < now() - interval '2 minutes')::int AS seal
+       FROM racing.races WHERE status IN ('SCHEDULED', 'OPEN', 'LOCKED', 'LIVE')`,
+    );
+    return ['start', 'finish', 'seal'].map((kind) => ({ value: rows[0][kind], attributes: { kind } }));
+  });
+  gauge('ars.scheduler.horizon', 'Seconds until the last scheduled race starts', 's', async () => {
+    const { rows } = await runtime.pool.query(
+      `SELECT coalesce(extract(epoch from max(start_at) - now()), 0) AS horizon FROM racing.races WHERE status IN ('SCHEDULED', 'OPEN', 'LOCKED')`,
+    );
+    return [{ value: Math.max(0, Number(rows[0].horizon)) }];
+  });
+  gauge('ars.scheduler.horizon_target', 'Seconds ahead the scheduler aims to keep filled', 's', async () => {
+    const programme = await loadProgramme(runtime.pool);
+    return [{ value: Math.min(programme.horizonHours, envInt('SCHEDULER_MAX_HORIZON_HOURS', 48)) * 3600 }];
   });
 }
 
@@ -267,6 +310,7 @@ async function cancelRace(client: Client, raceId: string, reason: string): Promi
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('scheduler', { outbox: ['racing'] });
+  registerGauges(runtime);
   every(envInt('SCHEDULER_INTERVAL_MS', 30_000), () => fillHorizon(runtime), runtime, 'fill horizon');
   every(1000, () => lockAndExpire(runtime), runtime, 'lock races');
   runtime.consumers.push(await runConsumer({

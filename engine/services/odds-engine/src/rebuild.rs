@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use ars_infra::convert::{ENTRANT_COLUMNS, entrant_from_row};
-use ars_infra::{Context, Res, log};
+use ars_infra::{Context, Res};
 
 use crate::pricing::MarketKind;
 use crate::registry::{Market, MarketStatus, RaceInfo};
@@ -11,7 +11,7 @@ pub async fn load_race(app: &Shared, race_id: i64) -> Res<Option<RaceInfo>> {
     let conn = app.db.acquire().await?;
     let Some(row) = conn
         .query_opt(
-            "SELECT species, venue_id, venue_version, laps, engine_version FROM racing.races WHERE race_id = $1",
+            "SELECT species, venue_id, venue_version, laps, engine_version, race_class FROM racing.races WHERE race_id = $1",
             &[&race_id],
         )
         .await
@@ -32,6 +32,7 @@ pub async fn load_race(app: &Shared, race_id: i64) -> Res<Option<RaceInfo>> {
         venue_version: row.get::<_, i32>(2) as u32,
         laps: row.get::<_, i32>(3) as u32,
         engine_version: row.get(4),
+        race_class: row.get(5),
         entrants,
     }))
 }
@@ -40,7 +41,7 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
     let conn = app.db.acquire().await?;
     let races = conn
         .query(
-            "SELECT race_id, species, venue_id, venue_version, laps, engine_version FROM racing.races
+            "SELECT race_id, species, venue_id, venue_version, laps, engine_version, race_class FROM racing.races
               WHERE status IN ('OPEN', 'LOCKED', 'LIVE')",
             &[],
         )
@@ -56,7 +57,7 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
         let race_id: i64 = row.get("race_id");
         match entrant_from_row(&row) {
             Ok(entrant) => entrants.entry(race_id).or_default().push(entrant),
-            Err(err) => log::warn(format!("race {race_id}: skipping entrant: {err}")),
+            Err(err) => tracing::warn!(raceId = %race_id, "race {race_id}: skipping entrant: {err}"),
         }
     }
     let markets = conn
@@ -106,6 +107,7 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
             venue_version: row.get::<_, i32>(3) as u32,
             laps: row.get::<_, i32>(4) as u32,
             engine_version: row.get(5),
+            race_class: row.get(6),
             entrants: entrants.remove(&race_id).unwrap_or_default(),
         });
     }
@@ -118,7 +120,7 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
         let kind = match MarketKind::from_json(&kind_text, &params) {
             Ok(kind) => kind,
             Err(err) => {
-                log::warn(format!("market {market_id}: {err}"));
+                tracing::warn!(marketId = %market_id, "market {market_id}: {err}");
                 continue;
             }
         };
@@ -135,6 +137,6 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
         );
         market_count += 1;
     }
-    log::info(format!("registry rebuilt: {} races, {market_count} markets", races.len()));
+    tracing::info!(races = races.len(), markets = market_count, "registry rebuilt: {} races, {market_count} markets", races.len());
     Ok(())
 }

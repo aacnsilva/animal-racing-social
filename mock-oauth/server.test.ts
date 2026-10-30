@@ -57,4 +57,11 @@ describe('mock oauth', () => {
     assert.equal((await token('google', code, redirectUri, 'wrong-verifier')).status, 400);
     assert.equal((await token('google', code, redirectUri)).status, 400);
   });
+
+  it('records Discord webhook deliveries', async () => {
+    const posted = await fetch(`${base}/webhooks/discord`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'RaceOverdue' }) });
+    assert.equal(posted.status, 204);
+    const received = await (await fetch(`${base}/webhooks/discord`)).json() as { body: { content: string } }[];
+    assert.equal(received.at(-1)?.body.content, 'RaceOverdue');
+  });
 });

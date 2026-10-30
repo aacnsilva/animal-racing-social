@@ -6,9 +6,9 @@ pub mod envelope;
 pub mod http;
 pub mod ids;
 pub mod kafka;
-pub mod log;
 pub mod redis_store;
 pub mod sealing;
+pub mod telemetry;
 pub mod time;
 
 pub type Res<T> = Result<T, String>;

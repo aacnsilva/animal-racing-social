@@ -32,6 +32,8 @@ x-env: &env
   ODDS_ENGINE_URL: http://odds-engine:7003
   WALLET_URL: http://wallet:3002
   REPLAY_RETENTION_HOURS: ${REPLAY_RETENTION_HOURS:-24}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=production,service.version=${IMAGE_TAG:-latest}
 
 x-script-keys: &script-keys
   SCRIPT_KEYS: ${SCRIPT_KEYS:?set SCRIPT_KEYS in .env}
@@ -270,13 +272,97 @@ services:
       SITE_ADDRESS: ${DOMAIN}
       API_UPSTREAM: api:3000
       SSE_UPSTREAM: sse:3001
+      GRAFANA_UPSTREAM: grafana:3000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_SERVICE_NAME: caddy
     volumes:
       - caddy_data:/data
       - caddy_config:/config
     depends_on: [api, sse]
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.154.0
+    restart: unless-stopped
+    mem_limit: 256m
+    <<: *logging
+    command: ["-storageDataPath=/storage", "-retentionPeriod=${METRICS_RETENTION:-30d}", "-memory.allowedPercent=50"]
+    volumes: [vmdata:/storage]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.53.0
+    restart: unless-stopped
+    mem_limit: 256m
+    <<: *logging
+    command: ["-storageDataPath=/storage", "-retentionPeriod=${LOGS_RETENTION:-14d}", "-memory.allowedPercent=50"]
+    volumes: [vldata:/storage]
+
+  jaeger:
+    image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/jaeger:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    mem_limit: 256m
+    <<: *logging
+    environment:
+      TRACE_RETENTION: ${TRACE_RETENTION:-168h}
+      GOMEMLIMIT: 200MiB
+    volumes: [jaegerdata:/badger]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:13133/status"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  alloy:
+    image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/alloy:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    mem_limit: 256m
+    <<: *logging
+    cgroup: host
+    environment:
+      POSTGRES_MONITOR_DSN: postgresql://ars_monitor:${DB_SERVICE_PASSWORD}@postgres:5432/ars?sslmode=disable
+      TRACE_SAMPLE_PERCENT: ${TRACE_SAMPLE_PERCENT:-25}
+      EDGE_PROBE_URL: https://${DOMAIN}/
+      GOMEMLIMIT: 200MiB
+    volumes:
+      - alloydata:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /sys:/sys:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    depends_on: [victoriametrics, victorialogs, jaeger]
+
+  grafana:
+    image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/grafana:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    mem_limit: 192m
+    <<: *logging
+    environment:
+      GF_SERVER_ROOT_URL: https://${DOMAIN}/grafana/
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SECURITY_COOKIE_SECURE: "true"
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?set DISCORD_WEBHOOK_URL in .env}
+    volumes: [grafanadata:/var/lib/grafana]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    depends_on: [victoriametrics, victorialogs, jaeger]
 
 volumes:
   pgdata:
   kafkadata:
   caddy_data:
   caddy_config:
+  vmdata:
+  vldata:
+  jaegerdata:
+  alloydata:
+  grafanadata:

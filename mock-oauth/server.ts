@@ -13,6 +13,7 @@ for (const entry of (process.env.MOCK_CLIENTS ?? 'google:ars-google:ars-google-s
 
 const codes = new Map<string, Grant>();
 const tokens = new Map<string, { provider: ProviderId; profile: Profile }>();
+const webhooks: { receivedAt: string; body: unknown }[] = [];
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const challengeOf = (verifier: string) => createHash('sha256').update(verifier).digest('base64url');
@@ -24,6 +25,16 @@ async function readForm(req: IncomingMessage): Promise<URLSearchParams> {
   const text = Buffer.concat(chunks).toString('utf8');
   if ((req.headers['content-type'] ?? '').includes('application/json')) return new URLSearchParams(JSON.parse(text || '{}'));
   return new URLSearchParams(text);
+}
+
+async function receiveWebhook(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const text = Buffer.concat(chunks).toString('utf8');
+  webhooks.push({ receivedAt: new Date().toISOString(), body: text.startsWith('{') ? JSON.parse(text) : text });
+  if (webhooks.length > 200) webhooks.shift();
+  res.writeHead(204);
+  res.end();
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -110,6 +121,8 @@ export const server = createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/github/login/oauth/access_token') return await exchange(req, res, 'github');
     if (req.method === 'GET' && url.pathname === '/google/userinfo') return profile(req, res, 'google');
     if (req.method === 'GET' && url.pathname === '/github/user') return profile(req, res, 'github');
+    if (req.method === 'POST' && url.pathname === '/webhooks/discord') return await receiveWebhook(req, res);
+    if (req.method === 'GET' && url.pathname === '/webhooks/discord') return json(res, 200, webhooks);
     json(res, 404, { error: 'not_found' });
   } catch (error) {
     json(res, 400, { error: 'invalid_request', error_description: error instanceof Error ? error.message : String(error) });

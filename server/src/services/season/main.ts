@@ -5,7 +5,9 @@ import { payload, runConsumer, Topics } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
 import type { Redis } from '../../lib/redis.ts';
+import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, every, type Runtime } from '../../lib/runtime.ts';
+import { gauge } from '../../lib/telemetry.ts';
 import { activeSeason, type SeasonRow } from '../../lib/seasons.ts';
 import { DAY_MS, HOUR_MS } from '../../lib/time.ts';
 import { applySettled, BOARDS, boardScore, thresholdCrossings, type Board, type SeasonStats } from '../../domain/leaderboard.ts';
@@ -45,11 +47,13 @@ async function lockStats(client: Client, userId: string, seasonId: string): Prom
 async function syncBoards(redis: Redis, row: StatsRow): Promise<void> {
   const stats = toStats(row);
   for (const board of BOARDS) {
+    const started = performance.now();
     const score = boardScore(board, stats, Number(row.rank_score));
     const key = boardKey(row.season_id, board);
     if (score === null) await redis.zRem(key, row.user_id);
     else await redis.zAdd(key, [{ score, value: row.user_id }]);
     await redis.expireAt(key, Math.floor((Date.now() + 40 * DAY_MS) / 1000));
+    instruments.leaderboardUpdate().record((performance.now() - started) / 1000, { board });
   }
 }
 
@@ -188,6 +192,7 @@ async function onSettled(runtime: Runtime, eventId: string, event: { betId: stri
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('season', { outbox: ['season'] });
+  gauge('ars.season.active', 'Whether a season is active (1) or not (0)', '', async () => [{ value: (await activeSeason(runtime.pool)) ? 1 : 0 }]);
   every(30_000, () => maintainSeasons(runtime), runtime, 'season maintenance');
   runtime.consumers.push(await runConsumer({
     kafka: runtime.kafka,

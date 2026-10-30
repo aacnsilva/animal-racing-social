@@ -7,6 +7,7 @@ import { createKafka, createProducer } from './kafka.ts';
 import { errorFields, log } from './log.ts';
 import { startOutboxRelay, type OutboxSchema } from './outbox.ts';
 import { connectRedis, type Redis } from './redis.ts';
+import { shutdownTelemetry } from './telemetry.ts';
 
 export type Runtime = {
   name: string;
@@ -46,6 +47,7 @@ export async function bootstrap(name: string, options: { outbox?: OutboxSchema[]
     await producer.disconnect().catch(() => undefined);
     await redis.quit().catch(() => undefined);
     await pool.end().catch(() => undefined);
+    await shutdownTelemetry();
     process.exit(0);
   };
   process.on('SIGTERM', () => void shutdown('SIGTERM'));

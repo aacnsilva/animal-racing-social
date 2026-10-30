@@ -5,6 +5,11 @@ DECLARE
   all_schemas TEXT[] := ARRAY['identity','stable','racing','market','betting','wallet','season','notification','admin'];
   service_roles TEXT[] := ARRAY['ars_api','ars_sse','ars_scheduler','ars_stable','ars_market','ars_betting','ars_wallet','ars_season','ars_notification','ars_race_engine','ars_broadcaster','ars_odds'];
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ars_monitor') THEN
+    CREATE ROLE ars_monitor LOGIN;
+  END IF;
+  GRANT pg_monitor TO ars_monitor;
+
   FOREACH r IN ARRAY service_roles LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
       EXECUTE format('CREATE ROLE %I LOGIN', r);

@@ -27,6 +27,8 @@ x-env: &env
   ODDS_ENGINE_URL: http://odds-engine:7003
   WALLET_URL: http://wallet:3002
   REPLAY_RETENTION_HOURS: "24"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=development
 
 x-script-keys: &script-keys
   SCRIPT_KEYS: k1:5f3a0c2e9b8d7a6c5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d
@@ -269,8 +271,88 @@ services:
       SITE_ADDRESS: ":80"
       API_UPSTREAM: api:3000
       SSE_UPSTREAM: sse:3001
+      GRAFANA_UPSTREAM: grafana:3000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_SERVICE_NAME: caddy
     depends_on: [api, sse]
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.154.0
+    restart: unless-stopped
+    command: ["-storageDataPath=/storage", "-retentionPeriod=${METRICS_RETENTION:-2d}"]
+    ports: ["127.0.0.1:8428:8428"]
+    volumes: [vmdata:/storage]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.53.0
+    restart: unless-stopped
+    command: ["-storageDataPath=/storage", "-retentionPeriod=${LOGS_RETENTION:-2d}"]
+    ports: ["127.0.0.1:9428:9428"]
+    volumes: [vldata:/storage]
+
+  jaeger:
+    image: ${ARS_JAEGER_IMAGE:-ars-jaeger:dev}
+    build: deploy/observability/jaeger
+    restart: unless-stopped
+    environment:
+      TRACE_RETENTION: ${TRACE_RETENTION:-48h}
+    ports: ["127.0.0.1:16686:16686"]
+    volumes: [jaegerdata:/badger]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:13133/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  alloy:
+    image: ${ARS_ALLOY_IMAGE:-ars-alloy:dev}
+    build: deploy/observability/alloy
+    restart: unless-stopped
+    cgroup: host
+    environment:
+      POSTGRES_MONITOR_DSN: postgresql://ars_monitor:ars@postgres:5432/ars?sslmode=disable
+      TRACE_SAMPLE_PERCENT: "100"
+      EDGE_PROBE_URL: http://web:80/
+    volumes:
+      - alloydata:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CONTAINERD_SOCKET:-/run/containerd/containerd.sock}:/run/containerd/containerd.sock:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /sys:/sys:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    depends_on: [victoriametrics, victorialogs, jaeger]
+
+  grafana:
+    image: ${ARS_GRAFANA_IMAGE:-ars-grafana:dev}
+    build:
+      context: deploy/observability/grafana
+      args:
+        VICTORIALOGS_PLUGIN_VERSION: ${VICTORIALOGS_PLUGIN_VERSION-0.33.1}
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: ${PUBLIC_URL:-http://localhost:8080}/grafana/
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-http://mock-oauth:9000/webhooks/discord}
+    volumes: [grafanadata:/var/lib/grafana]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    depends_on: [victoriametrics, victorialogs, jaeger]
 
 volumes:
   pgdata:
   kafkadata:
+  vmdata:
+  vldata:
+  jaegerdata:
+  alloydata:
+  grafanadata:

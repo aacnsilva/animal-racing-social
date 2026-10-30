@@ -4,6 +4,7 @@ import { Envelope } from '../gen/ars/v1/events.ts';
 import { env } from './config.ts';
 import type { Pool } from './db.ts';
 import { errorFields, log } from './log.ts';
+import { BUCKETS, counter, extractContext, failSpan, histogram, setIdAttributes, SpanKind, withSpan, type Span } from './telemetry.ts';
 import { sleep } from './time.ts';
 
 export type Payload = NonNullable<Envelope['payload']>;
@@ -80,7 +81,24 @@ export type ConsumerOptions = {
   fromBeginning?: boolean;
   concurrency?: number;
   attempts?: number;
+  traced?: boolean;
 };
+
+const UNTRACED = new Set(['RaceTick', 'PriceUpdated', 'LapCompleted']);
+const processDuration = () => histogram('messaging.process.duration', 's', 'Duration of Kafka message processing', BUCKETS.messaging);
+const retries = () => counter('ars.consumer.retries', 'Kafka handler retries');
+const deadLettered = () => counter('ars.consumer.dead_lettered', 'Kafka messages moved to the DLQ');
+
+type RawHeaders = Record<string, Buffer | string | (Buffer | string)[] | undefined>;
+
+function headerStrings(headers: RawHeaders | undefined): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (first !== undefined) result[key] = first.toString();
+  }
+  return result;
+}
 
 export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
   const consumer = options.kafka.consumer({ groupId: options.groupId, allowAutoTopicCreation: false });
@@ -92,39 +110,68 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
     eachMessage: async ({ topic, partition, message, heartbeat }) => {
       const meta: MessageMeta = { topic, partition, offset: message.offset, key: message.key?.toString() ?? null };
       if (!message.value) return;
+      const value = message.value;
+      const headers = headerStrings(message.headers as RawHeaders);
+      const started = performance.now();
       let envelope: Envelope;
       try {
-        envelope = decodeEnvelope(message.value);
+        envelope = decodeEnvelope(value);
       } catch (error) {
-        await deadLetter(options, meta, message.value, null, error);
+        await deadLetter(options, meta, value, null, error, headers);
         return;
       }
-      for (let attempt = 1; ; attempt++) {
-        try {
-          await options.handler(envelope, meta);
-          return;
-        } catch (error) {
-          if (attempt >= attempts) {
-            await deadLetter(options, meta, message.value, envelope.type, error);
-            return;
+      const labels = { consumer_group: options.groupId, topic, event_type: envelope.type };
+      const process = async (span: Span | null): Promise<'ok' | 'dead_lettered'> => {
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await options.handler(envelope, meta);
+            return 'ok';
+          } catch (error) {
+            if (attempt >= attempts) {
+              if (span) failSpan(span, error);
+              deadLettered().add(1, { consumer_group: options.groupId, event_type: envelope.type });
+              await deadLetter(options, meta, value, envelope.type, error, headers);
+              return 'dead_lettered';
+            }
+            span?.addEvent('retry', { attempt, 'exception.message': error instanceof Error ? error.message : String(error) });
+            retries().add(1, { consumer_group: options.groupId, event_type: envelope.type });
+            log.warn('handler failed, retrying', { group: options.groupId, type: envelope.type, attempt, ...errorFields(error) });
+            await heartbeat().catch(() => undefined);
+            await sleep(Math.min(250 * 2 ** attempt, 5000));
+            await heartbeat().catch(() => undefined);
           }
-          log.warn('handler failed, retrying', { group: options.groupId, type: envelope.type, attempt, ...errorFields(error) });
-          await heartbeat().catch(() => undefined);
-          await sleep(Math.min(250 * 2 ** attempt, 5000));
-          await heartbeat().catch(() => undefined);
         }
-      }
+      };
+      const traced = (options.traced ?? true) && !UNTRACED.has(envelope.type);
+      const outcome = traced
+        ? await withSpan(`process ${topic} ${envelope.type}`, {
+          kind: SpanKind.CONSUMER,
+          parent: extractContext(headers),
+          attributes: {
+            'messaging.system': 'kafka',
+            'messaging.destination.name': topic,
+            'messaging.consumer.group.name': options.groupId,
+            'messaging.message.id': envelope.eventId,
+            'messaging.kafka.message.key': meta.key ?? '',
+            'messaging.destination.partition.id': String(partition),
+          },
+        }, async (span) => {
+          setIdAttributes(span, envelope.payload?.value);
+          return process(span);
+        })
+        : await process(null);
+      processDuration().record((performance.now() - started) / 1000, { ...labels, outcome });
     },
   });
   return consumer;
 }
 
-async function deadLetter(options: ConsumerOptions, meta: MessageMeta, value: Buffer, type: string | null, error: unknown): Promise<void> {
+async function deadLetter(options: ConsumerOptions, meta: MessageMeta, value: Buffer, type: string | null, error: unknown, headers: Record<string, string>): Promise<void> {
   log.error('message dead-lettered', { group: options.groupId, ...meta, type, ...errorFields(error) });
   if (!options.pool) return;
   await options.pool.query(
-    `INSERT INTO admin.dlq (consumer, topic, partition, msg_offset, msg_key, event_type, payload, error)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [options.groupId, meta.topic, meta.partition, meta.offset, meta.key, type, value, error instanceof Error ? error.message : String(error)],
+    `INSERT INTO admin.dlq (consumer, topic, partition, msg_offset, msg_key, event_type, payload, error, headers)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [options.groupId, meta.topic, meta.partition, meta.offset, meta.key, type, value, error instanceof Error ? error.message : String(error), JSON.stringify(headers)],
   ).catch((dbError) => log.error('dlq insert failed', errorFields(dbError)));
 }

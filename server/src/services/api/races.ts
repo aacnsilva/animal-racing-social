@@ -3,7 +3,7 @@ import { decodeCursor, page, pageLimit } from '../../lib/cursor.ts';
 import { many, one } from '../../lib/db.ts';
 import { ApiError, pathId, Reply, v, type Router } from '../../lib/http.ts';
 import { entrantKey } from '../../lib/ids.ts';
-import { raceEngine } from '../../lib/internal.ts';
+import { callRaw, raceEngine } from '../../lib/internal.ts';
 import { HOUR_MS, iso } from '../../lib/time.ts';
 import { marketsForRace } from '../../read/markets.ts';
 import { liveState, loadRace, RACE_SELECT, raceJson } from '../../read/races.ts';
@@ -35,10 +35,7 @@ export async function scriptBytes(deps: Deps, raceId: string): Promise<Buffer> {
   const engine = await one(deps.pool, 'SELECT replayable FROM racing.engine_versions WHERE engine_version = $1', [race.engine_version]);
   if (!engine?.replayable || !race.seed) throw new ApiError(410, 'REPLAY_EXPIRED', 'Replay retention has passed for this race');
   const entrants = await many(deps.pool, 'SELECT * FROM racing.race_entrants WHERE race_id = $1 ORDER BY entrant_id', [raceId]);
-  const response = await fetch(`${raceEngine.base()}/internal/simulate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
+  const response = await callRaw(raceEngine.base(), '/internal/simulate', {
       raceId,
       engineVersion: race.engine_version,
       venueId: race.venue_id,
@@ -49,11 +46,9 @@ export async function scriptBytes(deps: Deps, raceId: string): Promise<Buffer> {
       entrants: entrants.map((entrant) => ({
         entrantId: entrantKey(entrant.entrant_id), animalId: entrant.animal_id, lane: entrant.lane, temperament: entrant.temperament, stats: entrant.stats_snapshot,
       })),
-    }),
-    signal: AbortSignal.timeout(60_000),
-  }).catch(() => null);
-  if (!response?.ok) throw new ApiError(410, 'REPLAY_EXPIRED', 'Replay could not be regenerated');
-  return remember(raceId, Buffer.from(await response.arrayBuffer()));
+  }, 60_000).catch(() => null);
+  if (!response || response.status !== 200) throw new ApiError(410, 'REPLAY_EXPIRED', 'Replay could not be regenerated');
+  return remember(raceId, response.bytes);
 }
 
 function statusFilter(raw: string | null): string[] | null {

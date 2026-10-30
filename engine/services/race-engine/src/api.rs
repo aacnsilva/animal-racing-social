@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::Json;
 use axum::Router;
@@ -10,6 +11,8 @@ use ars_infra::convert::{IdText, WireEntrant, entrants_from_wire};
 use ars_infra::http::{bad_request, classify, internal};
 use race_engine_core::{RaceInputs, parse_seed, plan_race, simulate};
 use serde::Deserialize;
+use tracing::Instrument;
+use tracing::field::Empty;
 
 use crate::AppState;
 
@@ -82,12 +85,29 @@ async fn plan(State(state): State<Arc<AppState>>, body: Result<Json<PlanRequest>
         Err(err) => return classify(err),
     };
     let race_class = request.race_class.clone().unwrap_or_else(|| venue.class.clone());
+    let server = tracing::Span::current();
+    server.record("ars.flow", "race-scheduling");
+    server.record("race_class", race_class.as_str());
+    let span = tracing::info_span!("engine.plan", "ars.flow" = "race-scheduling", "race_class" = race_class.as_str(), "otel.status_code" = Empty);
     let species = request.species.clone();
-    let planned = tokio::task::spawn_blocking(move || plan_race(&params, &venue, &species, &race_class, &entrants)).await;
+    let plan_class = race_class.clone();
+    let started = Instant::now();
+    let planned = tokio::task::spawn_blocking(move || plan_race(&params, &venue, &species, &plan_class, &entrants))
+        .instrument(span.clone())
+        .await;
     match planned {
-        Ok(Ok(plan)) => Json(serde_json::json!({ "laps": plan.laps, "estimatedDurationSec": plan.estimated_duration_sec })).into_response(),
-        Ok(Err(err)) => bad_request(err.to_string()),
-        Err(err) => internal(err.to_string()),
+        Ok(Ok(plan)) => {
+            crate::metrics::plan_duration(&race_class, started.elapsed());
+            Json(serde_json::json!({ "laps": plan.laps, "estimatedDurationSec": plan.estimated_duration_sec })).into_response()
+        }
+        Ok(Err(err)) => {
+            span.record("otel.status_code", "error");
+            bad_request(err.to_string())
+        }
+        Err(err) => {
+            span.record("otel.status_code", "error");
+            internal(err.to_string())
+        }
     }
 }
 

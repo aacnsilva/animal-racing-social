@@ -50,6 +50,41 @@ pub fn payload_type(payload: &Payload) -> &'static str {
     }
 }
 
+pub fn event_type(envelope: &Envelope) -> &'static str {
+    envelope.payload.as_ref().map(payload_type).unwrap_or("unknown")
+}
+
+pub fn race_id(payload: &Payload) -> Option<i64> {
+    let race_id = match payload {
+        Payload::RaceScheduled(event) => event.race_id,
+        Payload::RaceOpened(event) => event.race_id,
+        Payload::RaceLocked(event) => event.race_id,
+        Payload::RaceStarted(event) => event.race_id,
+        Payload::ScriptSealed(event) => event.race_id,
+        Payload::ScriptFailed(event) => event.race_id,
+        Payload::RaceFinished(event) => event.race_id,
+        Payload::RaceSettled(event) => event.race_id,
+        Payload::RaceCancelled(event) => event.race_id,
+        Payload::GenerateScript(event) => event.race_id,
+        Payload::ScheduleRace(event) => event.race_id,
+        Payload::CancelRace(event) => event.race_id,
+        Payload::MarketCommand(event) => event.race_id,
+        Payload::RaceTick(event) => event.race_id,
+        Payload::LapCompleted(event) => event.race_id,
+        Payload::MarketOpened(event) => event.race_id,
+        Payload::PriceUpdated(event) => event.race_id,
+        Payload::MarketSuspended(event) => event.race_id,
+        Payload::MarketResumed(event) => event.race_id,
+        Payload::MarketClosed(event) => event.race_id,
+        Payload::MarketResulted(event) => event.race_id,
+        Payload::MarketVoided(event) => event.race_id,
+        Payload::BetRequested(event) => event.race_id,
+        Payload::BetAccepted(event) => event.race_id,
+        _ => 0,
+    };
+    (race_id != 0).then_some(race_id)
+}
+
 pub fn build(payload: Payload) -> Envelope {
     Envelope {
         event_id: crate::ids::uuid_v4(),
@@ -86,5 +121,8 @@ mod tests {
         assert!(envelope.occurred_at.ends_with('Z'));
         let decoded = decode(&encode(&envelope)).expect("decode");
         assert_eq!(decoded, envelope);
+        assert_eq!(event_type(&decoded), "ScriptSealed");
+        assert_eq!(decoded.payload.as_ref().and_then(race_id), Some(123));
+        assert_eq!(race_id(&Payload::AdminAudit(Default::default())), None);
     }
 }

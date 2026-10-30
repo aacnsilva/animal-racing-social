@@ -12,7 +12,7 @@ const sharedDir = env('SHARED_DIR', join(root, '..', 'shared'));
 
 export const SERVICE_ROLES = [
   'ars_api', 'ars_sse', 'ars_scheduler', 'ars_stable', 'ars_market', 'ars_betting', 'ars_wallet',
-  'ars_season', 'ars_notification', 'ars_race_engine', 'ars_broadcaster', 'ars_odds',
+  'ars_season', 'ars_notification', 'ars_race_engine', 'ars_broadcaster', 'ars_odds', 'ars_monitor',
 ];
 
 function readJson<T>(file: string): T {

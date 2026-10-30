@@ -1,5 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use std::time::Instant;
 
 use race_engine_core::{EntrantInput, EntrantState, PreparedRace, RevealedEntrant, RevealedState};
 
@@ -24,6 +25,7 @@ pub struct Market {
 #[derive(Debug, Clone)]
 pub struct RaceInfo {
     pub species: String,
+    pub race_class: String,
     pub venue_id: String,
     pub venue_version: u32,
     pub laps: u32,
@@ -73,6 +75,7 @@ pub struct RaceEntry {
     pub pricing: bool,
     pub pending: bool,
     pub priced: u64,
+    pub last_reprice: Option<Instant>,
 }
 
 #[derive(Default)]

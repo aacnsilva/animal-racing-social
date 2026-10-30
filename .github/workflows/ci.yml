@@ -74,6 +74,9 @@ jobs:
       ARS_SERVER_IMAGE: ghcr.io/${{ github.repository }}/server:sha-${{ github.sha }}
       ARS_ENGINE_IMAGE: ghcr.io/${{ github.repository }}/engine:sha-${{ github.sha }}
       ARS_WEB_IMAGE: ghcr.io/${{ github.repository }}/web:sha-${{ github.sha }}
+      ARS_ALLOY_IMAGE: ghcr.io/${{ github.repository }}/alloy:sha-${{ github.sha }}
+      ARS_JAEGER_IMAGE: ghcr.io/${{ github.repository }}/jaeger:sha-${{ github.sha }}
+      ARS_GRAFANA_IMAGE: ghcr.io/${{ github.repository }}/grafana:sha-${{ github.sha }}
       SCHEDULER_MAX_HORIZON_HOURS: "1"
     steps:
       - uses: actions/checkout@v4
@@ -110,7 +113,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          for image in server engine web; do
+          for image in server engine web alloy jaeger grafana; do
             docker push "$REGISTRY/$image:sha-$GITHUB_SHA"
             docker tag "$REGISTRY/$image:sha-$GITHUB_SHA" "$REGISTRY/$image:latest"
             docker push "$REGISTRY/$image:latest"

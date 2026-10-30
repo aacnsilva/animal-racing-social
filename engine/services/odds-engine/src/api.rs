@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use ars_infra::convert::{WireEntrant, entrants_from_wire};
 use ars_infra::http::{bad_request, classify, internal};
-use ars_infra::log;
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -11,6 +10,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use race_engine_core::{PreparedRace, estimate_probabilities};
 use serde::Deserialize;
+use tracing::Instrument;
+use tracing::field::Empty;
 
 use crate::pricing::{MarketKind, floor_probability, price, round_probability};
 use crate::state::Shared;
@@ -76,6 +77,10 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
         Ok(loaded) => loaded,
         Err(err) => return classify(err),
     };
+    let race_class = venue.class.clone();
+    let server = tracing::Span::current();
+    server.record("ars.flow", "race-scheduling");
+    server.record("race_class", race_class.as_str());
     let race = match PreparedRace::new(&params, &venue, &request.species, request.laps, &entrants) {
         Ok(race) => Arc::new(race),
         Err(err) => return bad_request(err.to_string()),
@@ -83,24 +88,49 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
     let runs = request.runs.unwrap_or(app.settings.runs_prerace).clamp(1, 100_000);
     let threads = app.settings.threads;
     let Ok(permit) = app.compute.acquire().await else { return internal("compute pool closed") };
+    let span = tracing::info_span!(
+        "odds.monte_carlo",
+        "phase" = "pre",
+        "runs" = i64::from(runs),
+        "race_class" = race_class.as_str(),
+        "otel.status_code" = Empty,
+    );
     let started = Instant::now();
     let seed: [u8; 32] = ars_infra::ids::random_bytes();
-    let computed = tokio::task::spawn_blocking(move || estimate_probabilities(&race, None, runs, threads, seed)).await;
+    let computed = tokio::task::spawn_blocking(move || estimate_probabilities(&race, None, runs, threads, seed))
+        .instrument(span.clone())
+        .await;
     drop(permit);
+    let elapsed = started.elapsed();
     let table = match computed {
         Ok(Ok(table)) => table,
-        Ok(Err(err)) => return bad_request(err.to_string()),
-        Err(err) => return internal(err.to_string()),
+        Ok(Err(err)) => {
+            span.record("otel.status_code", "error");
+            return bad_request(err.to_string());
+        }
+        Err(err) => {
+            span.record("otel.status_code", "error");
+            return internal(err.to_string());
+        }
     };
-    log::info(format!(
+    drop(span);
+    crate::metrics::monte_carlo("pre", &race_class, elapsed);
+    tracing::info!(
+        venueId = %request.venue_id,
+        species = %request.species,
+        laps = request.laps,
+        entrants = entrants.len(),
+        markets = kinds.len(),
+        runs,
+        elapsedMs = elapsed.as_millis() as u64,
         "priced {} {} laps {} ({} entrants, {} markets) from {runs} runs in {} ms",
         request.venue_id,
         request.species,
         request.laps,
         entrants.len(),
         kinds.len(),
-        started.elapsed().as_millis()
-    ));
+        elapsed.as_millis()
+    );
     let margin = app.settings.margin;
     let markets: Vec<serde_json::Value> = request
         .markets

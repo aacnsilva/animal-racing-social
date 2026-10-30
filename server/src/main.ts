@@ -1,4 +1,5 @@
 import { errorFields, log } from './lib/log.ts';
+import { initTelemetry } from './lib/telemetry.ts';
 
 const services: Record<string, () => Promise<{ start: () => Promise<void> }>> = {
   migrate: () => import('./services/migrate.ts'),
@@ -22,6 +23,7 @@ if (!load) {
   process.exit(2);
 }
 process.env.SERVICE_NAME ??= name;
+initTelemetry(process.env.OTEL_SERVICE_NAME ?? name);
 load()
   .then((module) => module.start())
   .catch((error) => {

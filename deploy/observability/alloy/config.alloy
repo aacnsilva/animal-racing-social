@@ -1,0 +1,368 @@
+logging {
+	level  = coalesce(sys.env("ALLOY_LOG_LEVEL"), "warn")
+	format = "json"
+}
+
+otelcol.receiver.otlp "default" {
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		metrics = [otelcol.processor.batch.metrics.input]
+		traces  = [otelcol.processor.tail_sampling.default.input]
+	}
+}
+
+otelcol.processor.tail_sampling "default" {
+	decision_wait = "10s"
+	num_traces    = 20000
+
+	decision_cache = {
+		sampled_cache_size     = 100000,
+		non_sampled_cache_size = 100000,
+	}
+
+	policy {
+		name = "errors"
+		type = "status_code"
+
+		status_code {
+			status_codes = ["ERROR"]
+		}
+	}
+
+	policy {
+		name = "slow"
+		type = "latency"
+
+		latency {
+			threshold_ms = 2000
+		}
+	}
+
+	policy {
+		name = "critical-flows"
+		type = "string_attribute"
+
+		string_attribute {
+			key    = "ars.flow"
+			values = ["settlement", "cashout", "cancellation", "admin", "reconciliation"]
+		}
+	}
+
+	policy {
+		name = "baseline"
+		type = "probabilistic"
+
+		probabilistic {
+			sampling_percentage = encoding.from_json(coalesce(sys.env("TRACE_SAMPLE_PERCENT"), "25"))
+		}
+	}
+
+	output {
+		traces = [otelcol.processor.batch.traces.input]
+	}
+}
+
+otelcol.processor.batch "traces" {
+	output {
+		traces = [otelcol.exporter.otlp.jaeger.input]
+	}
+}
+
+otelcol.exporter.otlp "jaeger" {
+	client {
+		endpoint = "jaeger:4317"
+
+		tls {
+			insecure = true
+		}
+	}
+}
+
+otelcol.processor.batch "metrics" {
+	output {
+		metrics = [otelcol.exporter.prometheus.default.input]
+	}
+}
+
+otelcol.exporter.prometheus "default" {
+	include_target_info = false
+	forward_to          = [prometheus.remote_write.victoriametrics.receiver]
+}
+
+prometheus.remote_write "victoriametrics" {
+	endpoint {
+		url = "http://victoriametrics:8428/api/v1/write"
+	}
+}
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		regex         = "ars"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "job"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.containers.output
+	relabel_rules = discovery.relabel.containers.rules
+	labels        = {}
+	forward_to    = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+	stage.match {
+		selector = "{job=\"kafka\"}"
+
+		stage.drop {
+			expression = "^\\[[^\\]]+\\] (TRACE|DEBUG|INFO) "
+		}
+	}
+
+	forward_to = [loki.write.victorialogs.receiver]
+}
+
+loki.write "victorialogs" {
+	endpoint {
+		url = "http://victorialogs:9428/insert/loki/api/v1/push?_stream_fields=job,container&_msg_field=msg"
+	}
+}
+
+prometheus.exporter.postgres "ars" {
+	data_source_names = [sys.env("POSTGRES_MONITOR_DSN")]
+}
+
+prometheus.exporter.redis "ars" {
+	redis_addr = "redis:6379"
+}
+
+prometheus.exporter.kafka "ars" {
+	kafka_uris      = ["kafka:9092"]
+	instance        = "kafka"
+	offset_show_all = true
+}
+
+prometheus.exporter.cadvisor "host" {
+	docker_only                  = true
+	store_container_labels       = false
+	allowlisted_container_labels = ["com.docker.compose.service"]
+}
+
+prometheus.exporter.unix "host" {
+	procfs_path    = "/host/proc"
+	sysfs_path     = "/host/sys"
+	rootfs_path    = "/host/root"
+	udev_data_path = "/host/root/run/udev/data"
+	set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "uname", "vmstat"]
+}
+
+prometheus.exporter.blackbox "health" {
+	config = "{ modules: { http_2xx: { prober: http, timeout: 5s, http: { preferred_ip_protocol: ip4 } } } }"
+
+	target {
+		name    = "api"
+		address = "http://api:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "sse"
+		address = "http://sse:3001/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "wallet"
+		address = "http://wallet:3002/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "scheduler"
+		address = "http://scheduler:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "stable"
+		address = "http://stable:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "market-manager"
+		address = "http://market-manager:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "bet-worker"
+		address = "http://bet-worker:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "settlement"
+		address = "http://settlement:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "combo-aggregator"
+		address = "http://combo-aggregator:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "season"
+		address = "http://season:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "notification"
+		address = "http://notification:3000/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "race-engine"
+		address = "http://race-engine:7001/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "race-broadcaster"
+		address = "http://race-broadcaster:7002/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "odds-engine"
+		address = "http://odds-engine:7003/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
+		name    = "web"
+		address = coalesce(sys.env("EDGE_PROBE_URL"), "http://web:80/")
+		module  = "http_2xx"
+	}
+}
+
+discovery.relabel "health" {
+	targets = prometheus.exporter.blackbox.health.targets
+
+	rule {
+		source_labels = ["__param_target"]
+		regex         = ".*"
+		target_label  = "instance"
+	}
+
+	rule {
+		source_labels = ["job"]
+		regex         = "integrations/blackbox/(.*)"
+		target_label  = "probe"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "blackbox"
+	}
+}
+
+discovery.relabel "postgres" {
+	targets = prometheus.exporter.postgres.ars.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "postgres"
+	}
+}
+
+discovery.relabel "redis" {
+	targets = prometheus.exporter.redis.ars.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "redis"
+	}
+}
+
+discovery.relabel "kafka" {
+	targets = prometheus.exporter.kafka.ars.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "kafka"
+	}
+}
+
+discovery.relabel "cadvisor" {
+	targets = prometheus.exporter.cadvisor.host.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "cadvisor"
+	}
+}
+
+discovery.relabel "host" {
+	targets = prometheus.exporter.unix.host.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "host"
+	}
+
+	rule {
+		target_label = "instance"
+		replacement  = "vps"
+	}
+}
+
+prometheus.scrape "exporters" {
+	targets = array.concat(
+		discovery.relabel.health.output,
+		discovery.relabel.postgres.output,
+		discovery.relabel.redis.output,
+		discovery.relabel.kafka.output,
+		discovery.relabel.cadvisor.output,
+		discovery.relabel.host.output,
+	)
+	scrape_interval = "15s"
+	forward_to      = [prometheus.remote_write.victoriametrics.receiver]
+}
+
+prometheus.scrape "stack" {
+	targets = [
+		{"__address__" = "web:2020", "job" = "caddy", "instance" = "web"},
+		{"__address__" = "victoriametrics:8428", "job" = "victoriametrics", "instance" = "victoriametrics"},
+		{"__address__" = "victorialogs:9428", "job" = "victorialogs", "instance" = "victorialogs"},
+		{"__address__" = "jaeger:8888", "job" = "jaeger", "instance" = "jaeger"},
+		{"__address__" = "localhost:12345", "job" = "alloy", "instance" = "alloy"},
+	]
+	scrape_interval = "15s"
+	forward_to      = [prometheus.remote_write.victoriametrics.receiver]
+}
