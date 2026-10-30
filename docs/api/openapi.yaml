@@ -143,6 +143,24 @@ paths:
       responses:
         '200': { description: OK }
 
+  /seasons:
+    get:
+      summary: List seasons
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Season' } } } } }
+  /seasons/current:
+    get:
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Season' } } } }
+  /seasons/{seasonId}/leaderboards/{board}:
+    get:
+      parameters:
+        - { name: seasonId, in: path, required: true, schema: { type: string } }
+        - { name: board, in: path, required: true, schema: { type: string, enum: [balance, biggest-payout, roi, win-streak] } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+        - { name: around, in: query, schema: { type: string, enum: [me] }, description: "Return the window around the caller" }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LeaderboardEntry' } } } } }
   /animals:
     get:
       parameters:
@@ -187,6 +205,22 @@ components:
                        STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED]
               message: { type: string }
   schemas:
+    Season:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [UPCOMING, ACTIVE, ENDED] }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        startingGrant: { type: integer }
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank: { type: integer }
+        userId: { type: string }
+        displayName: { type: string }
+        score: { type: number }
     RaceStatus: { type: string, enum: [SCHEDULED, OPEN, LIVE, FINISHED, SETTLED, CANCELLED] }
     MarketStatus: { type: string, enum: [OPEN, SUSPENDED, CLOSED, RESULTED] }
     MarketType: { type: string, enum: [FINISH_POSITION, TOP_N, TRICAST, LEADER_AT_LAP] }
@@ -205,7 +239,7 @@ components:
         name: { type: string }
         species: { type: string }
         status: { type: string, enum: [ACTIVE, RETIRED] }
-        ageRaces: { type: integer }
+        ageWeeks: { type: integer, description: "1 real day = 1 animal week" }
         lifeStage: { type: string, enum: [ROOKIE, PRIME, VETERAN] }
         base: { $ref: '#/components/schemas/Stats' }
         current: { $ref: '#/components/schemas/Stats' }
@@ -309,7 +343,7 @@ components:
       required: [selection, stake, acceptedPrice, priceVersion]
       properties:
         selection: { $ref: '#/components/schemas/Selection' }
-        stake: { type: integer, minimum: 1 }
+        stake: { type: integer, minimum: 1, description: "No maximum; capped only by available balance (all-in allowed)" }
         acceptedPrice: { type: number }
         priceVersion: { type: integer }
         acceptPriceChanges: { type: string, enum: [NONE, BETTER, ANY], default: NONE }

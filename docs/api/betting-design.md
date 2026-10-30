@@ -118,10 +118,14 @@ Animal { id, name, species, bornAt, ageRaces, status: ACTIVE|RETIRED,
 }
 ```
 
-- **Age** advances per race run and per day.
-- **ageFactor** follows a curve: rises to a peak (prime), then declines.
-  Species have different curves (ants peak fast and fade fast; tortoises the
-  opposite).
+- **Age is calendar-driven: 1 real day = 1 animal week** (≈ 52 days = 1 animal
+  year). The Stable runs a daily job that advances every active animal and
+  emits `AnimalAged`. Racing does not age an animal (but may add fatigue later).
+- **ageFactor** follows a per-species curve: rises to a peak (prime), then
+  declines. Species have different curves (ants peak fast and fade fast;
+  tortoises the opposite). Example: a horse is a ROOKIE for its first ~3 animal
+  years (~150 days), PRIME until ~8 (~420 days), then VETERAN.
+- Ages shown in the UI as animal years/weeks (`ageWeeks`), so players feel it.
 - **Retirement** when `current` falls below a species threshold or max age; the
   Stable recruits a new randomized animal to keep rosters full
   (`AnimalRetired`, `AnimalRecruited` events, which also make good social content).
@@ -172,6 +176,10 @@ POST /v1/markets/{marketId}/bets   Idempotency-Key: <uuid>
 → 202 { betId, status: "PENDING" }
 ```
 
+- **No stake limits.** Minimum 1 point, maximum = available balance (all-in
+  allowed). The balance check and stake debit are one atomic ledger write
+  (`SELECT … FOR UPDATE` on the user's wallet row or a conditional insert), so
+  concurrent bets across races can't overspend.
 - Pre-race (`OPEN` race): validated immediately, delay 0.
 - In-running: accepted after `acceptDelayTicks`, re-priced against the then
   current version and the `acceptPriceChanges` policy.
@@ -208,6 +216,22 @@ POST /v1/bets/{betId}/cashout          Idempotency-Key
 Ledger entry types: `SIGNUP_GRANT`, `DAILY_GRANT`, `BET_STAKE (−)`,
 `BET_PAYOUT (+)`, `BET_REFUND (+, void)`, `CASHOUT (+)`.
 Unique constraint `(type, refId)` makes every consumer idempotent.
+Because all-in is allowed, `DAILY_GRANT` is the safety net that gets busted
+players back in the game.
+
+## 8a. Seasons & leaderboards
+
+- A **season** is a fixed calendar window (default 4 weeks) with status
+  `UPCOMING | ACTIVE | ENDED`. Every ledger entry carries `seasonId`.
+- At season start each user gets a fresh season wallet (`SEASON_GRANT`);
+  the previous season's balance is frozen as its final score.
+- **Leaderboard** (per season) ranks by season balance; secondary boards for
+  biggest single payout, best ROI (min. N bets) and longest win streak.
+- Implemented as a Kafka consumer of `wallet.events` / `bet.events` that
+  maintains Redis sorted sets (`lb:{seasonId}:balance`, …). Postgres is the
+  source of truth; Redis can be rebuilt by replaying the topics.
+- Season end emits `SeasonEnded{seasonId, top[]}`, which the social feed can
+  turn into champion posts.
 
 ## 9. Concurrency & partitioning
 

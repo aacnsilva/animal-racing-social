@@ -20,6 +20,7 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 | `bet.events` | userId | Bet Service, Settlement | Wallet, SSE, Social feed |
 | `wallet.events` | userId | Wallet | SSE |
 | `stable.events` | animalId | Stable | Scheduler, Social feed |
+| `season.events` | seasonId | Season Service | Wallet, Leaderboard, Social feed |
 
 ## race.lifecycle
 
@@ -71,12 +72,19 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 
 | Type | Payload |
 |---|---|
-| `LedgerEntryAppended` | `entryId, userId, type, amount, refId, balanceAfter` |
+| `LedgerEntryAppended` | `entryId, userId, seasonId, type, amount, refId, balanceAfter` |
 
 ## stable.events
 
 | Type | Payload |
 |---|---|
 | `AnimalRecruited` | `animalId, species, name, base` |
-| `AnimalAged` | `animalId, ageRaces, current` |
+| `AnimalAged` | `animalId, ageWeeks, lifeStage, current` (daily) |
 | `AnimalRetired` | `animalId, reason: AGE\|DECLINE, careerStats` |
+
+## season.events
+
+| Type | Payload |
+|---|---|
+| `SeasonStarted` | `seasonId, startsAt, endsAt, startingGrant` |
+| `SeasonEnded` | `seasonId, top[{userId, rank, score}]` |
