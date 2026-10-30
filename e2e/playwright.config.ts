@@ -17,7 +17,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', testIgnore: /(observability|mobile)\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile', testMatch: /mobile\.spec\.ts/, use: { ...devices['Pixel 7'] } },
+    { name: 'mobile', testMatch: /mobile\.spec\.ts/, dependencies: ['chromium'], use: { ...devices['Pixel 7'], deviceScaleFactor: 1 } },
     { name: 'observability', testMatch: /observability\.spec\.ts/, dependencies: ['chromium'] },
   ],
 });
