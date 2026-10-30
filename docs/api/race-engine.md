@@ -128,3 +128,39 @@ reveals them live and markets suspend). DQ is announced at `RaceFinished`
   `/internal/engine-versions`; otherwise the API returns `410 REPLAY_EXPIRED`.
 - Highlight clips for the social feed should be rendered/captured within
   the retention window.
+
+## 8. Wire formats
+
+- **Kafka (service ↔ service): Protobuf.** Schemas in `proto/` are the single
+  source of truth, generated with `prost` (Rust) and `ts-proto` (TypeScript).
+  Envelope fields (`eventId`, `type`, `version`, `occurredAt`) are a shared
+  `Envelope` message; payloads evolve by adding fields only.
+- **Browser (REST + SSE): JSON.** The SSE Gateway / API translate Protobuf → JSON
+  using the generated types, so field names stay identical. Script Store and
+  replays are served as JSON so the WASM verifier and three.js read the same
+  shape.
+
+## 9. Odds cadence
+
+- The Odds Engine reprices **every second tick (1 s)** per live race; it may
+  reprice immediately on an incident or lap completion.
+- `PriceUpdated` therefore arrives at ≤ 1 Hz per market; the bet/cash-out
+  acceptance delay (2 ticks) stays aligned with one reprice.
+
+## 10. Fields & species
+
+- **6–10 entrants per race**, single species. Every venue has **10 lanes**.
+- v1 species: **horses** and **giraffes**. 1 real day = 1 animal week.
+
+| | Horse | Giraffe |
+|---|---|---|
+| ROOKIE | 2–4 y (~104 days) | 2–5 y (~156 days) |
+| PRIME | 4–8 y (~208 days) | 5–10 y (~260 days) |
+| VETERAN | 8–11 y (~156 days) | 10–13 y (~156 days) |
+| Retire by | 11 y (~470 days of racing) | 13 y (~570 days) |
+| Strengths | acceleration, tight curves, DIRT/GRASS | top speed on long straights, stamina, SAND |
+| Weaknesses | stamina on MUD | tight curves (hairpins), ICE stumble risk |
+
+Animals enter the roster at a random age within ROOKIE so retirements are
+staggered; the Stable keeps each species' active pool sized for its race
+programme.
