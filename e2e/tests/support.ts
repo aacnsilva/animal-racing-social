@@ -14,7 +14,7 @@ export function uniqueSubject(prefix: string): string {
 export async function signIn(page: Page, options: { provider?: 'google' | 'github'; subject?: string; name?: string; from?: string } = {}) {
   const provider = options.provider ?? 'google';
   const subject = options.subject ?? uniqueSubject('racer');
-  const name = options.name ?? `Racer ${subject.slice(-4)}`;
+  const name = options.name ?? `Racer ${subject.slice(-8)}`;
   await page.goto(options.from ?? '/');
   await page.getByTestId(`login-${provider}`).click();
   await page.waitForURL(/:9000\//);
