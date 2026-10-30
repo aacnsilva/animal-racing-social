@@ -14,6 +14,7 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 | Topic | Key | Producers | Consumers |
 |---|---|---|---|
 | `race.lifecycle` | raceId | Scheduler, Broadcaster | Market Manager, Broadcaster, Settlement, Stable, SSE |
+| `race.commands` | raceId | Scheduler | race-engine (`GenerateScript`) |
 | `race.ticks` | raceId | Broadcaster | Odds Engine, Market Manager, Settlement, SSE |
 | `market.events` | raceId | Market Manager, Odds Engine, Settlement | Bet Service, SSE |
 | `bet.commands` | raceId | Bet Service (API) | Bet Service (acceptance worker) |
@@ -29,7 +30,9 @@ Consumers dedupe on `eventId` and on business keys (`betId`, `marketId`, …).
 | `RaceScheduled` | `raceId, class, venueId, venueVersion, startAt, laps, estimatedDurationSec, tickMs, entrants[{entrantId, animalId, lane, statsSnapshot}], seedHash, scriptHash` |
 | `RaceOpened` | `raceId` (pre-race markets open) |
 | `RaceStarted` | `raceId, startedAt` |
-| `RaceFinished` | `raceId, finishTick, order[entrantId], seed` (script now public) |
+| `ScriptSealed` | `raceId, engineVersion, seedHash, scriptHash` |
+| `ScriptFailed` | `raceId, reason` |
+| `RaceFinished` | `raceId, finishTick, order[entrantId] (official), asRun[entrantId], incidents[], seed` (script now public) |
 | `RaceSettled` | `raceId` |
 | `RaceCancelled` | `raceId, reason` (all bets VOID) |
 

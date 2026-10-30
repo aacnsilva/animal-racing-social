@@ -215,7 +215,7 @@ components:
               code:
                 type: string
                 enum: [BETTING_CLOSED, MARKET_SUSPENDED, PRICE_CHANGED, INSUFFICIENT_FUNDS,
-                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED]
+                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED, REPLAY_EXPIRED]
               message: { type: string }
   schemas:
     Venue:
@@ -276,6 +276,7 @@ components:
         status: { type: string, enum: [ACTIVE, RETIRED] }
         ageWeeks: { type: integer, description: "1 real day = 1 animal week" }
         lifeStage: { type: string, enum: [ROOKIE, PRIME, VETERAN] }
+        temperament: { type: string, enum: [FRONT_RUNNER, STALKER, CLOSER, STEADY] }
         base: { $ref: '#/components/schemas/Stats' }
         current: { $ref: '#/components/schemas/Stats' }
         form:
@@ -340,7 +341,7 @@ components:
               lane: { type: number }
               speed: { type: number }
               staminaPct: { type: number }
-              state: { type: string, enum: [RUNNING, SPRINTING, TIRED, STUMBLED, FINISHED] }
+              state: { type: string, enum: [RUNNING, SPRINTING, TIRED, STUMBLED, DNF, FINISHED] }
         events: { type: array, items: { type: object } }
     Market:
       type: object
