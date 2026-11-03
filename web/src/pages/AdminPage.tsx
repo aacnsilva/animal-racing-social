@@ -20,14 +20,22 @@ function ResultNotice({ result, testId }: { result: Result; testId?: string }) {
   );
 }
 
-const fail = (error: unknown): Result => ({ kind: 'error', text: friendlyError(error), code: error instanceof ApiError ? error.code : undefined });
+const fail = (error: unknown): Result => ({
+  kind: 'error',
+  text: friendlyError(error),
+  code: error instanceof ApiError ? error.code : undefined,
+});
 
 function Card({ title, children, hint }: { title: string; children: ReactNode; hint?: string }) {
   return (
     <section className="card stack">
       <div>
         <h2>{title}</h2>
-        {hint && <div className="small muted" style={{ marginTop: 4 }}>{hint}</div>}
+        {hint && (
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {hint}
+          </div>
+        )}
       </div>
       {children}
     </section>
@@ -57,10 +65,19 @@ function ScheduleRace() {
     try {
       const response = await api<{ raceId: string }>('/v1/admin/races', {
         method: 'POST',
-        body: { startAt, species, class: raceClass, venueId: venueId || undefined, fieldSize: fieldSize ? Number(fieldSize) : undefined },
+        body: {
+          startAt,
+          species,
+          class: raceClass,
+          venueId: venueId || undefined,
+          fieldSize: fieldSize ? Number(fieldSize) : undefined,
+        },
       });
       setRaceId(response.raceId);
-      setResult({ kind: 'success', text: `Scheduled for ${fmtTime(startAt)}${seconds !== requested * 60 ? ' (moved to the earliest allowed start)' : ''}. It appears on the card once its script is sealed.` });
+      setResult({
+        kind: 'success',
+        text: `Scheduled for ${fmtTime(startAt)}${seconds !== requested * 60 ? ' (moved to the earliest allowed start)' : ''}. It appears on the card once its script is sealed.`,
+      });
     } catch (error) {
       setResult(fail(error));
     } finally {
@@ -69,18 +86,31 @@ function ScheduleRace() {
   };
 
   return (
-    <Card title="Schedule a one-off race" hint="Starts must be at least 65 seconds ahead. The engine plans laps and seals the script asynchronously.">
+    <Card
+      title="Schedule a one-off race"
+      hint="Starts must be at least 65 seconds ahead. The engine plans laps and seals the script asynchronously."
+    >
       <div className="form-grid">
         <label className="field">
           <span>Species</span>
-          <select className="select" data-testid="admin-race-species" value={species} onChange={(e) => setSpecies(e.target.value as Species)}>
+          <select
+            className="select"
+            data-testid="admin-race-species"
+            value={species}
+            onChange={(e) => setSpecies(e.target.value as Species)}
+          >
             <option value="HORSE">Horse</option>
             <option value="GIRAFFE">Giraffe</option>
           </select>
         </label>
         <label className="field">
           <span>Class</span>
-          <select className="select" data-testid="admin-race-class" value={raceClass} onChange={(e) => setRaceClass(e.target.value as RaceClass)}>
+          <select
+            className="select"
+            data-testid="admin-race-class"
+            value={raceClass}
+            onChange={(e) => setRaceClass(e.target.value as RaceClass)}
+          >
             <option value="SPRINT">Sprint</option>
             <option value="STANDARD">Standard</option>
             <option value="ENDURANCE">Endurance</option>
@@ -88,11 +118,24 @@ function ScheduleRace() {
         </label>
         <label className="field">
           <span>Minutes from now</span>
-          <input className="input" data-testid="admin-race-minutes" type="number" min="1.1" step="0.5" value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+          <input
+            className="input"
+            data-testid="admin-race-minutes"
+            type="number"
+            min="1.1"
+            step="0.5"
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+          />
         </label>
         <label className="field">
           <span>Venue (optional)</span>
-          <select className="select" value={venueId} onChange={(e) => setVenueId(e.target.value)} data-testid="admin-race-venue">
+          <select
+            className="select"
+            value={venueId}
+            onChange={(e) => setVenueId(e.target.value)}
+            data-testid="admin-race-venue"
+          >
             <option value="">Random</option>
             {(venues.data ?? []).map((venue) => (
               <option key={venue.id} value={venue.id}>
@@ -103,7 +146,12 @@ function ScheduleRace() {
         </label>
         <label className="field">
           <span>Field size</span>
-          <select className="select" value={fieldSize} onChange={(e) => setFieldSize(e.target.value)} data-testid="admin-race-field-size">
+          <select
+            className="select"
+            value={fieldSize}
+            onChange={(e) => setFieldSize(e.target.value)}
+            data-testid="admin-race-field-size"
+          >
             <option value="">Default</option>
             {[6, 7, 8, 9, 10].map((n) => (
               <option key={n} value={n}>
@@ -114,7 +162,12 @@ function ScheduleRace() {
         </label>
       </div>
       <div className="row wrap">
-        <button className="btn primary" data-testid="admin-schedule-submit" onClick={() => void submit()} disabled={busy}>
+        <button
+          className="btn primary"
+          data-testid="admin-schedule-submit"
+          onClick={() => void submit()}
+          disabled={busy}
+        >
           Schedule race
         </button>
         {raceId && (
@@ -140,8 +193,14 @@ function CancelRace() {
     setBusy(true);
     setResult(null);
     try {
-      await api(`/v1/admin/races/${encodeURIComponent(raceId.trim())}/cancel`, { method: 'POST', body: reason.trim() ? { reason: reason.trim() } : {} });
-      setResult({ kind: 'success', text: `Cancellation requested for race ${raceId.trim()}. Markets will be voided and stakes refunded.` });
+      await api(`/v1/admin/races/${encodeURIComponent(raceId.trim())}/cancel`, {
+        method: 'POST',
+        body: reason.trim() ? { reason: reason.trim() } : {},
+      });
+      setResult({
+        kind: 'success',
+        text: `Cancellation requested for race ${raceId.trim()}. Markets will be voided and stakes refunded.`,
+      });
     } catch (error) {
       setResult(fail(error));
     } finally {
@@ -153,7 +212,12 @@ function CancelRace() {
       <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
         <label className="field">
           <span>Race id</span>
-          <input className="input mono" data-testid="admin-cancel-race-id" value={raceId} onChange={(e) => setRaceId(e.target.value)} />
+          <input
+            className="input mono"
+            data-testid="admin-cancel-race-id"
+            value={raceId}
+            onChange={(e) => setRaceId(e.target.value)}
+          />
         </label>
         <label className="field">
           <span>Reason</span>
@@ -161,7 +225,12 @@ function CancelRace() {
         </label>
       </div>
       <div>
-        <button className="btn danger" data-testid="admin-cancel-submit" onClick={() => void submit()} disabled={busy || !raceId.trim()}>
+        <button
+          className="btn danger"
+          data-testid="admin-cancel-submit"
+          onClick={() => void submit()}
+          disabled={busy || !raceId.trim()}
+        >
           Cancel race
         </button>
       </div>
@@ -217,7 +286,10 @@ function MarketControl() {
   const act = async (action: 'suspend' | 'resume' | 'void') => {
     setResult(null);
     try {
-      await api(`/v1/admin/markets/${encodeURIComponent(marketId.trim())}/${action}`, { method: 'POST', body: reason.trim() ? { reason: reason.trim() } : {} });
+      await api(`/v1/admin/markets/${encodeURIComponent(marketId.trim())}/${action}`, {
+        method: 'POST',
+        body: reason.trim() ? { reason: reason.trim() } : {},
+      });
       setResult({ kind: 'success', text: `${action} requested for market ${marketId.trim()}.` });
     } catch (error) {
       setResult(fail(error));
@@ -228,7 +300,12 @@ function MarketControl() {
       <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
         <label className="field">
           <span>Market id</span>
-          <input className="input mono" data-testid="admin-market-id" value={marketId} onChange={(e) => setMarketId(e.target.value)} />
+          <input
+            className="input mono"
+            data-testid="admin-market-id"
+            value={marketId}
+            onChange={(e) => setMarketId(e.target.value)}
+          />
         </label>
         <label className="field">
           <span>Reason</span>
@@ -236,13 +313,28 @@ function MarketControl() {
         </label>
       </div>
       <div className="row wrap">
-        <button className="btn" data-testid="admin-market-suspend" disabled={!marketId.trim()} onClick={() => void act('suspend')}>
+        <button
+          className="btn"
+          data-testid="admin-market-suspend"
+          disabled={!marketId.trim()}
+          onClick={() => void act('suspend')}
+        >
           Suspend
         </button>
-        <button className="btn" data-testid="admin-market-resume" disabled={!marketId.trim()} onClick={() => void act('resume')}>
+        <button
+          className="btn"
+          data-testid="admin-market-resume"
+          disabled={!marketId.trim()}
+          onClick={() => void act('resume')}
+        >
           Resume
         </button>
-        <button className="btn danger" data-testid="admin-market-void" disabled={!marketId.trim()} onClick={() => void act('void')}>
+        <button
+          className="btn danger"
+          data-testid="admin-market-void"
+          disabled={!marketId.trim()}
+          onClick={() => void act('void')}
+        >
           Void
         </button>
       </div>
@@ -251,7 +343,19 @@ function MarketControl() {
   );
 }
 
-function JsonEditor({ title, hint, load, save, transform }: { title: string; hint: string; load: () => Promise<unknown>; save: (value: unknown) => Promise<unknown>; transform?: (value: unknown) => unknown }) {
+function JsonEditor({
+  title,
+  hint,
+  load,
+  save,
+  transform,
+}: {
+  title: string;
+  hint: string;
+  load: () => Promise<unknown>;
+  save: (value: unknown) => Promise<unknown>;
+  transform?: (value: unknown) => unknown;
+}) {
   const [text, setText] = useState('');
   const [loaded, setLoaded] = useState<unknown>(null);
   const [result, setResult] = useState<Result>(null);
@@ -335,7 +439,12 @@ function Templates() {
         title={`Market template · ${CLASS_LABEL[raceClass]}`}
         hint="Edit the markets array. Changes apply to races scheduled afterwards."
         load={load}
-        save={(value) => api<unknown>(`/v1/admin/market-templates/${raceClass}`, { method: 'PUT', body: { markets: (value as { markets?: unknown }).markets ?? value } })}
+        save={(value) =>
+          api<unknown>(`/v1/admin/market-templates/${raceClass}`, {
+            method: 'PUT',
+            body: { markets: (value as { markets?: unknown }).markets ?? value },
+          })
+        }
         transform={(value) => ({ markets: (value as { markets?: unknown } | null)?.markets ?? [] })}
       />
     </div>
@@ -413,23 +522,47 @@ function Seasons() {
         <div className="form-grid form-pair">
           <label className="field">
             <span>Starts</span>
-            <input className="input" type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />
+            <input
+              className="input"
+              type="datetime-local"
+              value={form.startsAt}
+              onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+            />
           </label>
           <label className="field">
             <span>Ends</span>
-            <input className="input" type="datetime-local" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} />
+            <input
+              className="input"
+              type="datetime-local"
+              value={form.endsAt}
+              onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
+            />
           </label>
           <label className="field">
             <span>Starting grant</span>
-            <input className="input" type="number" value={form.startingGrant} onChange={(e) => setForm({ ...form, startingGrant: e.target.value })} />
+            <input
+              className="input"
+              type="number"
+              value={form.startingGrant}
+              onChange={(e) => setForm({ ...form, startingGrant: e.target.value })}
+            />
           </label>
           <label className="field">
             <span>Daily grant</span>
-            <input className="input" type="number" value={form.dailyGrant} onChange={(e) => setForm({ ...form, dailyGrant: e.target.value })} />
+            <input
+              className="input"
+              type="number"
+              value={form.dailyGrant}
+              onChange={(e) => setForm({ ...form, dailyGrant: e.target.value })}
+            />
           </label>
         </div>
         <div>
-          <button className="btn primary" onClick={() => void create()} disabled={!form.name || !form.startsAt || !form.endsAt}>
+          <button
+            className="btn primary"
+            onClick={() => void create()}
+            disabled={!form.name || !form.startsAt || !form.endsAt}
+          >
             Create season
           </button>
         </div>
@@ -439,7 +572,11 @@ function Seasons() {
   );
 }
 
-type AdminUser = User & { bannedAt: string | null; banReason: string | null; wallets: { seasonId: string; balance: number; inOpenBets: number }[] };
+type AdminUser = User & {
+  bannedAt: string | null;
+  banReason: string | null;
+  wallets: { seasonId: string; balance: number; inOpenBets: number }[];
+};
 
 function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => void }) {
   const detail = useAsync(() => api<AdminUser>(`/v1/admin/users/${userId}`), [userId]);
@@ -454,7 +591,10 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
   const adjust = async () => {
     setResult(null);
     try {
-      const response = await api<{ balance: number }>(`/v1/admin/users/${userId}/adjust`, { method: 'POST', body: { amount: Number(amount), reason } });
+      const response = await api<{ balance: number }>(`/v1/admin/users/${userId}/adjust`, {
+        method: 'POST',
+        body: { amount: Number(amount), reason },
+      });
       setResult({ kind: 'success', text: `Adjusted. New balance ${fmtPoints(response.balance)} pts.` });
       setAmount('');
       detail.reload();
@@ -466,7 +606,10 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
   const ban = async (banned: boolean) => {
     setResult(null);
     try {
-      await api(`/v1/admin/users/${userId}/ban`, { method: 'POST', body: banned ? { banned, reason: banReason || undefined } : { banned } });
+      await api(`/v1/admin/users/${userId}/ban`, {
+        method: 'POST',
+        body: banned ? { banned, reason: banReason || undefined } : { banned },
+      });
       setResult({ kind: 'success', text: banned ? 'User banned and sessions revoked.' : 'User unbanned.' });
       detail.reload();
       onChanged();
@@ -479,7 +622,8 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
       <dl className="kv">
         <dt>Name</dt>
         <dd>
-          <b>{u.displayName}</b> {u.role === 'ADMIN' && <span className="chip gold">admin</span>} {u.bannedAt && <span className="chip red">banned</span>}
+          <b>{u.displayName}</b> {u.role === 'ADMIN' && <span className="chip gold">admin</span>}{' '}
+          {u.bannedAt && <span className="chip red">banned</span>}
         </dd>
         <dt>User id</dt>
         <dd className="mono">{u.userId}</dd>
@@ -507,7 +651,13 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
       <div className="form-grid" style={{ gridTemplateColumns: '110px 1fr auto' }}>
         <label className="field">
           <span>Amount</span>
-          <input className="input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="+/-" />
+          <input
+            className="input"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="+/-"
+          />
         </label>
         <label className="field">
           <span>Reason</span>
@@ -562,7 +712,13 @@ function Users() {
   const [q, setQ] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
-  const users = useAsync(() => api<{ items: { userId: string; displayName: string; role: string; bannedAt: string | null; createdAt: string }[] }>(`/v1/admin/users${qs({ q: search })}`), [search]);
+  const users = useAsync(
+    () =>
+      api<{
+        items: { userId: string; displayName: string; role: string; bannedAt: string | null; createdAt: string }[];
+      }>(`/v1/admin/users${qs({ q: search })}`),
+    [search],
+  );
   return (
     <div className="admin-grid">
       <Card title="Users">
@@ -573,7 +729,14 @@ function Users() {
             setSearch(q);
           }}
         >
-          <input className="input" style={{ flex: 1 }} placeholder="Name or user id" value={q} onChange={(e) => setQ(e.target.value)} data-testid="admin-user-search" />
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            placeholder="Name or user id"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            data-testid="admin-user-search"
+          />
           <button className="btn" type="submit">
             Search
           </button>
@@ -588,13 +751,20 @@ function Users() {
             <table className="table">
               <tbody>
                 {users.data.items.map((user) => (
-                  <tr key={user.userId} className={selected === user.userId ? 'me' : ''} style={{ cursor: 'pointer' }} onClick={() => setSelected(user.userId)} data-testid="admin-user-row">
+                  <tr
+                    key={user.userId}
+                    className={selected === user.userId ? 'me' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelected(user.userId)}
+                    data-testid="admin-user-row"
+                  >
                     <td>
                       <b>{user.displayName}</b>
                       <div className="tiny muted mono">{user.userId}</div>
                     </td>
                     <td>
-                      {user.role === 'ADMIN' && <span className="chip gold">admin</span>} {user.bannedAt && <span className="chip red">banned</span>}
+                      {user.role === 'ADMIN' && <span className="chip gold">admin</span>}{' '}
+                      {user.bannedAt && <span className="chip red">banned</span>}
                     </td>
                     <td className="small muted">{fmtDateTime(user.createdAt)}</td>
                   </tr>
@@ -604,13 +774,41 @@ function Users() {
           </div>
         )}
       </Card>
-      <Card title="User detail">{selected ? <UserDetail key={selected} userId={selected} onChanged={users.reload} /> : <div className="small muted">Select a user.</div>}</Card>
+      <Card title="User detail">
+        {selected ? (
+          <UserDetail key={selected} userId={selected} onChanged={users.reload} />
+        ) : (
+          <div className="small muted">Select a user.</div>
+        )}
+      </Card>
     </div>
   );
 }
 
-type DlqItem = { id: string; consumer: string; topic: string; partition: number; offset: string; key: string | null; eventType: string | null; error: string; createdAt: string; replayedAt: string | null };
-type AuditItem = { id: string; adminUserId: string; adminName: string | null; action: string; targetType: string; targetId: string; before: unknown; after: unknown; reason: string | null; createdAt: string };
+type DlqItem = {
+  id: string;
+  consumer: string;
+  topic: string;
+  partition: number;
+  offset: string;
+  key: string | null;
+  eventType: string | null;
+  error: string;
+  createdAt: string;
+  replayedAt: string | null;
+};
+type AuditItem = {
+  id: string;
+  adminUserId: string;
+  adminName: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  before: unknown;
+  after: unknown;
+  reason: string | null;
+  createdAt: string;
+};
 
 function Ops() {
   const dlq = useAsync(() => api<{ items: DlqItem[] }>('/v1/admin/dlq'), []);
@@ -626,7 +824,10 @@ function Ops() {
   };
   return (
     <div className="stack" style={{ gap: 16 }}>
-      <Card title="Dead-letter queue" hint="Messages a consumer could not process. Replay re-publishes the original payload.">
+      <Card
+        title="Dead-letter queue"
+        hint="Messages a consumer could not process. Replay re-publishes the original payload."
+      >
         {dlq.error ? <ErrorNotice error={dlq.error} /> : null}
         {!dlq.data ? (
           <Loading />
@@ -756,7 +957,11 @@ export function AdminPage() {
       </div>
       <div className="tabs">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setQuery({ tab: t.id === 'races' ? null : t.id })}>
+          <button
+            key={t.id}
+            className={tab === t.id ? 'active' : ''}
+            onClick={() => setQuery({ tab: t.id === 'races' ? null : t.id })}
+          >
             {t.label}
           </button>
         ))}

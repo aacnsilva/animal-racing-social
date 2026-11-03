@@ -103,7 +103,11 @@ impl EventKind {
     pub fn is_incident(self) -> bool {
         matches!(
             self,
-            EventKind::Stumble | EventKind::FalseStart | EventKind::RefusedToRun | EventKind::PulledUp | EventKind::PhotoFinish
+            EventKind::Stumble
+                | EventKind::FalseStart
+                | EventKind::RefusedToRun
+                | EventKind::PulledUp
+                | EventKind::PhotoFinish
         )
     }
 }
@@ -235,11 +239,25 @@ pub struct TickEvent {
 
 impl TickEvent {
     pub fn single(kind: EventKind, id: &str) -> TickEvent {
-        TickEvent { kind, id: Some(id.to_string()), a: None, b: None, lap: None, pos: None }
+        TickEvent {
+            kind,
+            id: Some(id.to_string()),
+            a: None,
+            b: None,
+            lap: None,
+            pos: None,
+        }
     }
 
     pub fn pair(kind: EventKind, a: &str, b: &str) -> TickEvent {
-        TickEvent { kind, id: None, a: Some(a.to_string()), b: Some(b.to_string()), lap: None, pos: None }
+        TickEvent {
+            kind,
+            id: None,
+            a: Some(a.to_string()),
+            b: Some(b.to_string()),
+            lap: None,
+            pos: None,
+        }
     }
 }
 

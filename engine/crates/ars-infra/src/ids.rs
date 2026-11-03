@@ -1,8 +1,9 @@
 pub fn random_bytes<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];
-    if getrandom::fill(&mut bytes).is_err() {
-        panic!("operating system random number generator unavailable");
-    }
+    assert!(
+        getrandom::fill(&mut bytes).is_ok(),
+        "operating system random number generator unavailable"
+    );
     bytes
 }
 
@@ -11,7 +12,14 @@ pub fn uuid_v4() -> String {
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let text = hex::encode(bytes);
-    format!("{}-{}-{}-{}-{}", &text[0..8], &text[8..12], &text[12..16], &text[16..20], &text[20..32])
+    format!(
+        "{}-{}-{}-{}-{}",
+        &text[0..8],
+        &text[8..12],
+        &text[12..16],
+        &text[16..20],
+        &text[20..32]
+    )
 }
 
 pub fn entrant_wire_id(entrant_number: i32) -> String {
@@ -19,7 +27,9 @@ pub fn entrant_wire_id(entrant_number: i32) -> String {
 }
 
 pub fn entrant_db_id(wire_id: &str) -> Option<i32> {
-    wire_id.strip_prefix('e').and_then(|digits| digits.parse().ok())
+    wire_id
+        .strip_prefix('e')
+        .and_then(|digits| digits.parse().ok())
 }
 
 #[cfg(test)]
@@ -31,9 +41,15 @@ mod tests {
         let id = uuid_v4();
         assert_eq!(id.len(), 36);
         let parts: Vec<&str> = id.split('-').collect();
-        assert_eq!(parts.iter().map(|part| part.len()).collect::<Vec<_>>(), vec![8, 4, 4, 4, 12]);
+        assert_eq!(
+            parts.iter().map(|part| part.len()).collect::<Vec<_>>(),
+            vec![8, 4, 4, 4, 12]
+        );
         assert!(parts[2].starts_with('4'));
-        assert!(matches!(parts[3].chars().next(), Some('8' | '9' | 'a' | 'b')));
+        assert!(matches!(
+            parts[3].chars().next(),
+            Some('8' | '9' | 'a' | 'b')
+        ));
         assert_ne!(uuid_v4(), id);
     }
 

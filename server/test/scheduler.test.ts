@@ -3,17 +3,27 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { isAvailable, slotPlan, slotsBetween, validateProgramme, type Programme } from '../src/domain/scheduler.ts';
 
-const programme = JSON.parse(readFileSync(new URL('../../shared/programme.json', import.meta.url), 'utf8')) as Programme;
+const programme = JSON.parse(
+  readFileSync(new URL('../../shared/programme.json', import.meta.url), 'utf8'),
+) as Programme;
 
 describe('programme slots', () => {
   it('produces three aligned slots per hour', () => {
     const slots = slotsBetween(new Date('2026-10-30T12:05:00Z'), new Date('2026-10-30T13:00:00Z'), programme);
-    assert.deepEqual(slots.map((s) => s.toISOString()), ['2026-10-30T12:20:00.000Z', '2026-10-30T12:40:00.000Z', '2026-10-30T13:00:00.000Z']);
+    assert.deepEqual(
+      slots.map((s) => s.toISOString()),
+      ['2026-10-30T12:20:00.000Z', '2026-10-30T12:40:00.000Z', '2026-10-30T13:00:00.000Z'],
+    );
   });
 
   it('alternates species and follows the class mix', () => {
-    const plans = slotsBetween(new Date('2026-10-30T12:00:00Z'), new Date('2026-10-30T13:59:00Z'), programme).map((slot) => slotPlan(slot, programme));
-    assert.deepEqual(plans.map((p) => p.raceClass), ['SPRINT', 'STANDARD', 'SPRINT', 'SPRINT', 'STANDARD', 'ENDURANCE']);
+    const plans = slotsBetween(new Date('2026-10-30T12:00:00Z'), new Date('2026-10-30T13:59:00Z'), programme).map(
+      (slot) => slotPlan(slot, programme),
+    );
+    assert.deepEqual(
+      plans.map((p) => p.raceClass),
+      ['SPRINT', 'STANDARD', 'SPRINT', 'SPRINT', 'STANDARD', 'ENDURANCE'],
+    );
     const species = plans.map((p) => p.species);
     for (let i = 1; i < species.length; i++) assert.notEqual(species[i], species[i - 1]);
   });

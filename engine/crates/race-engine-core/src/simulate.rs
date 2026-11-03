@@ -3,8 +3,9 @@ use crate::inputs::RaceInputs;
 use crate::params::LoadedParams;
 use crate::rng::SeededStreams;
 use crate::script::{
-    LapLeader, Num, RaceScript, ResultEntrant, ResultStatus, ScriptEntrant, ScriptResult, ScriptStats, ScriptTick,
-    ScriptTrack, SealedScript, TickEntrant, TickEvent, EventKind, round2, sha256_hex,
+    EventKind, LapLeader, Num, RaceScript, ResultEntrant, ResultStatus, ScriptEntrant,
+    ScriptResult, ScriptStats, ScriptTick, ScriptTrack, SealedScript, TickEntrant, TickEvent,
+    round2, sha256_hex,
 };
 use crate::sim::{Phase, PreparedRace, Sim};
 use crate::venue::Venue;
@@ -15,15 +16,31 @@ pub fn simulate(
     inputs: &RaceInputs,
     seed: &[u8; 32],
 ) -> Result<SealedScript, EngineError> {
-    let race = PreparedRace::new(params, venue, &inputs.species, inputs.laps, &inputs.entrants)?;
+    let race = PreparedRace::new(
+        params,
+        venue,
+        &inputs.species,
+        inputs.laps,
+        &inputs.entrants,
+    )?;
     let script = run_recorded(params, &race, inputs, seed);
     let json = script.to_json_bytes();
     let script_hash = sha256_hex(&json);
     let seed_hash = sha256_hex(seed);
-    Ok(SealedScript { script, json, script_hash, seed_hash })
+    Ok(SealedScript {
+        script,
+        json,
+        script_hash,
+        seed_hash,
+    })
 }
 
-fn run_recorded(params: &LoadedParams, race: &PreparedRace, inputs: &RaceInputs, seed: &[u8; 32]) -> RaceScript {
+fn run_recorded(
+    params: &LoadedParams,
+    race: &PreparedRace,
+    inputs: &RaceInputs,
+    seed: &[u8; 32],
+) -> RaceScript {
     let mut streams = SeededStreams::new(seed, race.entrants.len());
     let mut sim = Sim::new(race, true);
     sim.start(&mut streams);
@@ -33,23 +50,36 @@ fn run_recorded(params: &LoadedParams, race: &PreparedRace, inputs: &RaceInputs,
     ticks.push(tick_record(&sim, &previous_positions, start_events));
     let count = race.entrants.len();
     while !sim.is_done() {
-        let racing_before: Vec<bool> = sim.runners.iter().map(|runner| runner.phase == Phase::Running).collect();
+        let racing_before: Vec<bool> = sim
+            .runners
+            .iter()
+            .map(|runner| runner.phase == Phase::Running)
+            .collect();
         sim.step(&mut streams);
         let positions = sim.positions();
         let mut overtakes: Vec<(u32, u32, TickEvent)> = Vec::new();
         for a in 0..count {
-            if !racing_before[a] || !matches!(sim.runners[a].phase, Phase::Running | Phase::Finished) {
+            if !racing_before[a]
+                || !matches!(sim.runners[a].phase, Phase::Running | Phase::Finished)
+            {
                 continue;
             }
             for b in 0..count {
-                if a == b || !racing_before[b] || !matches!(sim.runners[b].phase, Phase::Running | Phase::Finished) {
+                if a == b
+                    || !racing_before[b]
+                    || !matches!(sim.runners[b].phase, Phase::Running | Phase::Finished)
+                {
                     continue;
                 }
                 if previous_positions[a] > previous_positions[b] && positions[a] < positions[b] {
                     overtakes.push((
                         positions[a],
                         positions[b],
-                        TickEvent::pair(EventKind::Overtake, &race.entrants[a].id, &race.entrants[b].id),
+                        TickEvent::pair(
+                            EventKind::Overtake,
+                            &race.entrants[a].id,
+                            &race.entrants[b].id,
+                        ),
                     ));
                 }
             }
@@ -115,7 +145,12 @@ fn tick_record(sim: &Sim<'_>, positions: &[u32], events: Vec<TickEvent>) -> Scri
             pos: positions[index],
         })
         .collect();
-    ScriptTick { tick: sim.tick, lap: sim.leader_lap(), entrants, events }
+    ScriptTick {
+        tick: sim.tick,
+        lap: sim.leader_lap(),
+        entrants,
+        events,
+    }
 }
 
 fn build_result(sim: &Sim<'_>) -> ScriptResult {
@@ -145,8 +180,12 @@ fn build_result(sim: &Sim<'_>) -> ScriptResult {
             let runner = &sim.runners[*index];
             let (status, finish_time_ms, distance) = match runner.phase {
                 Phase::Finished => (
-                    if runner.disqualified { ResultStatus::Disqualified } else { ResultStatus::Finished },
-                    Some(libm::round(runner.finish_time * race.tick_ms as f64) as i64),
+                    if runner.disqualified {
+                        ResultStatus::Disqualified
+                    } else {
+                        ResultStatus::Finished
+                    },
+                    Some(libm::round(runner.finish_time * f64::from(race.tick_ms)) as i64),
                     race.track.length,
                 ),
                 Phase::NonRunner => (ResultStatus::NonRunner, None, 0.0),
@@ -165,8 +204,14 @@ fn build_result(sim: &Sim<'_>) -> ScriptResult {
         .collect();
     ScriptResult {
         finish_tick: sim.tick,
-        order: official.iter().map(|index| race.entrants[*index].id.clone()).collect(),
-        as_run: as_run.iter().map(|index| race.entrants[*index].id.clone()).collect(),
+        order: official
+            .iter()
+            .map(|index| race.entrants[*index].id.clone())
+            .collect(),
+        as_run: as_run
+            .iter()
+            .map(|index| race.entrants[*index].id.clone())
+            .collect(),
         entrants,
         lap_leaders,
         incidents: sim.incidents.clone(),

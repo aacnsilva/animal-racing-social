@@ -1,6 +1,8 @@
 use crate::error::EngineError;
 use crate::inputs::{EntrantInput, Stats, Temperament, sorted_entrants, validate_entrants};
-use crate::params::{IncidentParams, LoadedParams, NoiseParams, PhysicsParams, StaminaParams, TemperamentParams};
+use crate::params::{
+    IncidentParams, LoadedParams, NoiseParams, PhysicsParams, StaminaParams, TemperamentParams,
+};
 use crate::rng::Streams;
 use crate::script::{EntrantState, EventKind, Incident, IncidentKind, TickEvent, round2};
 use crate::venue::{Track, Venue};
@@ -50,7 +52,9 @@ impl PreparedRace {
     ) -> Result<PreparedRace, EngineError> {
         let engine = &params.params;
         if laps == 0 || laps > 100 {
-            return Err(EngineError::InvalidInputs(format!("laps {laps} out of range")));
+            return Err(EngineError::InvalidInputs(format!(
+                "laps {laps} out of range"
+            )));
         }
         let species_params = engine
             .species
@@ -58,7 +62,7 @@ impl PreparedRace {
             .ok_or_else(|| EngineError::InvalidInputs(format!("unknown species {species}")))?;
         validate_entrants(entrants, venue)?;
         let track = Track::build(venue, laps, species_params, engine)?;
-        let dt = engine.tick_ms as f64 / 1000.0;
+        let dt = f64::from(engine.tick_ms) / 1000.0;
         let stamina = engine.stamina;
         let effective_length = libm::pow(stamina.reference_length, 1.0 - stamina.length_exponent)
             * libm::pow(track.length, stamina.length_exponent);
@@ -74,9 +78,18 @@ impl PreparedRace {
             let tactics = *engine
                 .temperaments
                 .get(entrant.temperament.key())
-                .ok_or_else(|| EngineError::InvalidParams(format!("no temperament {}", entrant.temperament.key())))?;
+                .ok_or_else(|| {
+                    EngineError::InvalidParams(format!(
+                        "no temperament {}",
+                        entrant.temperament.key()
+                    ))
+                })?;
             let reference = species_params.reference_velocity;
-            let v_top = reference * libm::pow(stats.velocity / reference, engine.physics.velocity_elasticity);
+            let v_top = reference
+                * libm::pow(
+                    stats.velocity / reference,
+                    engine.physics.velocity_elasticity,
+                );
             let capacity = stamina.capacity_base + stamina.capacity_per_point * stats.stamina;
             let drain_per_meter = base_drain / capacity;
             let inconsistency = 1.0 - stats.consistency;
@@ -96,7 +109,8 @@ impl PreparedRace {
                 stumble_per_meter: incidents.stumble_per_km / 1000.0 * (inconsistency / 0.25),
                 form_sd: noise.form_sd_base + noise.form_sd_per_inconsistency * inconsistency,
                 pace_sd,
-                pace_innovation_sd: pace_sd * libm::sqrt((1.0 - correlation * correlation).max(0.0)),
+                pace_innovation_sd: pace_sd
+                    * libm::sqrt((1.0 - correlation * correlation).max(0.0)),
                 tactics,
             });
         }
@@ -136,7 +150,10 @@ impl PreparedRace {
     }
 
     pub fn entrant_ids(&self) -> Vec<String> {
-        self.entrants.iter().map(|entrant| entrant.id.clone()).collect()
+        self.entrants
+            .iter()
+            .map(|entrant| entrant.id.clone())
+            .collect()
     }
 
     pub fn entrant_index(&self, id: &str) -> Option<usize> {
@@ -223,8 +240,8 @@ impl<'a> Sim<'a> {
             .map(|entrant| Runner {
                 dist: 0.0,
                 speed: 0.0,
-                lane: entrant.lane as f64,
-                lane_target: entrant.lane as f64,
+                lane: f64::from(entrant.lane),
+                lane_target: f64::from(entrant.lane),
                 stamina: 100.0,
                 phase: Phase::Running,
                 wait_ticks: 0,
@@ -284,7 +301,8 @@ impl<'a> Sim<'a> {
         runner.form = 1.0 + form_z * entrant.form_sd;
         runner.inverse_reference_speed = entrant.inverse_reference_speed / runner.form;
         runner.pace = pace_z * entrant.pace_sd;
-        let base_kick = (entrant.tactics.kick_fraction * race.track.length).min(entrant.tactics.kick_max_distance);
+        let base_kick = (entrant.tactics.kick_fraction * race.track.length)
+            .min(entrant.tactics.kick_max_distance);
         runner.kick_distance = base_kick * jitter;
         self.plan_efforts(index);
     }
@@ -321,18 +339,35 @@ impl<'a> Sim<'a> {
         for index in 0..count {
             if streams.incident().uniform() < incidents.refused_per_entrant {
                 self.runners[index].phase = Phase::NonRunner;
-                self.push_event(TickEvent::single(EventKind::RefusedToRun, &self.race.entrants[index].id));
-                self.push_incident(IncidentKind::RefusedToRun, Some(index), serde_json::json!({}));
+                self.push_event(TickEvent::single(
+                    EventKind::RefusedToRun,
+                    &self.race.entrants[index].id,
+                ));
+                self.push_incident(
+                    IncidentKind::RefusedToRun,
+                    Some(index),
+                    serde_json::json!({}),
+                );
             }
         }
         if streams.incident().uniform() < incidents.false_start_per_race {
-            let candidates: Vec<usize> = (0..count).filter(|index| self.runners[*index].phase == Phase::Running).collect();
+            let candidates: Vec<usize> = (0..count)
+                .filter(|index| self.runners[*index].phase == Phase::Running)
+                .collect();
             if !candidates.is_empty() {
                 let pick = candidates[streams.incident().below(candidates.len() as u32) as usize];
                 self.runners[pick].wait_ticks = incidents.false_start_delay_ticks;
-                self.push_event(TickEvent::single(EventKind::FalseStart, &self.race.entrants[pick].id));
-                let delay_ms = incidents.false_start_delay_ticks as u64 * self.race.tick_ms as u64;
-                self.push_incident(IncidentKind::FalseStart, Some(pick), serde_json::json!({ "delayMs": delay_ms }));
+                self.push_event(TickEvent::single(
+                    EventKind::FalseStart,
+                    &self.race.entrants[pick].id,
+                ));
+                let delay_ms =
+                    u64::from(incidents.false_start_delay_ticks) * u64::from(self.race.tick_ms);
+                self.push_incident(
+                    IncidentKind::FalseStart,
+                    Some(pick),
+                    serde_json::json!({ "delayMs": delay_ms }),
+                );
             }
         }
         for index in 0..count {
@@ -377,7 +412,10 @@ impl<'a> Sim<'a> {
     }
 
     pub fn running_count(&self) -> usize {
-        self.runners.iter().filter(|runner| runner.phase == Phase::Running).count()
+        self.runners
+            .iter()
+            .filter(|runner| runner.phase == Phase::Running)
+            .count()
     }
 
     pub fn is_done(&self) -> bool {
@@ -513,11 +551,19 @@ impl<'a> Sim<'a> {
         let runner = &self.runners[index];
         let tactics = &entrant.tactics;
         let length = race.track.length;
-        let kick = if runner.kicking { remaining } else { runner.kick_distance.min(remaining) };
+        let kick = if runner.kicking {
+            remaining
+        } else {
+            runner.kick_distance.min(remaining)
+        };
         let rest = remaining - kick;
         let covered = length - remaining;
         let early_end = tactics.early_until * length;
-        let early_left = if covered < early_end { (early_end - covered).min(rest) } else { 0.0 };
+        let early_left = if covered < early_end {
+            (early_end - covered).min(rest)
+        } else {
+            0.0
+        };
         let cruise_left = rest - early_left;
         let early_effort = runner.cruise_effort + tactics.early_boost;
         let cruise_effort = runner.cruise_effort;
@@ -530,7 +576,11 @@ impl<'a> Sim<'a> {
         if demand <= 0.0 {
             return f64::INFINITY;
         }
-        let reserve = if runner.kicking { race.stamina.kick_reserve } else { race.stamina.pacing_reserve };
+        let reserve = if runner.kicking {
+            race.stamina.kick_reserve
+        } else {
+            race.stamina.pacing_reserve
+        };
         let available = runner.stamina - reserve;
         if available <= 0.0 {
             return 0.0;
@@ -571,7 +621,7 @@ impl<'a> Sim<'a> {
 
     fn traffic(&mut self, index: usize, target: f64) -> f64 {
         let physics = self.race.physics;
-        let lanes = self.race.venue.lanes as f64;
+        let lanes = f64::from(self.race.venue.lanes);
         let dist = self.snapshot_dist[index];
         let lane_now = self.runners[index].lane;
         let mut blocker = None;
@@ -596,7 +646,10 @@ impl<'a> Sim<'a> {
                 if settled {
                     let current = self.runners[index].lane_target;
                     for candidate in [current - 1.0, current + 1.0] {
-                        if candidate >= 1.0 && candidate <= lanes && self.lane_free(index, candidate, dist) {
+                        if candidate >= 1.0
+                            && candidate <= lanes
+                            && self.lane_free(index, candidate, dist)
+                        {
                             self.runners[index].lane_target = candidate;
                             break;
                         }
@@ -616,7 +669,13 @@ impl<'a> Sim<'a> {
         }
     }
 
-    fn advance_runner<S: Streams>(&mut self, index: usize, pace_update: bool, replan: bool, streams: &mut S) {
+    fn advance_runner<S: Streams>(
+        &mut self,
+        index: usize,
+        pace_update: bool,
+        replan: bool,
+        streams: &mut S,
+    ) {
         let race = self.race;
         let entrant = &race.entrants[index];
         let track = &race.track;
@@ -627,14 +686,19 @@ impl<'a> Sim<'a> {
             self.runners[index].phase = Phase::PulledUp;
             let dist = round2(self.runners[index].dist);
             self.push_event(TickEvent::single(EventKind::PulledUp, &entrant.id));
-            self.push_incident(IncidentKind::PulledUp, Some(index), serde_json::json!({ "dist": dist }));
+            self.push_incident(
+                IncidentKind::PulledUp,
+                Some(index),
+                serde_json::json!({ "dist": dist }),
+            );
             self.coast_to_stop(index);
             return;
         }
         if pace_update {
             let shock = streams.entrant(index).normal();
             let runner = &mut self.runners[index];
-            runner.pace = race.noise.pace_correlation * runner.pace + entrant.pace_innovation_sd * shock;
+            runner.pace =
+                race.noise.pace_correlation * runner.pace + entrant.pace_innovation_sd * shock;
         }
         let dist = self.runners[index].dist;
         let speed = self.runners[index].speed;
@@ -649,9 +713,15 @@ impl<'a> Sim<'a> {
         }
         let runner = &self.runners[index];
         let segment = track.segments[runner.segment_index];
-        let ahead = track.segment_ahead(runner.segment_lap, runner.segment_index, runner.segment_end, dist + speed * physics.curve_look_ahead_sec);
+        let ahead = track.segment_ahead(
+            runner.segment_lap,
+            runner.segment_index,
+            runner.segment_end,
+            dist + speed * physics.curve_look_ahead_sec,
+        );
         let effort = self.effort(index, remaining, runner.pacing_scale);
-        let mut target = entrant.v_top * runner.form * (1.0 + runner.pace) * segment.speed_factor * effort;
+        let mut target =
+            entrant.v_top * runner.form * (1.0 + runner.pace) * segment.speed_factor * effort;
         target = target.min(segment.speed_cap).min(ahead.speed_cap);
         if runner.stamina <= 0.0 {
             target *= stamina_params.exhausted_factor;
@@ -675,13 +745,20 @@ impl<'a> Sim<'a> {
         let advance = new_speed * race.dt * lane_factor;
         let relative = new_speed * runner.inverse_reference_speed;
         let cost = relative * relative * relative;
-        runner.stamina = (runner.stamina - entrant.drain_per_meter * cost * segment.drain_factor * advance).max(0.0);
+        runner.stamina = (runner.stamina
+            - entrant.drain_per_meter * cost * segment.drain_factor * advance)
+            .max(0.0);
         runner.speed = new_speed;
         if runner.stumble_ticks > 0 {
             runner.stumble_ticks -= 1;
         } else {
-            let tired = if runner.stamina < stamina_params.tired_threshold { incidents.stumble_tired_multiplier } else { 1.0 };
-            runner.stumble_budget -= entrant.stumble_per_meter * segment.stumble_factor * advance * tired;
+            let tired = if runner.stamina < stamina_params.tired_threshold {
+                incidents.stumble_tired_multiplier
+            } else {
+                1.0
+            };
+            runner.stumble_budget -=
+                entrant.stumble_per_meter * segment.stumble_factor * advance * tired;
             if runner.stumble_budget <= 0.0 {
                 let span = incidents.stumble_ticks_max - incidents.stumble_ticks_min + 1;
                 let ticks = incidents.stumble_ticks_min + streams.incident().below(span);
@@ -691,19 +768,23 @@ impl<'a> Sim<'a> {
                 runner.stumble_ticks = ticks;
                 runner.speed *= incidents.stumble_speed_drop;
                 self.push_event(TickEvent::single(EventKind::Stumble, &entrant.id));
-                self.push_incident(IncidentKind::Stumble, Some(index), serde_json::json!({ "ticks": ticks }));
+                self.push_incident(
+                    IncidentKind::Stumble,
+                    Some(index),
+                    serde_json::json!({ "ticks": ticks }),
+                );
             }
         }
         let new_dist = dist + advance;
         if advance > 0.0 {
             while self.runners[index].laps_done < track.laps {
                 let lap_number = self.runners[index].laps_done + 1;
-                let line = lap_number as f64 * track.lap_length;
+                let line = f64::from(lap_number) * track.lap_length;
                 if line > new_dist {
                     break;
                 }
                 if self.lap_leaders[(lap_number - 1) as usize].is_none() {
-                    let time = (self.tick - 1) as f64 + (line - dist) / advance;
+                    let time = f64::from(self.tick - 1) + (line - dist) / advance;
                     self.lap_crossings.push((lap_number, time, index));
                 }
                 self.runners[index].laps_done = lap_number;
@@ -711,14 +792,19 @@ impl<'a> Sim<'a> {
         }
         let runner = &mut self.runners[index];
         if new_dist >= track.length && advance > 0.0 {
-            let time = (self.tick - 1) as f64 + (track.length - dist) / advance;
+            let time = f64::from(self.tick - 1) + (track.length - dist) / advance;
             runner.dist = track.length;
             runner.phase = Phase::Finished;
             runner.finish_time = time;
             self.finish_crossings.push((time, index));
         } else {
             runner.dist = new_dist;
-            track.advance_cursor(&mut runner.segment_lap, &mut runner.segment_index, &mut runner.segment_end, new_dist);
+            track.advance_cursor(
+                &mut runner.segment_lap,
+                &mut runner.segment_index,
+                &mut runner.segment_end,
+                new_dist,
+            );
         }
     }
 
@@ -728,7 +814,10 @@ impl<'a> Sim<'a> {
         }
         let mut crossings = std::mem::take(&mut self.lap_crossings);
         crossings.sort_by(|left, right| {
-            left.0.cmp(&right.0).then(left.1.total_cmp(&right.1)).then(left.2.cmp(&right.2))
+            left.0
+                .cmp(&right.0)
+                .then(left.1.total_cmp(&right.1))
+                .then(left.2.cmp(&right.2))
         });
         let mut start = 0;
         while start < crossings.len() {
@@ -762,7 +851,8 @@ impl<'a> Sim<'a> {
                 };
                 self.lap_leaders[(lap - 1) as usize] = Some((winner, self.tick));
                 if self.record {
-                    let mut event = TickEvent::single(EventKind::Lap, &self.race.entrants[winner].id);
+                    let mut event =
+                        TickEvent::single(EventKind::Lap, &self.race.entrants[winner].id);
                     event.lap = Some(lap);
                     self.events.push(event);
                 }
@@ -782,13 +872,16 @@ impl<'a> Sim<'a> {
         let mut start = 0;
         while start < crossings.len() {
             let mut end = start + 1;
-            while end < crossings.len() && crossings[end].0.to_bits() == crossings[start].0.to_bits() {
+            while end < crossings.len()
+                && crossings[end].0.to_bits() == crossings[start].0.to_bits()
+            {
                 end += 1;
             }
             if end - start > 1 {
                 let mut position = end - 1;
                 while position > start {
-                    let pick = start + streams.incident().below((position - start + 1) as u32) as usize;
+                    let pick =
+                        start + streams.incident().below((position - start + 1) as u32) as usize;
                     crossings.swap(position, pick);
                     position -= 1;
                 }
@@ -809,7 +902,8 @@ impl<'a> Sim<'a> {
                 let rank = self.finished;
                 self.runners[crossing.1].finish_rank = rank;
                 if self.record {
-                    let mut event = TickEvent::single(EventKind::Finish, &self.race.entrants[crossing.1].id);
+                    let mut event =
+                        TickEvent::single(EventKind::Finish, &self.race.entrants[crossing.1].id);
                     event.pos = Some(rank);
                     self.events.push(event);
                 }
@@ -826,7 +920,11 @@ impl<'a> Sim<'a> {
         }
         if streams.incident().uniform() < self.race.incidents.disqualified_per_race {
             let pick_rank = streams.incident().below(self.finished) + 1;
-            if let Some(index) = self.runners.iter().position(|runner| runner.finish_rank == pick_rank) {
+            if let Some(index) = self
+                .runners
+                .iter()
+                .position(|runner| runner.finish_rank == pick_rank)
+            {
                 self.runners[index].disqualified = true;
                 self.push_incident(
                     IncidentKind::Disqualified,
@@ -838,8 +936,9 @@ impl<'a> Sim<'a> {
     }
 
     pub fn as_run_order(&self) -> Vec<usize> {
-        let mut finishers: Vec<usize> =
-            (0..self.runners.len()).filter(|index| self.runners[*index].phase == Phase::Finished).collect();
+        let mut finishers: Vec<usize> = (0..self.runners.len())
+            .filter(|index| self.runners[*index].phase == Phase::Finished)
+            .collect();
         finishers.sort_by_key(|index| self.runners[*index].finish_rank);
         let mut order = finishers;
         order.extend(self.retired_order());
@@ -847,28 +946,43 @@ impl<'a> Sim<'a> {
     }
 
     pub fn official_order(&self) -> Vec<usize> {
-        let mut finishers: Vec<usize> =
-            (0..self.runners.len()).filter(|index| self.runners[*index].phase == Phase::Finished).collect();
-        finishers.sort_by_key(|index| (self.runners[*index].disqualified, self.runners[*index].finish_rank));
+        let mut finishers: Vec<usize> = (0..self.runners.len())
+            .filter(|index| self.runners[*index].phase == Phase::Finished)
+            .collect();
+        finishers.sort_by_key(|index| {
+            (
+                self.runners[*index].disqualified,
+                self.runners[*index].finish_rank,
+            )
+        });
         let mut order = finishers;
         order.extend(self.retired_order());
         order
     }
 
     fn retired_order(&self) -> Vec<usize> {
-        let mut pulled: Vec<usize> =
-            (0..self.runners.len()).filter(|index| self.runners[*index].phase == Phase::PulledUp).collect();
+        let mut pulled: Vec<usize> = (0..self.runners.len())
+            .filter(|index| self.runners[*index].phase == Phase::PulledUp)
+            .collect();
         pulled.sort_by(|left, right| {
             self.runners[*right]
                 .dist
                 .total_cmp(&self.runners[*left].dist)
-                .then(self.race.entrants[*left].lane.cmp(&self.race.entrants[*right].lane))
+                .then(
+                    self.race.entrants[*left]
+                        .lane
+                        .cmp(&self.race.entrants[*right].lane),
+                )
                 .then(left.cmp(right))
         });
-        let mut non_runners: Vec<usize> =
-            (0..self.runners.len()).filter(|index| self.runners[*index].phase == Phase::NonRunner).collect();
+        let mut non_runners: Vec<usize> = (0..self.runners.len())
+            .filter(|index| self.runners[*index].phase == Phase::NonRunner)
+            .collect();
         non_runners.sort_by(|left, right| {
-            self.race.entrants[*left].lane.cmp(&self.race.entrants[*right].lane).then(left.cmp(right))
+            self.race.entrants[*left]
+                .lane
+                .cmp(&self.race.entrants[*right].lane)
+                .then(left.cmp(right))
         });
         pulled.extend(non_runners);
         pulled
@@ -891,7 +1005,11 @@ impl<'a> Sim<'a> {
                     Phase::Finished => a.finish_rank.cmp(&b.finish_rank),
                     _ => b.dist.total_cmp(&a.dist),
                 })
-                .then(self.race.entrants[*left].lane.cmp(&self.race.entrants[*right].lane))
+                .then(
+                    self.race.entrants[*left]
+                        .lane
+                        .cmp(&self.race.entrants[*right].lane),
+                )
                 .then(left.cmp(right))
         });
         let mut positions = vec![0u32; count];
@@ -922,7 +1040,11 @@ impl<'a> Sim<'a> {
 
     pub fn leader_lap(&self) -> u32 {
         let track = &self.race.track;
-        let leader = self.runners.iter().map(|runner| runner.dist).fold(0.0, f64::max);
+        let leader = self
+            .runners
+            .iter()
+            .map(|runner| runner.dist)
+            .fold(0.0, f64::max);
         let lap = libm::floor(leader / track.lap_length) as u32 + 1;
         lap.min(track.laps)
     }

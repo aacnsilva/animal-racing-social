@@ -26,7 +26,12 @@ async function raceTick(redis: Redis, raceId: string): Promise<number | null> {
   return state && state.status === 'LIVE' ? state.tick : null;
 }
 
-export async function cashOutValue(redis: Redis, db: Queryable, stake: number, legs: readonly LegRow[]): Promise<CashOutValue> {
+export async function cashOutValue(
+  redis: Redis,
+  db: Queryable,
+  stake: number,
+  legs: readonly LegRow[],
+): Promise<CashOutValue> {
   const lockedPrices: number[] = [];
   const probabilities: number[] = [];
   const versions: Record<string, number> = {};
@@ -49,7 +54,11 @@ export async function cashOutValue(redis: Redis, db: Queryable, stake: number, l
     if (!['OPEN', 'LIVE'].includes(market.race_status)) return { ok: false, reason: 'NOT_CASHABLE' };
     let pricedMarketId = leg.market_id;
     if (market.type === 'TRICAST') {
-      const win = await one(db, `SELECT market_id FROM market.markets WHERE race_id = $1 AND type = 'FINISH_POSITION' AND (params->>'position')::int = 1`, [leg.race_id]);
+      const win = await one(
+        db,
+        `SELECT market_id FROM market.markets WHERE race_id = $1 AND type = 'FINISH_POSITION' AND (params->>'position')::int = 1`,
+        [leg.race_id],
+      );
       if (!win) return { ok: false, reason: 'NOT_CASHABLE' };
       pricedMarketId = win.market_id;
     }
@@ -63,23 +72,58 @@ export async function cashOutValue(redis: Redis, db: Queryable, stake: number, l
       const win = new Map(price.selections.map((selection) => [selection.entrantId, selection.probability]));
       probabilities.push(harvilleProbability(win, (leg.tricast_order ?? []).map(entrantKey)));
     } else {
-      probabilities.push(price.selections.find((selection) => selection.entrantId === entrantKey(leg.entrant_id ?? 0))?.probability ?? 0);
+      probabilities.push(
+        price.selections.find((selection) => selection.entrantId === entrantKey(leg.entrant_id ?? 0))?.probability ?? 0,
+      );
     }
     if (market.race_status === 'LIVE') {
       live = true;
       tick = (await raceTick(redis, leg.race_id)) ?? tick;
     }
   }
-  return { ok: true, amount: cashOutAmount(stake, lockedPrices, probabilities, settings.cashOutMargin), versions, live, tick, tickMs };
+  return {
+    ok: true,
+    amount: cashOutAmount(stake, lockedPrices, probabilities, settings.cashOutMargin),
+    versions,
+    live,
+    tick,
+    tickMs,
+  };
 }
 
-export type StoredQuote = { betId: string; userId: string; amount: number; versions: Record<string, number>; live: boolean; tick: number | null; tickMs: number };
+export type StoredQuote = {
+  betId: string;
+  userId: string;
+  amount: number;
+  versions: Record<string, number>;
+  live: boolean;
+  tick: number | null;
+  tickMs: number;
+};
 
-export async function issueQuote(redis: Redis, db: Queryable, bet: { userId: string; betId: string; stake: number }, legs: readonly LegRow[]) {
+export async function issueQuote(
+  redis: Redis,
+  db: Queryable,
+  bet: { userId: string; betId: string; stake: number },
+  legs: readonly LegRow[],
+) {
   const value = await cashOutValue(redis, db, bet.stake, legs);
   if (!value.ok) return value;
   const quoteId = randomUUID();
-  await setJson(redis, `cashout:quote:${quoteId}`, { betId: bet.betId, userId: bet.userId, amount: value.amount, versions: value.versions, live: value.live, tick: value.tick, tickMs: value.tickMs } satisfies StoredQuote, 60);
+  await setJson(
+    redis,
+    `cashout:quote:${quoteId}`,
+    {
+      betId: bet.betId,
+      userId: bet.userId,
+      amount: value.amount,
+      versions: value.versions,
+      live: value.live,
+      tick: value.tick,
+      tickMs: value.tickMs,
+    } satisfies StoredQuote,
+    60,
+  );
   const priceVersion = Math.max(0, ...Object.values(value.versions));
   return {
     ok: true as const,
@@ -99,12 +143,20 @@ export async function issueQuote(redis: Redis, db: Queryable, bet: { userId: str
 // Live prices bump their version every tick, so requiring an unchanged version
 // expired nearly every in-running quote. The bet worker re-values the cash-out at
 // acceptance and enforces the user's minAmount, which is the real price guard.
-export async function quoteStillValid(redis: Redis, quoteId: string, betId: string, userId: string): Promise<StoredQuote | null> {
+export async function quoteStillValid(
+  redis: Redis,
+  quoteId: string,
+  betId: string,
+  userId: string,
+): Promise<StoredQuote | null> {
   const stored = await getJson<StoredQuote>(redis, `cashout:quote:${quoteId}`);
   if (!stored || stored.betId !== betId || stored.userId !== userId) return null;
   return stored;
 }
 
 export async function loadLegs(db: Queryable, userId: string, betId: string): Promise<LegRow[]> {
-  return many<LegRow>(db, 'SELECT * FROM betting.bet_legs WHERE user_id = $1 AND bet_id = $2 ORDER BY leg_no', [userId, betId]);
+  return many<LegRow>(db, 'SELECT * FROM betting.bet_legs WHERE user_id = $1 AND bet_id = $2 ORDER BY leg_no', [
+    userId,
+    betId,
+  ]);
 }

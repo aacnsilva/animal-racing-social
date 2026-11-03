@@ -20,9 +20,9 @@ pub use params::{EngineParams, LoadedParams, canonical_json, core_version};
 pub use plan::{LapEstimate, Plan, dry_run_durations, median, plan_race};
 pub use rng::fast_rng;
 pub use script::{
-    EntrantState, EventKind, Incident, IncidentKind, LapLeader, Num, RaceScript, ResultEntrant, ResultStatus,
-    ScriptEntrant, ScriptResult, ScriptStats, ScriptTick, ScriptTrack, SealedScript, TickEntrant, TickEvent,
-    round2, sha256_hex,
+    EntrantState, EventKind, Incident, IncidentKind, LapLeader, Num, RaceScript, ResultEntrant,
+    ResultStatus, ScriptEntrant, ScriptResult, ScriptStats, ScriptTick, ScriptTrack, SealedScript,
+    TickEntrant, TickEvent, round2, sha256_hex,
 };
 pub use sim::PreparedRace;
 pub use simulate::simulate;

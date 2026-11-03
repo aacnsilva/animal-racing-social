@@ -10,7 +10,10 @@ const UNIT_SCALE: f64 = 1.0 / 9_007_199_254_740_992.0;
 
 impl<R: Rng> Stream<R> {
     pub fn new(rng: R) -> Stream<R> {
-        Stream { rng, spare_normal: None }
+        Stream {
+            rng,
+            spare_normal: None,
+        }
     }
 
     #[inline]
@@ -23,7 +26,7 @@ impl<R: Rng> Stream<R> {
         if bound <= 1 {
             return 0;
         }
-        (self.rng.next_u64() % bound as u64) as u32
+        (self.rng.next_u64() % u64::from(bound)) as u32
     }
 
     #[inline]
@@ -71,7 +74,10 @@ impl SeededStreams {
                 Stream::new(rng)
             })
             .collect();
-        SeededStreams { incident: Stream::new(incident_rng), entrants }
+        SeededStreams {
+            incident: Stream::new(incident_rng),
+            entrants,
+        }
     }
 }
 
@@ -95,7 +101,9 @@ pub struct SharedStream<R: Rng> {
 
 impl<R: Rng> SharedStream<R> {
     pub fn new(rng: R) -> SharedStream<R> {
-        SharedStream { stream: Stream::new(rng) }
+        SharedStream {
+            stream: Stream::new(rng),
+        }
     }
 }
 

@@ -19,7 +19,10 @@ export type Runtime = {
   onStop: (fn: () => Promise<void> | void) => void;
 };
 
-export async function bootstrap(name: string, options: { outbox?: OutboxSchema[]; health?: boolean } = {}): Promise<Runtime> {
+export async function bootstrap(
+  name: string,
+  options: { outbox?: OutboxSchema[]; health?: boolean } = {},
+): Promise<Runtime> {
   process.env.SERVICE_NAME ??= name;
   const pool = createPool();
   const kafka = createKafka(name);
@@ -42,7 +45,8 @@ export async function bootstrap(name: string, options: { outbox?: OutboxSchema[]
     stopping = true;
     log.info('shutting down', { signal });
     for (const consumer of consumers) await consumer.disconnect().catch(() => undefined);
-    for (const stop of stops.reverse()) await Promise.resolve(stop()).catch((error) => log.error('stop failed', errorFields(error)));
+    for (const stop of stops.reverse())
+      await Promise.resolve(stop()).catch((error) => log.error('stop failed', errorFields(error)));
     health?.close();
     await producer.disconnect().catch(() => undefined);
     await redis.quit().catch(() => undefined);

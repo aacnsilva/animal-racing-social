@@ -53,13 +53,16 @@ export function RacePage({ id }: { id: string }) {
           api<Race>(`/v1/races/${id}`),
           api<Market[]>(`/v1/races/${id}/markets`).catch(() => null),
           session.status === 'authed'
-            ? api<Page<Bet>>(`/v1/me/bets?raceId=${id}&limit=50`).then((p) => p.items).catch(() => null)
+            ? api<Page<Bet>>(`/v1/me/bets?raceId=${id}&limit=50`)
+                .then((p) => p.items)
+                .catch(() => null)
             : Promise.resolve(null),
         ]);
         if (!cancelled) stream.seed(race, markets, bets);
       } catch (error) {
         if (cancelled) return;
-        if (error instanceof ApiError && (error.status === 404 || error.code === 'VALIDATION_FAILED')) setNotFound(true);
+        if (error instanceof ApiError && (error.status === 404 || error.code === 'VALIDATION_FAILED'))
+          setNotFound(true);
         else setLoadError(error);
       }
     })();
@@ -92,7 +95,9 @@ export function RacePage({ id }: { id: string }) {
     [race?.venueId, race?.venueVersion],
   );
 
-  const otherRaceIds = state.myBets.flatMap((bet) => bet.legs.map((leg) => leg.raceId)).filter((raceId) => raceId !== id);
+  const otherRaceIds = state.myBets
+    .flatMap((bet) => bet.legs.map((leg) => leg.raceId))
+    .filter((raceId) => raceId !== id);
   const otherRaces = useRaceInfos(otherRaceIds);
   const replayTick = useReplayTick(replay);
   const displayTick: RaceTick | null = replay ? replayTick : state.tick;
@@ -107,7 +112,10 @@ export function RacePage({ id }: { id: string }) {
       const playback = new ReplayPlayback(ticks, race.tickMs);
       setReplay(playback);
       playback.play();
-      (viewerAnchor.current?.firstElementChild ?? viewerAnchor.current)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      (viewerAnchor.current?.firstElementChild ?? viewerAnchor.current)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
     } catch (error) {
       toast(friendlyError(error), 'error');
     } finally {
@@ -152,7 +160,8 @@ export function RacePage({ id }: { id: string }) {
       <RaceHeader race={race} venue={venue.data} connection={state.connection} now={now} />
       {race.status === 'CANCELLED' && (
         <div className="notice warn" style={{ marginBottom: 16 }}>
-          This race was cancelled ({race.cancelledReason ?? 'no reason given'}). All markets are void and stakes are refunded.
+          This race was cancelled ({race.cancelledReason ?? 'no reason given'}). All markets are void and stakes are
+          refunded.
         </div>
       )}
       <div className="stage" ref={viewerAnchor}>
@@ -189,17 +198,41 @@ export function RacePage({ id }: { id: string }) {
           ))}
         </div>
         <div className={sectionClass('race')}>
-          <Standings race={race} tick={displayTick} title={replay ? 'Replay standings' : race.status === 'LIVE' ? 'Live standings' : finished ? 'Final standings' : 'Field'} />
+          <Standings
+            race={race}
+            tick={displayTick}
+            title={
+              replay
+                ? 'Replay standings'
+                : race.status === 'LIVE'
+                  ? 'Live standings'
+                  : finished
+                    ? 'Final standings'
+                    : 'Field'
+            }
+          />
         </div>
       </div>
       <div className="race-body">
         <main>
           <div className={sectionClass('markets')}>
-            <MarketsPanel race={race} markets={state.markets} bettingOpen={bettingOpen} selected={slip} onPick={onPick} />
+            <MarketsPanel
+              race={race}
+              markets={state.markets}
+              bettingOpen={bettingOpen}
+              selected={slip}
+              onPick={onPick}
+            />
           </div>
           {finished && (
             <div className={sectionClass('result')}>
-              <RaceResult raceId={race.id} version={state.resultVersion} entrants={entrants} onWatchReplay={() => void watchReplay()} replayLoading={replayLoading} />
+              <RaceResult
+                raceId={race.id}
+                version={state.resultVersion}
+                entrants={entrants}
+                onWatchReplay={() => void watchReplay()}
+                replayLoading={replayLoading}
+              />
             </div>
           )}
           <div className={sectionClass('runners')}>
@@ -236,7 +269,14 @@ export function RacePage({ id }: { id: string }) {
               ) : (
                 <div className="stack" style={{ gap: 8 }}>
                   {visibleBets.map((bet) => (
-                    <BetCard key={bet.id} bet={bet} races={racesForBets} focusRaceId={race.id} live={state.cashouts[bet.id]} cashout="live" />
+                    <BetCard
+                      key={bet.id}
+                      bet={bet}
+                      races={racesForBets}
+                      focusRaceId={race.id}
+                      live={state.cashouts[bet.id]}
+                      cashout="live"
+                    />
                   ))}
                 </div>
               )}

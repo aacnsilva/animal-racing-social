@@ -2,9 +2,11 @@ import type { BetLeg, BetSelection, Entrant, Market, MarketType, RaceClass, Race
 
 const pointsFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
-export const fmtPoints = (value: number | null | undefined) => (value === null || value === undefined ? '—' : pointsFormat.format(Math.round(value)));
+export const fmtPoints = (value: number | null | undefined) =>
+  value === null || value === undefined ? '—' : pointsFormat.format(Math.round(value));
 
-export const fmtPrice = (value: number | null | undefined) => (value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toFixed(2));
+export const fmtPrice = (value: number | null | undefined) =>
+  value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toFixed(2);
 
 export function fmtSigned(value: number): string {
   return `${value > 0 ? '+' : value < 0 ? '−' : ''}${fmtPoints(Math.abs(value))}`;
@@ -54,7 +56,14 @@ export function fmtRelative(iso: string | null | undefined, now = Date.now()): s
   const diff = now - new Date(iso).getTime();
   const abs = Math.abs(diff);
   const future = diff < 0;
-  const unit = abs < 60_000 ? `${Math.max(1, Math.round(abs / 1000))}s` : abs < 3_600_000 ? `${Math.round(abs / 60_000)}m` : abs < 86_400_000 ? `${Math.round(abs / 3_600_000)}h` : `${Math.round(abs / 86_400_000)}d`;
+  const unit =
+    abs < 60_000
+      ? `${Math.max(1, Math.round(abs / 1000))}s`
+      : abs < 3_600_000
+        ? `${Math.round(abs / 60_000)}m`
+        : abs < 86_400_000
+          ? `${Math.round(abs / 3_600_000)}h`
+          : `${Math.round(abs / 86_400_000)}d`;
   return future ? `in ${unit}` : `${unit} ago`;
 }
 
@@ -70,9 +79,17 @@ export function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
-export const titleCase = (value: string) => value.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+export const titleCase = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 
-export const CLASS_LABEL: Record<RaceClass, string> = { SPRINT: 'Sprint', STANDARD: 'Standard', ENDURANCE: 'Endurance' };
+export const CLASS_LABEL: Record<RaceClass, string> = {
+  SPRINT: 'Sprint',
+  STANDARD: 'Standard',
+  ENDURANCE: 'Endurance',
+};
 
 export const STATUS_LABEL: Record<RaceStatus, string> = {
   SCHEDULED: 'Scheduled',
@@ -149,7 +166,12 @@ export function fmtStat(key: keyof Stats, value: number): string {
   return value.toFixed(0);
 }
 
-export const STAT_LABEL: Record<keyof Stats, string> = { velocity: 'Speed', stamina: 'Stamina', acceleration: 'Accel', consistency: 'Consistency' };
+export const STAT_LABEL: Record<keyof Stats, string> = {
+  velocity: 'Speed',
+  stamina: 'Stamina',
+  acceleration: 'Accel',
+  consistency: 'Consistency',
+};
 
 export function formClass(entry: string): string {
   if (entry === '1') return 'form-win';

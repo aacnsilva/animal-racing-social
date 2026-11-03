@@ -47,7 +47,11 @@ export function ProfilePage() {
       setSessionUser(updated);
       setMessage({ kind: 'success', text: 'Profile saved.' });
     } catch (error) {
-      setMessage({ kind: 'error', text: friendlyError(error), code: error instanceof ApiError ? error.code : undefined });
+      setMessage({
+        kind: 'error',
+        text: friendlyError(error),
+        code: error instanceof ApiError ? error.code : undefined,
+      });
     } finally {
       setSaving(false);
     }
@@ -83,14 +87,30 @@ export function ProfilePage() {
         <h2>Profile</h2>
         <label className="field">
           <span>Display name</span>
-          <input className="input" data-testid="display-name-input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+          <input
+            className="input"
+            data-testid="display-name-input"
+            value={name}
+            maxLength={40}
+            onChange={(e) => setName(e.target.value)}
+          />
         </label>
         <label className="field">
           <span>Avatar URL (https)</span>
-          <input className="input" value={avatarUrl} placeholder="https://…" onChange={(e) => setAvatarUrl(e.target.value)} />
+          <input
+            className="input"
+            value={avatarUrl}
+            placeholder="https://…"
+            onChange={(e) => setAvatarUrl(e.target.value)}
+          />
         </label>
         <div className="row">
-          <button className="btn primary" data-testid="save-profile" onClick={() => void save()} disabled={saving || name.trim().length < 2}>
+          <button
+            className="btn primary"
+            data-testid="save-profile"
+            onClick={() => void save()}
+            disabled={saving || name.trim().length < 2}
+          >
             Save profile
           </button>
           {message && (
@@ -109,7 +129,12 @@ export function ProfilePage() {
         {PROVIDERS.map((provider) => {
           const linked = user.providers.includes(provider.id);
           return (
-            <div className="setting" key={provider.id} data-provider={provider.id} data-linked={linked ? 'true' : 'false'}>
+            <div
+              className="setting"
+              key={provider.id}
+              data-provider={provider.id}
+              data-linked={linked ? 'true' : 'false'}
+            >
               <span className="provider-btn">
                 <ProviderIcon provider={provider.id} />
               </span>
@@ -120,7 +145,12 @@ export function ProfilePage() {
               {linked ? (
                 <span className="chip green">Linked</span>
               ) : (
-                <button className="btn small" onClick={() => void link(provider.id)} disabled={linking !== null} data-testid={`link-${provider.id}`}>
+                <button
+                  className="btn small"
+                  onClick={() => void link(provider.id)}
+                  disabled={linking !== null}
+                  data-testid={`link-${provider.id}`}
+                >
                   Link {provider.label}
                 </button>
               )}
@@ -169,7 +199,12 @@ function TrophyCase({ podiums }: { podiums: Podium[] }) {
       </div>
       <div className="trophies">
         {podiums.map((podium) => (
-          <div key={podium.seasonId} className={`trophy tier-${podium.tier}`} data-testid="trophy" data-tier={podium.tier}>
+          <div
+            key={podium.seasonId}
+            className={`trophy tier-${podium.tier}`}
+            data-testid="trophy"
+            data-tier={podium.tier}
+          >
             <Medal tier={podium.tier} />
             <div>
               <b>{podium.seasonName}</b>

@@ -4,7 +4,17 @@ import { Envelope } from '../gen/ars/v1/events.ts';
 import { env } from './config.ts';
 import type { Pool } from './db.ts';
 import { errorFields, log } from './log.ts';
-import { BUCKETS, counter, extractContext, failSpan, histogram, setIdAttributes, SpanKind, withSpan, type Span } from './telemetry.ts';
+import {
+  BUCKETS,
+  counter,
+  extractContext,
+  failSpan,
+  histogram,
+  setIdAttributes,
+  SpanKind,
+  withSpan,
+  type Span,
+} from './telemetry.ts';
 import { sleep } from './time.ts';
 
 export type Payload = NonNullable<Envelope['payload']>;
@@ -32,7 +42,7 @@ export function payload<C extends PayloadCase>(kind: C, value: PayloadOf<C>): Pa
 }
 
 export function typeName(kind: PayloadCase): string {
-  return kind[0]!.toUpperCase() + kind.slice(1);
+  return kind[0].toUpperCase() + kind.slice(1);
 }
 
 export function encodeEnvelope(body: Payload): Buffer {
@@ -56,10 +66,12 @@ export function createKafka(clientId: string): Kafka {
     brokers: env('KAFKA_BROKERS', 'localhost:29092').split(','),
     logLevel: logLevel.WARN,
     retry: { initialRetryTime: 300, retries: 10 },
-    logCreator: () => ({ namespace, level, log: entry }) => {
-      const { message, ...rest } = entry;
-      if (level <= logLevel.WARN) log.warn(`kafka ${namespace}: ${message}`, rest);
-    },
+    logCreator:
+      () =>
+      ({ namespace, level, log: entry }) => {
+        const { message, ...rest } = entry;
+        if (level <= logLevel.WARN) log.warn(`kafka ${namespace}: ${message}`, rest);
+      },
   });
 }
 
@@ -85,7 +97,8 @@ export type ConsumerOptions = {
 };
 
 const UNTRACED = new Set(['RaceTick', 'PriceUpdated', 'LapCompleted']);
-const processDuration = () => histogram('messaging.process.duration', 's', 'Duration of Kafka message processing', BUCKETS.messaging);
+const processDuration = () =>
+  histogram('messaging.process.duration', 's', 'Duration of Kafka message processing', BUCKETS.messaging);
 const retries = () => counter('ars.consumer.retries', 'Kafka handler retries');
 const deadLettered = () => counter('ars.consumer.dead_lettered', 'Kafka messages moved to the DLQ');
 
@@ -111,7 +124,7 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
       const meta: MessageMeta = { topic, partition, offset: message.offset, key: message.key?.toString() ?? null };
       if (!message.value) return;
       const value = message.value;
-      const headers = headerStrings(message.headers as RawHeaders);
+      const headers = headerStrings(message.headers);
       const started = performance.now();
       let envelope: Envelope;
       try {
@@ -133,9 +146,17 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
               await deadLetter(options, meta, value, envelope.type, error, headers);
               return 'dead_lettered';
             }
-            span?.addEvent('retry', { attempt, 'exception.message': error instanceof Error ? error.message : String(error) });
+            span?.addEvent('retry', {
+              attempt,
+              'exception.message': error instanceof Error ? error.message : String(error),
+            });
             retries().add(1, { consumer_group: options.groupId, event_type: envelope.type });
-            log.warn('handler failed, retrying', { group: options.groupId, type: envelope.type, attempt, ...errorFields(error) });
+            log.warn('handler failed, retrying', {
+              group: options.groupId,
+              type: envelope.type,
+              attempt,
+              ...errorFields(error),
+            });
             await heartbeat().catch(() => undefined);
             await sleep(Math.min(250 * 2 ** attempt, 5000));
             await heartbeat().catch(() => undefined);
@@ -144,21 +165,25 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
       };
       const traced = (options.traced ?? true) && !UNTRACED.has(envelope.type);
       const outcome = traced
-        ? await withSpan(`process ${topic} ${envelope.type}`, {
-          kind: SpanKind.CONSUMER,
-          parent: extractContext(headers),
-          attributes: {
-            'messaging.system': 'kafka',
-            'messaging.destination.name': topic,
-            'messaging.consumer.group.name': options.groupId,
-            'messaging.message.id': envelope.eventId,
-            'messaging.kafka.message.key': meta.key ?? '',
-            'messaging.destination.partition.id': String(partition),
-          },
-        }, async (span) => {
-          setIdAttributes(span, envelope.payload?.value);
-          return process(span);
-        })
+        ? await withSpan(
+            `process ${topic} ${envelope.type}`,
+            {
+              kind: SpanKind.CONSUMER,
+              parent: extractContext(headers),
+              attributes: {
+                'messaging.system': 'kafka',
+                'messaging.destination.name': topic,
+                'messaging.consumer.group.name': options.groupId,
+                'messaging.message.id': envelope.eventId,
+                'messaging.kafka.message.key': meta.key ?? '',
+                'messaging.destination.partition.id': String(partition),
+              },
+            },
+            async (span) => {
+              setIdAttributes(span, envelope.payload?.value);
+              return process(span);
+            },
+          )
         : await process(null);
       processDuration().record((performance.now() - started) / 1000, { ...labels, outcome });
     },
@@ -166,12 +191,31 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
   return consumer;
 }
 
-async function deadLetter(options: ConsumerOptions, meta: MessageMeta, value: Buffer, type: string | null, error: unknown, headers: Record<string, string>): Promise<void> {
+async function deadLetter(
+  options: ConsumerOptions,
+  meta: MessageMeta,
+  value: Buffer,
+  type: string | null,
+  error: unknown,
+  headers: Record<string, string>,
+): Promise<void> {
   log.error('message dead-lettered', { group: options.groupId, ...meta, type, ...errorFields(error) });
   if (!options.pool) return;
-  await options.pool.query(
-    `INSERT INTO admin.dlq (consumer, topic, partition, msg_offset, msg_key, event_type, payload, error, headers)
+  await options.pool
+    .query(
+      `INSERT INTO admin.dlq (consumer, topic, partition, msg_offset, msg_key, event_type, payload, error, headers)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [options.groupId, meta.topic, meta.partition, meta.offset, meta.key, type, value, error instanceof Error ? error.message : String(error), JSON.stringify(headers)],
-  ).catch((dbError) => log.error('dlq insert failed', errorFields(dbError)));
+      [
+        options.groupId,
+        meta.topic,
+        meta.partition,
+        meta.offset,
+        meta.key,
+        type,
+        value,
+        error instanceof Error ? error.message : String(error),
+        JSON.stringify(headers),
+      ],
+    )
+    .catch((dbError) => log.error('dlq insert failed', errorFields(dbError)));
 }

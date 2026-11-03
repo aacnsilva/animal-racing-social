@@ -30,15 +30,18 @@ ENV: DATABASE_URL KAFKA_BROKERS PORT SCRIPT_KEYS SCRIPT_KEY_ID RUST_LOG OTEL_EXP
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("--help") | Some("-h") | Some("help") => println!("{USAGE}"),
-        Some("--version") | Some("-V") => println!("race-engine {}", race_engine_core::ENGINE_VERSION),
+        Some("--help" | "-h" | "help") => println!("{USAGE}"),
+        Some("--version" | "-V") => println!("race-engine {}", race_engine_core::ENGINE_VERSION),
         Some("verify") => std::process::exit(cli::verify(&args[1..])),
         Some(other) => {
             eprintln!("unknown argument {other}\n\n{USAGE}");
             std::process::exit(2);
         }
         None => {
-            let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
             runtime.block_on(async {
                 telemetry::init("race-engine");
                 if let Err(err) = run().await {
@@ -55,7 +58,10 @@ async fn run() -> Res<()> {
     let keyring = Keyring::from_env()?;
     let port: u16 = config::number("PORT", 7001);
     let brokers = config::kafka_brokers();
-    let state = Arc::new(AppState { db: Db::new(&config::database_url(), 4), catalog: Catalog::new() });
+    let state = Arc::new(AppState {
+        db: Db::new(&config::database_url(), 4),
+        catalog: Catalog::new(),
+    });
     state.db.wait_ready().await;
     register::register_engine_version(&state.db).await?;
     let producer = Producer::new(&brokers, "race-engine")?;

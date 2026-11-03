@@ -32,7 +32,9 @@ impl DerefMut for DbConn<'_> {
 }
 
 pub async fn connect(url: &str) -> Res<Client> {
-    let (client, connection) = tokio_postgres::connect(url, NoTls).await.map_err(|err| format!("postgres connect: {err}"))?;
+    let (client, connection) = tokio_postgres::connect(url, NoTls)
+        .await
+        .map_err(|err| format!("postgres connect: {err}"))?;
     tokio::spawn(async move {
         if let Err(err) = connection.await {
             tracing::warn!("postgres connection closed: {err}");
@@ -58,14 +60,13 @@ impl Db {
                 break;
             }
         }
-        let mut guard = match guard {
-            Some(guard) => guard,
-            None => {
-                let index = self.next.fetch_add(1, Ordering::Relaxed) % self.slots.len();
-                self.slots[index].lock().await
-            }
+        let mut guard = if let Some(guard) = guard {
+            guard
+        } else {
+            let index = self.next.fetch_add(1, Ordering::Relaxed) % self.slots.len();
+            self.slots[index].lock().await
         };
-        let stale = guard.as_ref().map(|client| client.is_closed()).unwrap_or(true);
+        let stale = guard.as_ref().is_none_or(Client::is_closed);
         if stale {
             *guard = Some(connect(&self.url).await?);
         }

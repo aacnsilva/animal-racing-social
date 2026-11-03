@@ -30,7 +30,9 @@ export async function betsJson(db: Queryable, bets: BetRow[]) {
         raceId: leg.race_id,
         marketType: leg.market_type,
         marketParams: leg.market_params ?? {},
-        selection: leg.tricast_order ? { order: leg.tricast_order.map(entrantKey) } : { entrantId: entrantKey(leg.entrant_id) },
+        selection: leg.tricast_order
+          ? { order: leg.tricast_order.map(entrantKey) }
+          : { entrantId: entrantKey(leg.entrant_id) },
         acceptedPrice: leg.accepted_price,
         priceVersion: leg.price_version,
         lockedPrice: leg.locked_price,
@@ -57,7 +59,7 @@ export type BetJson = Awaited<ReturnType<typeof betsJson>>[number];
 export async function loadBet(db: Queryable, userId: string, betId: string): Promise<BetJson | null> {
   const row = await one(db, 'SELECT * FROM betting.bets WHERE user_id = $1 AND bet_id = $2', [userId, betId]);
   if (!row) return null;
-  return (await betsJson(db, [row]))[0]!;
+  return (await betsJson(db, [row]))[0];
 }
 
 export async function betsOnRace(db: Queryable, userId: string, raceId: string): Promise<BetJson[]> {

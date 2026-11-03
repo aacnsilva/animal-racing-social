@@ -22,15 +22,24 @@ fn instruments() -> &'static Instruments {
 }
 
 pub fn lateness(scheduled: SystemTime, published: SystemTime) -> f64 {
-    published.duration_since(scheduled).unwrap_or(Duration::ZERO).as_secs_f64()
+    published
+        .duration_since(scheduled)
+        .unwrap_or(Duration::ZERO)
+        .as_secs_f64()
 }
 
 pub fn tick_drift(race_class: &str, scheduled: SystemTime, published: SystemTime) {
-    instruments().tick_drift.record(lateness(scheduled, published), &[KeyValue::new("race_class", class_label(race_class))]);
+    instruments().tick_drift.record(
+        lateness(scheduled, published),
+        &[KeyValue::new("race_class", class_label(race_class))],
+    );
 }
 
 pub fn start_delay(race_class: &str, start_at: SystemTime, published: SystemTime) {
-    instruments().start_delay.record(lateness(start_at, published), &[KeyValue::new("race_class", class_label(race_class))]);
+    instruments().start_delay.record(
+        lateness(start_at, published),
+        &[KeyValue::new("race_class", class_label(race_class))],
+    );
 }
 
 #[cfg(test)]
@@ -40,7 +49,13 @@ mod tests {
     #[test]
     fn lateness_is_clamped_at_zero() {
         let scheduled = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
-        assert_eq!(lateness(scheduled, scheduled + Duration::from_millis(40)), 0.04);
-        assert_eq!(lateness(scheduled, scheduled - Duration::from_millis(40)), 0.0);
+        assert_eq!(
+            lateness(scheduled, scheduled + Duration::from_millis(40)),
+            0.04
+        );
+        assert_eq!(
+            lateness(scheduled, scheduled - Duration::from_millis(40)),
+            0.0
+        );
     }
 }

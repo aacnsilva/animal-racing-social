@@ -3,20 +3,32 @@ use std::time::{Duration, SystemTime};
 use ars_infra::kafka::{MARKET_EVENTS, Producer, RACE_COMMANDS, RACE_LIFECYCLE, RACE_TICKS};
 use ars_infra::{Context, Res, config};
 use ars_proto::envelope::Payload;
-use ars_proto::{EntrantInfo, GenerateScript, MarketOpened, RaceOpened, RaceScheduled, SelectionPrice, Stats};
+use ars_proto::{
+    EntrantInfo, GenerateScript, MarketOpened, RaceOpened, RaceScheduled, SelectionPrice, Stats,
+};
 use rdkafka::Message;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn http_post(url: &str, body: &serde_json::Value) -> Res<serde_json::Value> {
-    let rest = url.strip_prefix("http://").context("url must start with http://")?;
-    let (host_port, path) = rest.split_once('/').map(|(host, path)| (host, format!("/{path}"))).unwrap_or((rest, "/".into()));
-    let mut stream = tokio::net::TcpStream::connect(host_port).await.context("connect")?;
+    let rest = url
+        .strip_prefix("http://")
+        .context("url must start with http://")?;
+    let (host_port, path) = rest
+        .split_once('/')
+        .map(|(host, path)| (host, format!("/{path}")))
+        .unwrap_or((rest, "/".into()));
+    let mut stream = tokio::net::TcpStream::connect(host_port)
+        .await
+        .context("connect")?;
     let payload = body.to_string();
     let request = format!(
         "POST {path} HTTP/1.1\r\nHost: {host_port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
         payload.len()
     );
-    stream.write_all(request.as_bytes()).await.context("write")?;
+    stream
+        .write_all(request.as_bytes())
+        .await
+        .context("write")?;
     let mut response = Vec::new();
     stream.read_to_end(&mut response).await.context("read")?;
     let text = String::from_utf8_lossy(&response).to_string();
@@ -28,11 +40,19 @@ async fn http_post(url: &str, body: &serde_json::Value) -> Res<serde_json::Value
 }
 
 async fn schedule(args: &[String]) -> Res<()> {
-    let race_id: i64 = args.first().context("race_id")?.parse().context("race_id")?;
+    let race_id: i64 = args
+        .first()
+        .context("race_id")?
+        .parse()
+        .context("race_id")?;
     let venue_id = args.get(1).context("venue_id")?.clone();
     let species = args.get(2).context("species")?.clone();
-    let start_in: u64 = args.get(3).context("start_in_secs")?.parse().context("start_in")?;
-    let field: i64 = args.get(4).map(|value| value.parse().unwrap_or(8)).unwrap_or(8);
+    let start_in: u64 = args
+        .get(3)
+        .context("start_in_secs")?
+        .parse()
+        .context("start_in")?;
+    let field: i64 = args.get(4).map_or(8, |value| value.parse().unwrap_or(8));
     let engine_url = config::string("RACE_ENGINE_URL", "http://localhost:7001");
     let odds_url = config::string("ODDS_ENGINE_URL", "http://localhost:7003");
     let client = ars_infra::db::connect(&config::database_url()).await?;
@@ -65,7 +85,12 @@ async fn schedule(args: &[String]) -> Res<()> {
             animal_id: row.get(0),
             lane: lanes[index],
             temperament: row.get(1),
-            stats: Some(Stats { velocity: row.get(2), stamina: row.get(3), acceleration: row.get(4), consistency: row.get(5) }),
+            stats: Some(Stats {
+                velocity: row.get(2),
+                stamina: row.get(3),
+                acceleration: row.get(4),
+                consistency: row.get(5),
+            }),
             name: row.get(6),
         })
         .collect();
@@ -90,7 +115,7 @@ async fn schedule(args: &[String]) -> Res<()> {
     let laps = plan["laps"].as_i64().context("laps")? as i32;
     let estimate = plan["estimatedDurationSec"].as_i64().context("estimate")? as i32;
     let start_at = SystemTime::now() + Duration::from_secs(start_in);
-    let closes_at = start_at - Duration::from_secs(60);
+    let closes_at = start_at - Duration::from_mins(1);
     client
         .execute(
             "INSERT INTO racing.races (race_id, season_id, species, race_class, venue_id, venue_version, engine_version, laps,
@@ -122,20 +147,35 @@ async fn schedule(args: &[String]) -> Res<()> {
         entrants: entrants.clone(),
         species: species.clone(),
     };
-    producer.publish_payload(RACE_COMMANDS, &race_id.to_string(), Payload::GenerateScript(command)).await?;
+    producer
+        .publish_payload(
+            RACE_COMMANDS,
+            &race_id.to_string(),
+            Payload::GenerateScript(command),
+        )
+        .await?;
     println!("GenerateScript published for race {race_id}; waiting for seal");
     let (seed_hash, script_hash) = loop {
         let row = client
             .query_one("SELECT encode(seed_hash, 'hex'), encode(script_hash, 'hex') FROM racing.races WHERE race_id = $1", &[&race_id])
             .await
             .context("poll seal")?;
-        if let (Some(seed_hash), Some(script_hash)) = (row.get::<_, Option<String>>(0), row.get::<_, Option<String>>(1)) {
+        if let (Some(seed_hash), Some(script_hash)) = (
+            row.get::<_, Option<String>>(0),
+            row.get::<_, Option<String>>(1),
+        ) {
             break (seed_hash, script_hash);
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
     };
     println!("sealed seedHash {seed_hash} scriptHash {script_hash}");
-    client.execute("UPDATE racing.races SET status = 'OPEN' WHERE race_id = $1", &[&race_id]).await.context("open")?;
+    client
+        .execute(
+            "UPDATE racing.races SET status = 'OPEN' WHERE race_id = $1",
+            &[&race_id],
+        )
+        .await
+        .context("open")?;
     let scheduled = RaceScheduled {
         race_id,
         season_id: 1,
@@ -152,8 +192,20 @@ async fn schedule(args: &[String]) -> Res<()> {
         seed_hash,
         script_hash,
     };
-    producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), Payload::RaceScheduled(scheduled)).await?;
-    producer.publish_payload(RACE_LIFECYCLE, &race_id.to_string(), Payload::RaceOpened(RaceOpened { race_id })).await?;
+    producer
+        .publish_payload(
+            RACE_LIFECYCLE,
+            &race_id.to_string(),
+            Payload::RaceScheduled(scheduled),
+        )
+        .await?;
+    producer
+        .publish_payload(
+            RACE_LIFECYCLE,
+            &race_id.to_string(),
+            Payload::RaceOpened(RaceOpened { race_id }),
+        )
+        .await?;
     let mut market_specs = vec![
         ("FINISH_POSITION", serde_json::json!({ "position": 1 })),
         ("TOP_N", serde_json::json!({ "n": 3 })),
@@ -173,7 +225,10 @@ async fn schedule(args: &[String]) -> Res<()> {
     for (index, (kind, params)) in market_specs.iter().enumerate() {
         let market_id = race_id * 10 + index as i64 + 1;
         let market = &priced["markets"][index];
-        println!("  market {market_id} {kind} {params}: {}", market["selections"]);
+        println!(
+            "  market {market_id} {kind} {params}: {}",
+            market["selections"]
+        );
         client
             .execute(
                 "INSERT INTO market.markets (market_id, race_id, type, params, status, template_version, opens_rule, closes_rule, price_version)
@@ -183,8 +238,17 @@ async fn schedule(args: &[String]) -> Res<()> {
             .await
             .context("insert market")?;
         let mut selections = Vec::new();
-        for (position, selection) in market["selections"].as_array().cloned().unwrap_or_default().iter().enumerate() {
-            let entrant_id = selection["entrantId"].as_str().unwrap_or_default().to_string();
+        for (position, selection) in market["selections"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+        {
+            let entrant_id = selection["entrantId"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
             let selection_id = market_id * 100 + position as i64 + 1;
             let number: i32 = entrant_id[1..].parse().unwrap_or(0);
             let price = selection["price"].as_f64().unwrap_or(1.01);
@@ -197,11 +261,21 @@ async fn schedule(args: &[String]) -> Res<()> {
                 )
                 .await
                 .context("insert selection")?;
-            selections.push(SelectionPrice { selection_id, entrant_id, price, probability });
+            selections.push(SelectionPrice {
+                selection_id,
+                entrant_id,
+                price,
+                probability,
+            });
         }
         let params_map = params
             .as_object()
-            .map(|object| object.iter().map(|(key, value)| (key.clone(), value.as_i64().unwrap_or(0) as i32)).collect())
+            .map(|object| {
+                object
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.as_i64().unwrap_or(0) as i32))
+                    .collect()
+            })
             .unwrap_or_default();
         let opened = MarketOpened {
             market_id,
@@ -212,21 +286,39 @@ async fn schedule(args: &[String]) -> Res<()> {
             price_version: 1,
             closes_at_lap: None,
         };
-        producer.publish_payload(MARKET_EVENTS, &race_id.to_string(), Payload::MarketOpened(opened)).await?;
+        producer
+            .publish_payload(
+                MARKET_EVENTS,
+                &race_id.to_string(),
+                Payload::MarketOpened(opened),
+            )
+            .await?;
     }
-    println!("race {race_id} OPEN at {venue_id} ({species} {race_class}, {laps} laps, ~{estimate}s), starts in {start_in}s");
+    println!(
+        "race {race_id} OPEN at {venue_id} ({species} {race_class}, {laps} laps, ~{estimate}s), starts in {start_in}s"
+    );
     Ok(())
 }
 
 async fn regenerate(args: &[String]) -> Res<()> {
-    let race_id: i64 = args.first().context("race_id")?.parse().context("race_id")?;
+    let race_id: i64 = args
+        .first()
+        .context("race_id")?
+        .parse()
+        .context("race_id")?;
     let client = ars_infra::db::connect(&config::database_url()).await?;
     let race = client
         .query_one("SELECT engine_version, venue_id, venue_version, laps, species FROM racing.races WHERE race_id = $1", &[&race_id])
         .await
         .context("race")?;
     let rows = client
-        .query(&format!("SELECT {} FROM racing.race_entrants WHERE race_id = $1 ORDER BY entrant_id", ars_infra::convert::ENTRANT_COLUMNS), &[&race_id])
+        .query(
+            &format!(
+                "SELECT {} FROM racing.race_entrants WHERE race_id = $1 ORDER BY entrant_id",
+                ars_infra::convert::ENTRANT_COLUMNS
+            ),
+            &[&race_id],
+        )
         .await
         .context("entrants")?;
     let entrants = rows
@@ -258,7 +350,13 @@ async fn regenerate(args: &[String]) -> Res<()> {
         species: race.get(4),
     };
     let producer = Producer::new(&config::kafka_brokers(), "devtool")?;
-    producer.publish_payload(RACE_COMMANDS, &race_id.to_string(), Payload::GenerateScript(command)).await?;
+    producer
+        .publish_payload(
+            RACE_COMMANDS,
+            &race_id.to_string(),
+            Payload::GenerateScript(command),
+        )
+        .await?;
     println!("GenerateScript re-published for race {race_id}");
     Ok(())
 }
@@ -266,13 +364,35 @@ async fn regenerate(args: &[String]) -> Res<()> {
 fn summary(payload: &Payload) -> String {
     match payload {
         Payload::RaceTick(tick) => {
-            let leader = tick.entrants.iter().find(|entrant| entrant.pos == 1).map(|entrant| entrant.id.clone()).unwrap_or_default();
-            let events: Vec<String> = tick.events.iter().map(|event| event.r#type.clone()).collect();
-            format!("race {} tick {} lap {} leader {} events {:?}", tick.race_id, tick.tick, tick.lap, leader, events)
+            let leader = tick
+                .entrants
+                .iter()
+                .find(|entrant| entrant.pos == 1)
+                .map(|entrant| entrant.id.clone())
+                .unwrap_or_default();
+            let events: Vec<String> = tick
+                .events
+                .iter()
+                .map(|event| event.r#type.clone())
+                .collect();
+            format!(
+                "race {} tick {} lap {} leader {} events {:?}",
+                tick.race_id, tick.tick, tick.lap, leader, events
+            )
         }
         Payload::PriceUpdated(update) => {
-            let prices: Vec<String> = update.selections.iter().map(|selection| format!("{}@{}", selection.entrant_id, selection.price)).collect();
-            format!("market {} tick {} v{} {}", update.market_id, update.tick, update.price_version, prices.join(" "))
+            let prices: Vec<String> = update
+                .selections
+                .iter()
+                .map(|selection| format!("{}@{}", selection.entrant_id, selection.price))
+                .collect();
+            format!(
+                "market {} tick {} v{} {}",
+                update.market_id,
+                update.tick,
+                update.price_version,
+                prices.join(" ")
+            )
         }
         Payload::RaceFinished(finished) => format!(
             "race {} finishTick {} order {:?} asRun {:?} incidents {} lapLeaders {} seed {}",
@@ -299,15 +419,31 @@ async fn watch(args: &[String]) -> Res<()> {
     let every: u32 = config::number("WATCH_TICK_EVERY", 20);
     loop {
         let message = consumer.recv().await.context("recv")?;
-        let Some(bytes) = message.payload() else { continue };
+        let Some(bytes) = message.payload() else {
+            continue;
+        };
         let envelope = ars_infra::envelope::decode(bytes)?;
-        let Some(payload) = &envelope.payload else { continue };
+        let Some(payload) = &envelope.payload else {
+            continue;
+        };
         if let Payload::RaceTick(tick) = payload
-            && tick.tick % every != 0 && tick.events.iter().all(|event| event.r#type == "OVERTAKE") {
-                continue;
-            }
-        let key = message.key().map(|key| String::from_utf8_lossy(key).to_string()).unwrap_or_default();
-        println!("{} {} key={} {} {}", envelope.occurred_at, message.topic(), key, envelope.r#type, summary(payload));
+            && tick.tick % every != 0
+            && tick.events.iter().all(|event| event.r#type == "OVERTAKE")
+        {
+            continue;
+        }
+        let key = message
+            .key()
+            .map(|key| String::from_utf8_lossy(key).to_string())
+            .unwrap_or_default();
+        println!(
+            "{} {} key={} {} {}",
+            envelope.occurred_at,
+            message.topic(),
+            key,
+            envelope.r#type,
+            summary(payload)
+        );
     }
 }
 

@@ -4,7 +4,10 @@ use race_engine_core::{RaceInputs, sha256_hex, simulate};
 
 fn inputs() -> (race_engine_core::Venue, RaceInputs) {
     let venue = support::venue("v_riverside_oval");
-    (venue, support::race_inputs("HORSE", 6, support::varied_field("HORSE", 8, 11)))
+    (
+        venue,
+        support::race_inputs("HORSE", 6, support::varied_field("HORSE", 8, 11)),
+    )
 }
 
 #[test]
@@ -24,7 +27,11 @@ fn different_seeds_give_different_scripts() {
     let params = support::params();
     let (venue, inputs) = inputs();
     let hashes: Vec<String> = (0..6)
-        .map(|value| simulate(&params, &venue, &inputs, &support::seed(value)).expect("simulate").script_hash)
+        .map(|value| {
+            simulate(&params, &venue, &inputs, &support::seed(value))
+                .expect("simulate")
+                .script_hash
+        })
         .collect();
     for (index, hash) in hashes.iter().enumerate() {
         for other in &hashes[index + 1..] {

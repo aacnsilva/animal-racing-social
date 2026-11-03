@@ -165,7 +165,11 @@ impl LoadedParams {
         validate(&params)?;
         let canonical_json = canonical_json(value);
         let hash = hex::encode(Sha256::digest(canonical_json.as_bytes()));
-        Ok(LoadedParams { params, canonical_json, hash })
+        Ok(LoadedParams {
+            params,
+            canonical_json,
+            hash,
+        })
     }
 
     pub fn version(&self) -> &str {
@@ -210,19 +214,27 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) {
             out.push(']');
         }
         serde_json::Value::Number(number) => match number.as_f64() {
-            Some(float) if number.is_f64() => out.push_str(&serde_json::Value::from(float).to_string()),
+            Some(float) if number.is_f64() => {
+                out.push_str(&serde_json::Value::from(float).to_string())
+            }
             _ => out.push_str(&number.to_string()),
         },
         other => out.push_str(&other.to_string()),
     }
 }
 
-fn require_keys(map: &BTreeMap<String, f64>, keys: &[&str], context: &str) -> Result<(), EngineError> {
+fn require_keys(
+    map: &BTreeMap<String, f64>,
+    keys: &[&str],
+    context: &str,
+) -> Result<(), EngineError> {
     for key in keys {
         match map.get(*key) {
             Some(value) if value.is_finite() && *value > 0.0 => {}
             _ => {
-                return Err(EngineError::InvalidParams(format!("{context}.{key} missing or not positive")));
+                return Err(EngineError::InvalidParams(format!(
+                    "{context}.{key} missing or not positive"
+                )));
             }
         }
     }
@@ -237,19 +249,29 @@ fn validate(params: &EngineParams) -> Result<(), EngineError> {
         return Err(EngineError::InvalidParams("maxTicks too small".into()));
     }
     if params.noise.pace_update_ticks == 0 || params.stamina.replan_ticks == 0 {
-        return Err(EngineError::InvalidParams("noise.paceUpdateTicks must be positive".into()));
+        return Err(EngineError::InvalidParams(
+            "noise.paceUpdateTicks must be positive".into(),
+        ));
     }
-    if params.incidents.stumble_ticks_min == 0 || params.incidents.stumble_ticks_max < params.incidents.stumble_ticks_min {
-        return Err(EngineError::InvalidParams("incidents.stumbleTicks range invalid".into()));
+    if params.incidents.stumble_ticks_min == 0
+        || params.incidents.stumble_ticks_max < params.incidents.stumble_ticks_min
+    {
+        return Err(EngineError::InvalidParams(
+            "incidents.stumbleTicks range invalid".into(),
+        ));
     }
     for name in TEMPERAMENTS {
         if !params.temperaments.contains_key(name) {
-            return Err(EngineError::InvalidParams(format!("temperaments.{name} missing")));
+            return Err(EngineError::InvalidParams(format!(
+                "temperaments.{name} missing"
+            )));
         }
     }
     for name in SURFACES {
         if !params.surfaces.contains_key(name) {
-            return Err(EngineError::InvalidParams(format!("surfaces.{name} missing")));
+            return Err(EngineError::InvalidParams(format!(
+                "surfaces.{name} missing"
+            )));
         }
     }
     if params.species.is_empty() {
@@ -257,13 +279,35 @@ fn validate(params: &EngineParams) -> Result<(), EngineError> {
     }
     for (name, species) in &params.species {
         let context = format!("species.{name}");
-        require_keys(&species.surface_affinity, &SURFACES, &format!("{context}.surfaceAffinity"))?;
-        require_keys(&species.segment_affinity, &SEGMENT_KINDS, &format!("{context}.segmentAffinity"))?;
-        require_keys(&species.surface_stamina_drain, &SURFACES, &format!("{context}.surfaceStaminaDrain"))?;
-        require_keys(&species.surface_stumble, &SURFACES, &format!("{context}.surfaceStumble"))?;
-        require_keys(&species.segment_stumble, &SEGMENT_KINDS, &format!("{context}.segmentStumble"))?;
+        require_keys(
+            &species.surface_affinity,
+            &SURFACES,
+            &format!("{context}.surfaceAffinity"),
+        )?;
+        require_keys(
+            &species.segment_affinity,
+            &SEGMENT_KINDS,
+            &format!("{context}.segmentAffinity"),
+        )?;
+        require_keys(
+            &species.surface_stamina_drain,
+            &SURFACES,
+            &format!("{context}.surfaceStaminaDrain"),
+        )?;
+        require_keys(
+            &species.surface_stumble,
+            &SURFACES,
+            &format!("{context}.surfaceStumble"),
+        )?;
+        require_keys(
+            &species.segment_stumble,
+            &SEGMENT_KINDS,
+            &format!("{context}.segmentStumble"),
+        )?;
         if species.reference_velocity <= 0.0 || species.lateral_grip <= 0.0 {
-            return Err(EngineError::InvalidParams(format!("{context} referenceVelocity/lateralGrip must be positive")));
+            return Err(EngineError::InvalidParams(format!(
+                "{context} referenceVelocity/lateralGrip must be positive"
+            )));
         }
     }
     Ok(())

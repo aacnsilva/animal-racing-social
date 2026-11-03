@@ -9,11 +9,41 @@ import { Avatar, Logo, ProviderIcon } from './ui';
 
 type TabIconName = 'races' | 'bets' | 'wallet' | 'ranks' | 'more';
 
-const NAV: { to: string; label: string; testId: string; match: (path: string) => boolean; tab?: { id: string; label: string; icon: TabIconName } }[] = [
-  { to: '/', label: 'Races', testId: 'nav-races', match: (path) => path === '/' || path === '/results' || path.startsWith('/races'), tab: { id: 'races', label: 'Races', icon: 'races' } },
-  { to: '/bets', label: 'My bets', testId: 'nav-bets', match: (path) => path.startsWith('/bets'), tab: { id: 'bets', label: 'My bets', icon: 'bets' } },
-  { to: '/wallet', label: 'Wallet', testId: 'nav-wallet', match: (path) => path.startsWith('/wallet'), tab: { id: 'wallet', label: 'Wallet', icon: 'wallet' } },
-  { to: '/leaderboards', label: 'Leaderboards', testId: 'nav-leaderboards', match: (path) => path.startsWith('/leaderboards'), tab: { id: 'leaderboards', label: 'Ranks', icon: 'ranks' } },
+const NAV: {
+  to: string;
+  label: string;
+  testId: string;
+  match: (path: string) => boolean;
+  tab?: { id: string; label: string; icon: TabIconName };
+}[] = [
+  {
+    to: '/',
+    label: 'Races',
+    testId: 'nav-races',
+    match: (path) => path === '/' || path === '/results' || path.startsWith('/races'),
+    tab: { id: 'races', label: 'Races', icon: 'races' },
+  },
+  {
+    to: '/bets',
+    label: 'My bets',
+    testId: 'nav-bets',
+    match: (path) => path.startsWith('/bets'),
+    tab: { id: 'bets', label: 'My bets', icon: 'bets' },
+  },
+  {
+    to: '/wallet',
+    label: 'Wallet',
+    testId: 'nav-wallet',
+    match: (path) => path.startsWith('/wallet'),
+    tab: { id: 'wallet', label: 'Wallet', icon: 'wallet' },
+  },
+  {
+    to: '/leaderboards',
+    label: 'Leaderboards',
+    testId: 'nav-leaderboards',
+    match: (path) => path.startsWith('/leaderboards'),
+    tab: { id: 'leaderboards', label: 'Ranks', icon: 'ranks' },
+  },
   { to: '/animals', label: 'Animals', testId: 'nav-animals', match: (path) => path.startsWith('/animals') },
   { to: '/venues', label: 'Venues', testId: 'nav-venues', match: (path) => path.startsWith('/venues') },
 ];
@@ -29,21 +59,50 @@ const TAB_ICON: Record<TabIconName, string> = {
 function TabIcon({ name }: { name: TabIconName }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d={TAB_ICON[name]} stroke="currentColor" strokeWidth={name === 'more' ? 3.2 : 1.9} strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={TAB_ICON[name]}
+        stroke="currentColor"
+        strokeWidth={name === 'more' ? 3.2 : 1.9}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
-function TabBar({ path, menuOpen, moreActive, onMore }: { path: string; menuOpen: boolean; moreActive: boolean; onMore: () => void }) {
+function TabBar({
+  path,
+  menuOpen,
+  moreActive,
+  onMore,
+}: {
+  path: string;
+  menuOpen: boolean;
+  moreActive: boolean;
+  onMore: () => void;
+}) {
   return (
     <nav className="tabbar" aria-label="Sections">
       {NAV.filter((item) => item.tab).map((item) => (
-        <Link key={item.to} to={item.to} data-testid={`tab-${item.tab!.id}`} className={!menuOpen && item.match(path) ? 'active' : ''} aria-current={item.match(path) ? 'page' : undefined}>
+        <Link
+          key={item.to}
+          to={item.to}
+          data-testid={`tab-${item.tab!.id}`}
+          className={!menuOpen && item.match(path) ? 'active' : ''}
+          aria-current={item.match(path) ? 'page' : undefined}
+        >
           <TabIcon name={item.tab!.icon} />
           <span>{item.tab!.label}</span>
         </Link>
       ))}
-      <button type="button" data-testid="tab-more" className={menuOpen || moreActive ? 'active' : ''} aria-expanded={menuOpen} aria-controls="site-nav" onClick={onMore}>
+      <button
+        type="button"
+        data-testid="tab-more"
+        className={menuOpen || moreActive ? 'active' : ''}
+        aria-expanded={menuOpen}
+        aria-controls="site-nav"
+        onClick={onMore}
+      >
         <TabIcon name="more" />
         <span>More</span>
       </button>
@@ -58,10 +117,15 @@ function DailyRewardButton() {
   const claim = async () => {
     setBusy(true);
     try {
-      const result = await api<{ amount: number; balance: number; streak?: number }>('/v1/me/rewards/daily', { method: 'POST' });
+      const result = await api<{ amount: number; balance: number; streak?: number }>('/v1/me/rewards/daily', {
+        method: 'POST',
+      });
       walletStore.set((wallet) => (wallet ? { ...wallet, balance: result.balance } : wallet));
       dailyStore.set((d) => (d ? { ...d, claimable: false, streak: result.streak ?? d.streak + 1 } : d));
-      toast(`Daily reward: +${fmtPoints(result.amount)} pts${result.streak ? ` · ${result.streak}-day streak` : ''}`, 'success');
+      toast(
+        `Daily reward: +${fmtPoints(result.amount)} pts${result.streak ? ` · ${result.streak}-day streak` : ''}`,
+        'success',
+      );
       void refreshDaily();
     } catch (error) {
       toast(friendlyError(error), 'error');
@@ -78,7 +142,13 @@ function DailyRewardButton() {
       data-testid="daily-reward-claim"
       disabled={!claimable || busy}
       onClick={() => void claim()}
-      title={claimable ? 'Claim your daily reward' : daily ? `Claimed today · streak ${daily.streak} · next reward in ${label}` : 'Daily reward'}
+      title={
+        claimable
+          ? 'Claim your daily reward'
+          : daily
+            ? `Claimed today · streak ${daily.streak} · next reward in ${label}`
+            : 'Daily reward'
+      }
     >
       <span aria-hidden>🎁</span>
       <span className="hide-sm">{claimable ? `Claim ${label}` : label}</span>
@@ -107,7 +177,12 @@ export function Header() {
   return (
     <>
       <header className="header">
-        <button className="btn ghost icon menu-toggle" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <button
+          className="btn ghost icon menu-toggle"
+          aria-label="Menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
           <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
             <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -124,7 +199,12 @@ export function Header() {
         {open && <div className="nav-scrim" onClick={() => setOpen(false)} aria-hidden />}
         <nav id="site-nav" className={`nav${open ? ' open' : ''}`}>
           {NAV.map((item) => (
-            <Link key={item.to} to={item.to} data-testid={item.testId} className={`${item.match(path) ? 'active' : ''}${item.tab ? ' tabbed' : ''}`}>
+            <Link
+              key={item.to}
+              to={item.to}
+              data-testid={item.testId}
+              className={`${item.match(path) ? 'active' : ''}${item.tab ? ' tabbed' : ''}`}
+            >
               {item.label}
             </Link>
           ))}
@@ -139,7 +219,12 @@ export function Header() {
             </Link>
           )}
           {user && (
-            <button type="button" className="sheet-only nav-signout" data-testid="nav-logout" onClick={() => void logout()}>
+            <button
+              type="button"
+              className="sheet-only nav-signout"
+              data-testid="nav-logout"
+              onClick={() => void logout()}
+            >
               Sign out
             </button>
           )}
@@ -166,10 +251,25 @@ export function Header() {
                 </Link>
               )}
               <DailyRewardButton />
-              <Link to="/notifications" className={`bell${path.startsWith('/notifications') ? ' active' : ''}`} data-testid="nav-notifications" aria-label={`Notifications, ${unread} unread`}>
+              <Link
+                to="/notifications"
+                className={`bell${path.startsWith('/notifications') ? ' active' : ''}`}
+                data-testid="nav-notifications"
+                aria-label={`Notifications, ${unread} unread`}
+              >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path
+                    d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M10.3 21a1.94 1.94 0 0 0 3.4 0"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <span className={`badge-count${unread > 0 ? '' : ' empty'}`} data-testid="notification-count">
                   {unread > 99 ? '99+' : unread}
@@ -180,9 +280,22 @@ export function Header() {
                   <Avatar name={user.displayName} url={user.avatarUrl} frame={user.frame} />
                   <span>{user.displayName}</span>
                 </Link>
-                <button className="btn ghost small icon user-logout" data-testid="logout" onClick={() => void logout()} title="Sign out" aria-label="Sign out" style={{ width: 30, height: 30 }}>
+                <button
+                  className="btn ghost small icon user-logout"
+                  data-testid="logout"
+                  onClick={() => void logout()}
+                  title="Sign out"
+                  aria-label="Sign out"
+                  style={{ width: 30, height: 30 }}
+                >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-                    <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path
+                      d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </button>
               </div>

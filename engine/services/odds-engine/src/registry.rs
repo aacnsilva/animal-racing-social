@@ -49,21 +49,28 @@ impl LiveState {
             entrants: self
                 .entrants
                 .iter()
-                .map(|entrant| RevealedEntrant { false_start: self.false_starters.contains(&entrant.id), ..entrant.clone() })
+                .map(|entrant| RevealedEntrant {
+                    false_start: self.false_starters.contains(&entrant.id),
+                    ..entrant.clone()
+                })
                 .collect(),
             lap_leaders: self.lap_leaders.clone(),
         })
     }
 
     pub fn record_lap(&mut self, lap: u32, leader: &str) {
-        if lap > 0 && !leader.is_empty() && !self.lap_leaders.iter().any(|(known, _)| *known == lap) {
+        if lap > 0 && !leader.is_empty() && !self.lap_leaders.iter().any(|(known, _)| *known == lap)
+        {
             self.lap_leaders.push((lap, leader.to_string()));
         }
     }
 
     pub fn finished(&self) -> bool {
         !self.entrants.is_empty()
-            && self.entrants.iter().all(|entrant| matches!(entrant.state, EntrantState::Finished | EntrantState::Dnf))
+            && self
+                .entrants
+                .iter()
+                .all(|entrant| matches!(entrant.state, EntrantState::Finished | EntrantState::Dnf))
     }
 }
 

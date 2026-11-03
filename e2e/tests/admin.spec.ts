@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN_SUBJECT, apiSession, call, headerBalance, market, placeSingle, signIn, uniqueSubject, waitForRace } from './support.ts';
+import {
+  ADMIN_SUBJECT,
+  apiSession,
+  call,
+  headerBalance,
+  market,
+  placeSingle,
+  signIn,
+  uniqueSubject,
+  waitForRace,
+} from './support.ts';
 
 test('hides the admin area from regular users', async ({ page }) => {
   await signIn(page);

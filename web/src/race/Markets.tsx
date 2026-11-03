@@ -37,9 +37,21 @@ function PriceButton({
   const previous = useRef<number | null>(price);
   useEffect(() => {
     const element = ref.current;
-    if (element && price !== null && previous.current !== null && price !== previous.current && typeof element.animate === 'function') {
+    if (
+      element &&
+      price !== null &&
+      previous.current !== null &&
+      price !== previous.current &&
+      typeof element.animate === 'function'
+    ) {
       const up = price > previous.current;
-      element.animate([{ boxShadow: `inset 0 0 0 2px ${up ? '#3ddc97' : '#ff6b6b'}` }, { boxShadow: 'inset 0 0 0 2px rgba(0, 0, 0, 0)' }], { duration: 900, easing: 'ease-out' });
+      element.animate(
+        [
+          { boxShadow: `inset 0 0 0 2px ${up ? '#3ddc97' : '#ff6b6b'}` },
+          { boxShadow: 'inset 0 0 0 2px rgba(0, 0, 0, 0)' },
+        ],
+        { duration: 900, easing: 'ease-out' },
+      );
     }
     previous.current = price;
   }, [price]);
@@ -91,7 +103,11 @@ function MarketCardInner({
         <MarketStatusChip status={market.status} />
       </div>
       {market.closesAtLap && market.type !== 'TRICAST' && market.status !== 'RESULTED' && (
-        <div className="tiny muted">{market.type === 'LEADER_AT_LAP' ? `Suspends just before lap ${market.params.lap} completes` : `Closes at lap ${market.closesAtLap}`}</div>
+        <div className="tiny muted">
+          {market.type === 'LEADER_AT_LAP'
+            ? `Suspends just before lap ${market.params.lap} completes`
+            : `Closes at lap ${market.closesAtLap}`}
+        </div>
       )}
       {market.status === 'SUSPENDED' && <div className="market-veil">Suspended</div>}
       {market.status === 'VOID' && <div className="market-veil">Void · stakes refunded</div>}
@@ -102,7 +118,10 @@ function MarketCardInner({
           {sorted.map((entrant) => {
             const selection = prices.get(entrant.entrantId);
             const won = selection ? winning.has(selection.selectionId) || winning.has(entrant.entrantId) : false;
-            const isSelected = selected?.marketId === market.id && 'entrantId' in selected.selection && selected.selection.entrantId === entrant.entrantId;
+            const isSelected =
+              selected?.marketId === market.id &&
+              'entrantId' in selected.selection &&
+              selected.selection.entrantId === entrant.entrantId;
             const nonRunner = entrant.result?.resultStatus === 'NON_RUNNER';
             return (
               <div key={entrant.entrantId} className={`sel-row${won ? ' won' : ''}`}>
@@ -144,7 +163,17 @@ export const MarketCard = memo(MarketCardInner);
 
 type Quote = { price: number; priceVersion: number; probability: number };
 
-function TricastBuilder({ market, entrants, canBet, onPick }: { market: Market; entrants: Entrant[]; canBet: boolean; onPick: PickHandler }) {
+function TricastBuilder({
+  market,
+  entrants,
+  canBet,
+  onPick,
+}: {
+  market: Market;
+  entrants: Entrant[];
+  canBet: boolean;
+  onPick: PickHandler;
+}) {
   const [picks, setPicks] = useState<[string, string, string]>(['', '', '']);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -191,10 +220,19 @@ function TricastBuilder({ market, entrants, canBet, onPick }: { market: Market; 
         {[0, 1, 2].map((index) => (
           <label className="field" key={index}>
             <span>{['1st', '2nd', '3rd'][index]}</span>
-            <select className="select" data-testid={`tricast-pick-${index + 1}`} value={picks[index]} onChange={(e) => setPick(index, e.target.value)}>
+            <select
+              className="select"
+              data-testid={`tricast-pick-${index + 1}`}
+              value={picks[index]}
+              onChange={(e) => setPick(index, e.target.value)}
+            >
               <option value="">Select…</option>
               {entrants.map((entrant) => (
-                <option key={entrant.entrantId} value={entrant.entrantId} disabled={picks.includes(entrant.entrantId) && picks[index] !== entrant.entrantId}>
+                <option
+                  key={entrant.entrantId}
+                  value={entrant.entrantId}
+                  disabled={picks.includes(entrant.entrantId) && picks[index] !== entrant.entrantId}
+                >
                   {entrant.lane} · {entrant.animal.name}
                 </option>
               ))}
@@ -203,7 +241,12 @@ function TricastBuilder({ market, entrants, canBet, onPick }: { market: Market; 
         ))}
       </div>
       <div className="row wrap">
-        <button className="btn" data-testid="tricast-quote" disabled={!valid || busy} onClick={() => void requestQuote()}>
+        <button
+          className="btn"
+          data-testid="tricast-quote"
+          disabled={!valid || busy}
+          onClick={() => void requestQuote()}
+        >
           {busy ? <Spinner /> : null} Get price
         </button>
         <span className="small muted">Price</span>
@@ -259,25 +302,41 @@ export function MarketsPanel({
 }) {
   const entrants = race.entrants ?? [];
   const preRace = race.status === 'SCHEDULED' || race.status === 'OPEN' || race.status === 'LOCKED';
-  const pendingLaps = markets.filter((m) => m.type === 'LEADER_AT_LAP' && m.status === 'PENDING').map((m) => m.params.lap);
+  const pendingLaps = markets
+    .filter((m) => m.type === 'LEADER_AT_LAP' && m.status === 'PENDING')
+    .map((m) => m.params.lap);
   const visible = markets.filter((m) => !(m.type === 'LEADER_AT_LAP' && m.status === 'PENDING'));
   return (
     <section className="card">
       <div className="card-head">
         <h2>Markets</h2>
         <span className="small muted">
-          {race.status === 'LIVE' ? 'In-running: bets are accepted after a short delay.' : bettingOpen ? 'Points only. Prices update live.' : 'Betting is closed.'}
+          {race.status === 'LIVE'
+            ? 'In-running: bets are accepted after a short delay.'
+            : bettingOpen
+              ? 'Points only. Prices update live.'
+              : 'Betting is closed.'}
         </span>
       </div>
-      {!markets.length && <div className="empty">{race.status === 'CANCELLED' ? 'No markets: this race was cancelled.' : 'Markets are being priced and will appear here shortly.'}</div>}
+      {!markets.length && (
+        <div className="empty">
+          {race.status === 'CANCELLED'
+            ? 'No markets: this race was cancelled.'
+            : 'Markets are being priced and will appear here shortly.'}
+        </div>
+      )}
       <div className="stack" style={{ gap: 18 }}>
         {GROUPS.map((group) => {
           const list = visible.filter((m) => group.types.includes(m.type));
           if (!list.length) {
-            if (group.types[0] === 'LEADER_AT_LAP' && (pendingLaps.length > 0 || (preRace && race.class !== 'SPRINT' && markets.length > 0)))
+            if (
+              group.types[0] === 'LEADER_AT_LAP' &&
+              (pendingLaps.length > 0 || (preRace && race.class !== 'SPRINT' && markets.length > 0))
+            )
               return (
                 <div key={group.title} className="notice info small">
-                  Leader-at-lap markets{pendingLaps.length ? ` (laps ${pendingLaps.join(', ')})` : ''} open when the race starts.
+                  Leader-at-lap markets{pendingLaps.length ? ` (laps ${pendingLaps.join(', ')})` : ''} open when the
+                  race starts.
                 </div>
               );
             return null;
@@ -285,13 +344,23 @@ export function MarketsPanel({
           return (
             <div key={group.title}>
               <div className="section-title">
-                <h3 className="muted" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '0.75rem' }}>
+                <h3
+                  className="muted"
+                  style={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '0.75rem' }}
+                >
                   {group.title}
                 </h3>
               </div>
               <div className="markets-grid">
                 {list.map((market) => (
-                  <MarketCard key={market.id} market={market} entrants={entrants} bettingOpen={bettingOpen} selected={selected} onPick={onPick} />
+                  <MarketCard
+                    key={market.id}
+                    market={market}
+                    entrants={entrants}
+                    bettingOpen={bettingOpen}
+                    selected={selected}
+                    onPick={onPick}
+                  />
                 ))}
               </div>
             </div>

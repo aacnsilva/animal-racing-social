@@ -20,16 +20,35 @@ export type SlipSelection = {
   priceVersion: number;
 };
 
-type SlipStatus = { kind: 'placing' | 'pending' | 'accepted' | 'rejected' | 'error'; message: string; code?: string; betId?: string };
+type SlipStatus = {
+  kind: 'placing' | 'pending' | 'accepted' | 'rejected' | 'error';
+  message: string;
+  code?: string;
+  betId?: string;
+};
 
 function statusFromBet(bet: Bet): SlipStatus {
-  if (bet.status === 'PENDING') return { kind: 'pending', betId: bet.id, message: 'Bet PENDING · waiting for confirmation…' };
-  if (bet.status === 'REJECTED') return { kind: 'rejected', betId: bet.id, code: bet.rejectReason ?? undefined, message: `Bet REJECTED · ${friendlyCode(bet.rejectReason)}` };
+  if (bet.status === 'PENDING')
+    return { kind: 'pending', betId: bet.id, message: 'Bet PENDING · waiting for confirmation…' };
+  if (bet.status === 'REJECTED')
+    return {
+      kind: 'rejected',
+      betId: bet.id,
+      code: bet.rejectReason ?? undefined,
+      message: `Bet REJECTED · ${friendlyCode(bet.rejectReason)}`,
+    };
   const price = bet.lockedPrice ?? bet.legs[0]?.lockedPrice ?? bet.legs[0]?.acceptedPrice ?? 0;
-  if (bet.status === 'WON') return { kind: 'accepted', betId: bet.id, message: `Bet WON · paid ${fmtPoints(bet.payout)} pts` };
-  if (bet.status === 'LOST') return { kind: 'rejected', betId: bet.id, message: `Bet LOST · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)}` };
+  if (bet.status === 'WON')
+    return { kind: 'accepted', betId: bet.id, message: `Bet WON · paid ${fmtPoints(bet.payout)} pts` };
+  if (bet.status === 'LOST')
+    return { kind: 'rejected', betId: bet.id, message: `Bet LOST · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)}` };
   if (bet.status === 'VOID') return { kind: 'pending', betId: bet.id, message: 'Bet VOID · stake refunded' };
-  if (bet.status === 'CASHED_OUT') return { kind: 'accepted', betId: bet.id, message: `Bet CASHED_OUT · ${fmtPoints(bet.cashOutAmount ?? bet.payout)} pts returned` };
+  if (bet.status === 'CASHED_OUT')
+    return {
+      kind: 'accepted',
+      betId: bet.id,
+      message: `Bet CASHED_OUT · ${fmtPoints(bet.cashOutAmount ?? bet.payout)} pts returned`,
+    };
   return {
     kind: 'accepted',
     betId: bet.id,
@@ -104,9 +123,13 @@ export function BetSlip({
   }
 
   useEffect(() => {
-    if (!market || !('order' in slip.selection) || market.priceVersion <= slip.priceVersion || market.status !== 'OPEN') return;
+    if (!market || !('order' in slip.selection) || market.priceVersion <= slip.priceVersion || market.status !== 'OPEN')
+      return;
     let cancelled = false;
-    api<{ price: number; priceVersion: number }>(`/v1/markets/${market.id}/quotes`, { method: 'POST', body: { order: slip.selection.order } })
+    api<{ price: number; priceVersion: number }>(`/v1/markets/${market.id}/quotes`, {
+      method: 'POST',
+      body: { order: slip.selection.order },
+    })
       .then((quote) => {
         if (!cancelled) onRequote({ ...slip, price: quote.price, priceVersion: quote.priceVersion });
       })
@@ -139,7 +162,13 @@ export function BetSlip({
       const bet = await api<Bet>(`/v1/markets/${slip.marketId}/bets`, {
         method: 'POST',
         headers: { 'Idempotency-Key': key },
-        body: { selection: slip.selection, stake: stakeNumber, acceptedPrice: price, priceVersion, acceptPriceChanges: policy },
+        body: {
+          selection: slip.selection,
+          stake: stakeNumber,
+          acceptedPrice: price,
+          priceVersion,
+          acceptPriceChanges: policy,
+        },
       });
       keyRef.current = null;
       onPlaced(bet);
@@ -168,10 +197,23 @@ export function BetSlip({
       price,
       priceVersion,
     });
-    toast(result === 'duplicate' ? 'Already in your combo.' : result === 'replaced' ? 'Combo leg updated.' : 'Added to combo slip.', 'success', 2500);
+    toast(
+      result === 'duplicate'
+        ? 'Already in your combo.'
+        : result === 'replaced'
+          ? 'Combo leg updated.'
+          : 'Added to combo slip.',
+      'success',
+      2500,
+    );
   };
 
-  const tone = status?.kind === 'accepted' ? 'success' : status?.kind === 'error' || status?.kind === 'rejected' ? 'error' : 'info';
+  const tone =
+    status?.kind === 'accepted'
+      ? 'success'
+      : status?.kind === 'error' || status?.kind === 'rejected'
+        ? 'error'
+        : 'info';
 
   return (
     <section className="slip floating" data-testid="bet-slip">
@@ -194,7 +236,9 @@ export function BetSlip({
           {moved && <div className="tiny muted">was {fmtPrice(slip.price)}</div>}
         </div>
       </div>
-      {!marketOpen && market && <div className="notice warn small">{MARKET_STATE[market.status] ?? 'This market is not open.'}</div>}
+      {!marketOpen && market && (
+        <div className="notice warn small">{MARKET_STATE[market.status] ?? 'This market is not open.'}</div>
+      )}
       {marketOpen && !bettingOpen && <div className="notice warn small">Betting is closed for this race.</div>}
       <div className="stake-row">
         <label className="field">
@@ -213,7 +257,12 @@ export function BetSlip({
         </label>
         <label className="field">
           <span>If price changes</span>
-          <select className="select" data-testid="accept-changes-select" value={policy} onChange={(e) => setPolicy(e.target.value as PricePolicy)}>
+          <select
+            className="select"
+            data-testid="accept-changes-select"
+            value={policy}
+            onChange={(e) => setPolicy(e.target.value as PricePolicy)}
+          >
             <option value="NONE">Small changes only</option>
             <option value="BETTER">Better or small drops</option>
             <option value="ANY">Any price</option>
@@ -238,10 +287,21 @@ export function BetSlip({
       </div>
       {authed ? (
         <div className="row">
-          <button className="btn primary" style={{ flex: 1 }} data-testid="place-bet" onClick={() => void place()} disabled={status?.kind === 'placing'}>
+          <button
+            className="btn primary"
+            style={{ flex: 1 }}
+            data-testid="place-bet"
+            onClick={() => void place()}
+            disabled={status?.kind === 'placing'}
+          >
             Place bet
           </button>
-          <button className="btn" data-testid="add-to-combo" onClick={addToCombo} title="Add this selection to a multi-race combo">
+          <button
+            className="btn"
+            data-testid="add-to-combo"
+            onClick={addToCombo}
+            title="Add this selection to a multi-race combo"
+          >
             + Combo
           </button>
         </div>

@@ -6,17 +6,17 @@ docs disagree on a detail, this file describes what the code does.
 
 ## 1. Repository layout
 
-| Path | What |
-|---|---|
-| `proto/ars/v1/events.proto` | Kafka event schemas (single source of truth) |
-| `shared/*.json` | Static data: venues, species, market templates, programme, engine params |
-| `db/migrations/*.sql`, `db/grants.sql` | Postgres DDL (applied in order) + per-service roles |
-| `engine/` | Rust workspace: `race-engine-core` + `race-engine`, `race-broadcaster`, `odds-engine` |
-| `server/` | TypeScript services (one package, one image, many entrypoints) |
-| `web/` | React + three.js client (Vite) |
-| `mock-oauth/` | Zero-dependency fake Google/GitHub OAuth provider for dev and tests |
-| `e2e/` | Playwright UI tests |
-| `deploy/` | Production compose, Caddy, VPS scripts |
+| Path                                   | What                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `proto/ars/v1/events.proto`            | Kafka event schemas (single source of truth)                                          |
+| `shared/*.json`                        | Static data: venues, species, market templates, programme, engine params              |
+| `db/migrations/*.sql`, `db/grants.sql` | Postgres DDL (applied in order) + per-service roles                                   |
+| `engine/`                              | Rust workspace: `race-engine-core` + `race-engine`, `race-broadcaster`, `odds-engine` |
+| `server/`                              | TypeScript services (one package, one image, many entrypoints)                        |
+| `web/`                                 | React + three.js client (Vite)                                                        |
+| `mock-oauth/`                          | Zero-dependency fake Google/GitHub OAuth provider for dev and tests                   |
+| `e2e/`                                 | Playwright UI tests                                                                   |
+| `deploy/`                              | Production compose, Caddy, VPS scripts                                                |
 
 ## 2. Kafka
 
@@ -26,19 +26,19 @@ docs disagree on a detail, this file describes what the code does.
   (`RaceTick`), `version` = 1, `occurredAt` RFC 3339 UTC with milliseconds,
   `eventId` a UUID v4. Key: decimal string of the id named below.
 
-| Topic | Key | Payloads |
-|---|---|---|
-| `race.lifecycle` | raceId | RaceScheduled, RaceOpened, RaceLocked, RaceStarted, ScriptSealed, ScriptFailed, RaceFinished, RaceSettled, RaceCancelled |
-| `race.commands` | raceId | GenerateScript, ScheduleRace, CancelRace, MarketCommand |
-| `race.ticks` | raceId | RaceTick, LapCompleted |
-| `market.events` | raceId | MarketOpened, PriceUpdated, MarketSuspended, MarketResumed, MarketClosed, MarketResulted, MarketVoided |
-| `bet.commands` | raceId (singles, cash-outs) / betId (combos) | BetRequested, ComboRequested, CashOutRequested |
-| `bet.events` | userId (LegSettled: betId) | BetAccepted, BetRejected, LegSettled, BetSettled, BetCashedOut, CashOutRejected |
-| `wallet.events` | userId | LedgerEntryAppended |
-| `stable.events` | animalId | AnimalRecruited, AnimalAged, AnimalRetired |
-| `season.events` | seasonId | SeasonStarted, SeasonEnding, SeasonEnded, LeaderboardMoved |
-| `notification.events` | userId | NotificationCreated |
-| `admin.audit` | targetId | AdminAudit |
+| Topic                 | Key                                          | Payloads                                                                                                                 |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `race.lifecycle`      | raceId                                       | RaceScheduled, RaceOpened, RaceLocked, RaceStarted, ScriptSealed, ScriptFailed, RaceFinished, RaceSettled, RaceCancelled |
+| `race.commands`       | raceId                                       | GenerateScript, ScheduleRace, CancelRace, MarketCommand                                                                  |
+| `race.ticks`          | raceId                                       | RaceTick, LapCompleted                                                                                                   |
+| `market.events`       | raceId                                       | MarketOpened, PriceUpdated, MarketSuspended, MarketResumed, MarketClosed, MarketResulted, MarketVoided                   |
+| `bet.commands`        | raceId (singles, cash-outs) / betId (combos) | BetRequested, ComboRequested, CashOutRequested                                                                           |
+| `bet.events`          | userId (LegSettled: betId)                   | BetAccepted, BetRejected, LegSettled, BetSettled, BetCashedOut, CashOutRejected                                          |
+| `wallet.events`       | userId                                       | LedgerEntryAppended                                                                                                      |
+| `stable.events`       | animalId                                     | AnimalRecruited, AnimalAged, AnimalRetired                                                                               |
+| `season.events`       | seasonId                                     | SeasonStarted, SeasonEnding, SeasonEnded, LeaderboardMoved                                                               |
+| `notification.events` | userId                                       | NotificationCreated                                                                                                      |
+| `admin.audit`         | targetId                                     | AdminAudit                                                                                                               |
 
 Additions to `events.md`: `RaceLocked`, `MarketVoided`, `SeasonEnding`,
 `LeaderboardMoved`, `NotificationCreated`, `AdminAudit`, the admin commands on
@@ -71,23 +71,56 @@ e.g. `"1.0.0"`). It must contain `species.<SPECIES>.surfaceAffinity` and
 
 ```jsonc
 {
-  "raceId": "123", "engineVersion": "1.0.0", "paramsHash": "<hex>",
-  "seed": "<64 hex>", "tickMs": 500, "species": "HORSE",
-  "track": { "venueId": "v_dune_loop", "venueVersion": 1, "surface": "SAND",
-             "lapLength": 562.74, "laps": 7, "length": 3939.18, "lanes": 10 },
-  "entrants": [{ "id": "e1", "animalId": "77", "lane": 3, "temperament": "STALKER",
-                 "stats": { "velocity": 15.2, "stamina": 80, "acceleration": 3.1, "consistency": 0.8 } }],
-  "ticks": [{ "tick": 0, "lap": 1,
-              "entrants": [{ "id": "e1", "dist": 0, "lane": 3, "speed": 0, "staminaPct": 100, "state": "RUNNING", "pos": 1 }],
-              "events": [] }],
+  "raceId": "123",
+  "engineVersion": "1.0.0",
+  "paramsHash": "<hex>",
+  "seed": "<64 hex>",
+  "tickMs": 500,
+  "species": "HORSE",
+  "track": {
+    "venueId": "v_dune_loop",
+    "venueVersion": 1,
+    "surface": "SAND",
+    "lapLength": 562.74,
+    "laps": 7,
+    "length": 3939.18,
+    "lanes": 10,
+  },
+  "entrants": [
+    {
+      "id": "e1",
+      "animalId": "77",
+      "lane": 3,
+      "temperament": "STALKER",
+      "stats": { "velocity": 15.2, "stamina": 80, "acceleration": 3.1, "consistency": 0.8 },
+    },
+  ],
+  "ticks": [
+    {
+      "tick": 0,
+      "lap": 1,
+      "entrants": [{ "id": "e1", "dist": 0, "lane": 3, "speed": 0, "staminaPct": 100, "state": "RUNNING", "pos": 1 }],
+      "events": [],
+    },
+  ],
   "result": {
     "finishTick": 287,
-    "order": ["e3", "e1"], "asRun": ["e3", "e1"],
-    "entrants": [{ "id": "e3", "officialPosition": 1, "asRunPosition": 1, "resultStatus": "FINISHED",
-                   "finishTimeMs": 143210, "distanceCovered": 3939.18, "lapsLed": [1, 2] }],
+    "order": ["e3", "e1"],
+    "asRun": ["e3", "e1"],
+    "entrants": [
+      {
+        "id": "e3",
+        "officialPosition": 1,
+        "asRunPosition": 1,
+        "resultStatus": "FINISHED",
+        "finishTimeMs": 143210,
+        "distanceCovered": 3939.18,
+        "lapsLed": [1, 2],
+      },
+    ],
     "lapLeaders": [{ "lap": 1, "entrantId": "e3", "tick": 40 }],
-    "incidents": [{ "seq": 1, "tick": 10, "type": "STUMBLE", "entrantId": "e2", "data": {} }]
-  }
+    "incidents": [{ "seq": 1, "tick": 10, "type": "STUMBLE", "entrantId": "e2", "data": {} }],
+  },
 }
 ```
 
@@ -117,17 +150,17 @@ seed to `racing.races.seed`.
 
 ## 5. Race lifecycle ownership
 
-| Step | Who | What |
-|---|---|---|
-| Schedule | Scheduler | inserts `racing.races` (SCHEDULED) + `race_entrants`, `POST race-engine /internal/plan` for laps, publishes `GenerateScript` |
-| Seal | race-engine | simulates, seals, sets hashes, publishes `ScriptSealed` (re-publishes from stored hashes on redelivery) |
-| Open | Scheduler | on `ScriptSealed`: publishes `RaceScheduled` then `RaceOpened`, status OPEN |
-| Markets | Market Manager | on `RaceScheduled`: creates markets (PENDING) priced by `POST odds-engine /internal/price`; on `RaceOpened`: opens pre-race markets |
-| Lock | Scheduler | at `startAt − 60 s`: LOCKED, publishes `RaceLocked` (races never sealed are cancelled here) |
-| Live | Broadcaster | at `startAt`: LIVE, `RaceStarted`, then `RaceTick` every `tickMs`, `LapCompleted` when the leader completes a lap |
-| Finish | Broadcaster | reveals (one transaction), FINISHED, publishes `RaceFinished` |
-| Settle | Market Manager → Scheduler | all markets resulted → `RaceSettled` → Scheduler sets SETTLED |
-| Cancel | Scheduler | `CancelRace` command → CANCELLED, `RaceCancelled`; markets voided, bets refunded |
+| Step     | Who                        | What                                                                                                                                |
+| -------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Schedule | Scheduler                  | inserts `racing.races` (SCHEDULED) + `race_entrants`, `POST race-engine /internal/plan` for laps, publishes `GenerateScript`        |
+| Seal     | race-engine                | simulates, seals, sets hashes, publishes `ScriptSealed` (re-publishes from stored hashes on redelivery)                             |
+| Open     | Scheduler                  | on `ScriptSealed`: publishes `RaceScheduled` then `RaceOpened`, status OPEN                                                         |
+| Markets  | Market Manager             | on `RaceScheduled`: creates markets (PENDING) priced by `POST odds-engine /internal/price`; on `RaceOpened`: opens pre-race markets |
+| Lock     | Scheduler                  | at `startAt − 60 s`: LOCKED, publishes `RaceLocked` (races never sealed are cancelled here)                                         |
+| Live     | Broadcaster                | at `startAt`: LIVE, `RaceStarted`, then `RaceTick` every `tickMs`, `LapCompleted` when the leader completes a lap                   |
+| Finish   | Broadcaster                | reveals (one transaction), FINISHED, publishes `RaceFinished`                                                                       |
+| Settle   | Market Manager → Scheduler | all markets resulted → `RaceSettled` → Scheduler sets SETTLED                                                                       |
+| Cancel   | Scheduler                  | `CancelRace` command → CANCELLED, `RaceCancelled`; markets voided, bets refunded                                                    |
 
 The broadcaster discovers races from the database (1 Hz poll) and holds a
 Postgres advisory lock for leadership, so a standby instance takes over on
@@ -164,15 +197,15 @@ Cash-out: `floor(stake × Π lockedPrice × Π pNow × (1 − CASHOUT_MARGIN))`.
 
 ## 8. Redis
 
-| Key | Format | Writers |
-|---|---|---|
-| `price:{marketId}` | hash: `version`, `tick`, `selections` (JSON `[{selectionId, entrantId, price, probability}]`), TTL 48 h | Market Manager at open, Odds Engine on every reprice |
-| `race:{raceId}:state` | JSON `{ raceId, status, tick, lap, tickMs, startAt, entrants: [TickEntrant], events, updatedAt }`, TTL 2 h | Broadcaster every tick |
-| `idem:{userId}:{key}` | JSON response, TTL 2 h | API |
-| `cashout:quote:{quoteId}` | JSON `{ betId, userId, amount, versions: {marketId: version} }`, TTL 60 s | API |
-| `lb:{seasonId}:{board}` | sorted set of userIds | Season |
-| `rl:{userId or ip}:{bucket}` | token bucket | API |
-| `notif:unread:{userId}` | counter | Notification |
+| Key                          | Format                                                                                                     | Writers                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `price:{marketId}`           | hash: `version`, `tick`, `selections` (JSON `[{selectionId, entrantId, price, probability}]`), TTL 48 h    | Market Manager at open, Odds Engine on every reprice |
+| `race:{raceId}:state`        | JSON `{ raceId, status, tick, lap, tickMs, startAt, entrants: [TickEntrant], events, updatedAt }`, TTL 2 h | Broadcaster every tick                               |
+| `idem:{userId}:{key}`        | JSON response, TTL 2 h                                                                                     | API                                                  |
+| `cashout:quote:{quoteId}`    | JSON `{ betId, userId, amount, versions: {marketId: version} }`, TTL 60 s                                  | API                                                  |
+| `lb:{seasonId}:{board}`      | sorted set of userIds                                                                                      | Season                                               |
+| `rl:{userId or ip}:{bucket}` | token bucket                                                                                               | API                                                  |
+| `notif:unread:{userId}`      | counter                                                                                                    | Notification                                         |
 
 ## 9. Public REST API (`/v1`, JSON)
 
@@ -183,117 +216,242 @@ which reads the httpOnly `ars_refresh` cookie.
 
 ```ts
 type Stats = { velocity: number; stamina: number; acceleration: number; consistency: number };
-type User = { userId: string; displayName: string; avatarUrl: string | null; role: 'USER' | 'ADMIN';
-              providers: ('google' | 'github')[]; createdAt: string; frame: Frame | null; podiums: Podium[] };
+type User = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: 'USER' | 'ADMIN';
+  providers: ('google' | 'github')[];
+  createdAt: string;
+  frame: Frame | null;
+  podiums: Podium[];
+};
 // Season podium: the final top 3 of the balance board. `frame` is the placing in the most recently
 // ended season (worn until the next season ends); `podiums` is every podium finish, newest first.
 type Frame = { tier: 'gold' | 'silver' | 'bronze'; rank: 1 | 2 | 3; seasonId: string; seasonName: string };
 type Podium = Frame & { score: number; endedAt: string };
-type AnimalSummary = { id: string; name: string; species: 'HORSE' | 'GIRAFFE'; status: 'ACTIVE' | 'RETIRED';
-  ageWeeks: number; careerDay: number; lifeStage: 'ROOKIE' | 'PRIME' | 'VETERAN';
-  temperament: 'FRONT_RUNNER' | 'STALKER' | 'CLOSER' | 'STEADY'; current: Stats;
-  form: { last5: string[]; races: number; wins: number; podiums: number }; restingUntil: string | null };
-type Animal = AnimalSummary & { base: Stats; recruitedAt: string; retiredAt: string | null; retireReason: string | null;
+type AnimalSummary = {
+  id: string;
+  name: string;
+  species: 'HORSE' | 'GIRAFFE';
+  status: 'ACTIVE' | 'RETIRED';
+  ageWeeks: number;
+  careerDay: number;
+  lifeStage: 'ROOKIE' | 'PRIME' | 'VETERAN';
+  temperament: 'FRONT_RUNNER' | 'STALKER' | 'CLOSER' | 'STEADY';
+  current: Stats;
+  form: { last5: string[]; races: number; wins: number; podiums: number };
+  restingUntil: string | null;
+};
+type Animal = AnimalSummary & {
+  base: Stats;
+  recruitedAt: string;
+  retiredAt: string | null;
+  retireReason: string | null;
   venueForm: { venueId: string; venueName: string; races: number; wins: number; podiums: number }[];
-  agingHistory: { day: string; careerDay: number; lifeStage: string; stats: Stats }[] };
-type EntrantResult = { officialPosition: number; asRunPosition: number;
-  resultStatus: 'FINISHED' | 'DISQUALIFIED' | 'DNF' | 'NON_RUNNER'; finishTimeMs: number | null; distanceCovered: number };
-type Entrant = { entrantId: string; lane: number; temperament: string; statsSnapshot: Stats;
-  animal: AnimalSummary; result: EntrantResult | null };
-type Race = { id: string; seasonId: string; status: 'SCHEDULED' | 'OPEN' | 'LOCKED' | 'LIVE' | 'FINISHED' | 'SETTLED' | 'CANCELLED';
-  class: 'SPRINT' | 'STANDARD' | 'ENDURANCE'; species: 'HORSE' | 'GIRAFFE';
-  venueId: string; venueVersion: number; venueName: string; surface: string;
-  laps: number; estimatedDurationSec: number; tickMs: number;
-  startAt: string; bettingClosesAt: string; startedAt: string | null; finishedAt: string | null;
-  currentTick: number | null; currentLap: number | null; seedHash: string | null; scriptHash: string | null;
-  cancelledReason: string | null; entrantCount: number;
+  agingHistory: { day: string; careerDay: number; lifeStage: string; stats: Stats }[];
+};
+type EntrantResult = {
+  officialPosition: number;
+  asRunPosition: number;
+  resultStatus: 'FINISHED' | 'DISQUALIFIED' | 'DNF' | 'NON_RUNNER';
+  finishTimeMs: number | null;
+  distanceCovered: number;
+};
+type Entrant = {
+  entrantId: string;
+  lane: number;
+  temperament: string;
+  statsSnapshot: Stats;
+  animal: AnimalSummary;
+  result: EntrantResult | null;
+};
+type Race = {
+  id: string;
+  seasonId: string;
+  status: 'SCHEDULED' | 'OPEN' | 'LOCKED' | 'LIVE' | 'FINISHED' | 'SETTLED' | 'CANCELLED';
+  class: 'SPRINT' | 'STANDARD' | 'ENDURANCE';
+  species: 'HORSE' | 'GIRAFFE';
+  venueId: string;
+  venueVersion: number;
+  venueName: string;
+  surface: string;
+  laps: number;
+  estimatedDurationSec: number;
+  tickMs: number;
+  startAt: string;
+  bettingClosesAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  currentTick: number | null;
+  currentLap: number | null;
+  seedHash: string | null;
+  scriptHash: string | null;
+  cancelledReason: string | null;
+  entrantCount: number;
   entrants?: Entrant[];
   result: string[] | null;
-  winner: { entrantId: string; animalId: string; name: string } | null };
+  winner: { entrantId: string; animalId: string; name: string } | null;
+};
 type Selection = { selectionId: string; entrantId: string; price: number; probability: number };
-type Market = { id: string; raceId: string; type: 'FINISH_POSITION' | 'TOP_N' | 'TRICAST' | 'LEADER_AT_LAP';
-  params: Record<string, number>; status: 'PENDING' | 'OPEN' | 'SUSPENDED' | 'CLOSED' | 'RESULTED' | 'VOID';
-  closesAtLap: number | null; priceVersion: number; selections: Selection[];
-  result: { winning: string[]; order: string[] } | null };
+type Market = {
+  id: string;
+  raceId: string;
+  type: 'FINISH_POSITION' | 'TOP_N' | 'TRICAST' | 'LEADER_AT_LAP';
+  params: Record<string, number>;
+  status: 'PENDING' | 'OPEN' | 'SUSPENDED' | 'CLOSED' | 'RESULTED' | 'VOID';
+  closesAtLap: number | null;
+  priceVersion: number;
+  selections: Selection[];
+  result: { winning: string[]; order: string[] } | null;
+};
 type BetSelection = { entrantId: string } | { order: [string, string, string] };
-type BetLeg = { legId: string; marketId: string; raceId: string; marketType: string; marketParams: Record<string, number>;
-  selection: BetSelection; acceptedPrice: number; priceVersion: number; lockedPrice: number | null;
-  status: 'OPEN' | 'WON' | 'LOST' | 'VOID'; placedAtTick: number | null };
-type Bet = { id: string; type: 'SINGLE' | 'COMBO'; legs: BetLeg[]; stake: number; lockedPrice: number | null;
+type BetLeg = {
+  legId: string;
+  marketId: string;
+  raceId: string;
+  marketType: string;
+  marketParams: Record<string, number>;
+  selection: BetSelection;
+  acceptedPrice: number;
+  priceVersion: number;
+  lockedPrice: number | null;
+  status: 'OPEN' | 'WON' | 'LOST' | 'VOID';
+  placedAtTick: number | null;
+};
+type Bet = {
+  id: string;
+  type: 'SINGLE' | 'COMBO';
+  legs: BetLeg[];
+  stake: number;
+  lockedPrice: number | null;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT';
-  rejectReason: string | null; payout: number | null; cashOutAmount: number | null; placedAtTick: number | null;
-  acceptPriceChanges: 'NONE' | 'BETTER' | 'ANY'; requestedAt: string; acceptedAt: string | null; settledAt: string | null };
-type CashOutQuote = { quoteId: string; amount: number; priceVersion: number; expiresAtTick: number | null; expiresAt: string };
+  rejectReason: string | null;
+  payout: number | null;
+  cashOutAmount: number | null;
+  placedAtTick: number | null;
+  acceptPriceChanges: 'NONE' | 'BETTER' | 'ANY';
+  requestedAt: string;
+  acceptedAt: string | null;
+  settledAt: string | null;
+};
+type CashOutQuote = {
+  quoteId: string;
+  amount: number;
+  priceVersion: number;
+  expiresAtTick: number | null;
+  expiresAt: string;
+};
 type Wallet = { seasonId: string; balance: number; inOpenBets: number; rankScore: number };
-type LedgerEntry = { entryId: string; seasonId: string; type: string; amount: number; refId: string; balanceAfter: number; createdAt: string };
+type LedgerEntry = {
+  entryId: string;
+  seasonId: string;
+  type: string;
+  amount: number;
+  refId: string;
+  balanceAfter: number;
+  createdAt: string;
+};
 type DailyReward = { claimable: boolean; amount: number; nextClaimAt: string; streak: number; bestStreak: number };
-type Season = { id: string; name: string; status: 'UPCOMING' | 'ACTIVE' | 'ENDED'; startsAt: string; endsAt: string;
-  lastRaceAt: string; startingGrant: number; dailyGrant: number };
-type LeaderboardEntry = { rank: number; userId: string; displayName: string; avatarUrl: string | null; score: number;
-  frame: Frame | null };
-type Venue = { id: string; version: number; name: string; class: string; surface: string; description: string;
-  lanes: number; lapLength: number; lapsRange: [number, number]; segments: object[]; assets: object; status: string };
-type Notification = { id: string; type: string; payload: Record<string, unknown>; createdAt: string; readAt: string | null };
+type Season = {
+  id: string;
+  name: string;
+  status: 'UPCOMING' | 'ACTIVE' | 'ENDED';
+  startsAt: string;
+  endsAt: string;
+  lastRaceAt: string;
+  startingGrant: number;
+  dailyGrant: number;
+};
+type LeaderboardEntry = {
+  rank: number;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  score: number;
+  frame: Frame | null;
+};
+type Venue = {
+  id: string;
+  version: number;
+  name: string;
+  class: string;
+  surface: string;
+  description: string;
+  lanes: number;
+  lapLength: number;
+  lapsRange: [number, number];
+  segments: object[];
+  assets: object;
+  status: string;
+};
+type Notification = {
+  id: string;
+  type: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+};
 ```
 
-| Method & path | Body / query | Response |
-|---|---|---|
-| `GET /auth/providers` | | `{ providers: ['google','github'] }` |
-| `GET /auth/{provider}/start` | `?redirect=/path&linkToken=` | 302 to provider |
-| `GET /auth/{provider}/callback` | | sets `ars_refresh`, 302 to redirect (`?authError=CODE` on failure) |
-| `POST /auth/refresh` | | `{ accessToken, expiresIn, user }` |
-| `POST /auth/logout` | | 204 |
-| `GET /me` · `PATCH /me` | `{ displayName?, avatarUrl? }` | `User` |
-| `POST /me/providers/{provider}/link` | | `{ url }` (navigate there) |
-| `GET /schedule` | `from,to,species,class` | `{ items: Race[], nextCursor }` |
-| `GET /races` | `status,from,to,species,venueId,animalId,cursor,limit` | `{ items: Race[], nextCursor }` |
-| `GET /races/{id}` | | `Race` with `entrants` |
-| `GET /races/{id}/result` | | `{ race, order, asRun, lapLeaders, incidents, markets: [{ marketId, type, params, status, winning: Selection[], order }], seed, seedHash, scriptHash, engineVersion, replay: { available, expiresAt } }` (409 `RACE_NOT_FINISHED`) |
-| `GET /races/{id}/ticks` | `fromTick` | `RaceTick[]` (FINISHED only; 409 / 410 `REPLAY_EXPIRED`) |
-| `GET /races/{id}/script` | | script JSON (FINISHED only) |
-| `GET /races/{id}/markets` | `status` | `Market[]` |
-| `GET /races/{id}/stream` | | SSE (§10) |
-| `GET /markets/{id}` | | `Market` |
-| `POST /markets/{id}/quotes` | `{ order: [a,b,c] }` | `{ price, priceVersion, probability }` |
-| `POST /markets/{id}/bets` | header `Idempotency-Key`; `{ selection, stake, acceptedPrice, priceVersion, acceptPriceChanges }` | 202 `Bet` |
-| `POST /bets/combos` | header `Idempotency-Key`; `{ legs: [{ marketId, selection, acceptedPrice, priceVersion }], stake, acceptPriceChanges }` | 202 `Bet` |
-| `POST /bets/combos/quote` | `{ legs }` | `{ combinedPrice, legs: [{ marketId, price, priceVersion }] }` |
-| `GET /bets/{id}` | | `Bet` |
-| `GET /bets/{id}/cashout` | | `CashOutQuote` (409 `NOT_CASHABLE`) |
-| `POST /bets/{id}/cashout` | header `Idempotency-Key`; `{ quoteId, minAmount }` | 202 `Bet` |
-| `GET /me/bets` | `raceId,status,cursor,limit` (`status=OPEN` = PENDING+ACCEPTED) | `{ items: Bet[], nextCursor }` |
-| `GET /me/wallet` | | `Wallet` |
-| `GET /me/wallet/ledger` | `cursor,limit` | `{ items: LedgerEntry[], nextCursor }` |
-| `GET /me/rewards/daily` · `POST` | | `DailyReward` · `{ amount, balance }` (409 `ALREADY_CLAIMED`) |
-| `GET /me/notifications` | `unread=true,cursor,limit` | `{ items: Notification[], nextCursor, unreadCount }` |
-| `POST /me/notifications/read` | `{ ids }` or `{ all: true }` | `{ unreadCount }` |
-| `GET /me/notification-settings` · `PUT` | `{ enabled, types }` | `{ enabled, types }` |
-| `GET /seasons` · `GET /seasons/current` | | `Season[]` · `Season` |
-| `GET /seasons/{id}/leaderboards/{board}` | `limit, around=me` | `{ items: LeaderboardEntry[], me: LeaderboardEntry \| null }` |
-| `GET /venues` · `GET /venues/{id}` | `class` · `version` | `Venue[]` · `Venue` |
-| `GET /venues/{id}/history` | `cursor` | `{ items: Race[], nextCursor }` |
-| `GET /animals` | `species,status,cursor,limit` | `{ items: AnimalSummary[], nextCursor }` |
-| `GET /animals/{id}` | | `Animal` |
-| `GET /animals/{id}/history` | `cursor` | `{ items: [{ raceId, finishedAt, class, venueId, venueName, position, resultStatus, timeSec, lapsLed, statsSnapshot, fieldSize }], nextCursor }` |
+| Method & path                            | Body / query                                                                                                            | Response                                                                                                                                                                                                                           |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /auth/providers`                    |                                                                                                                         | `{ providers: ['google','github'] }`                                                                                                                                                                                               |
+| `GET /auth/{provider}/start`             | `?redirect=/path&linkToken=`                                                                                            | 302 to provider                                                                                                                                                                                                                    |
+| `GET /auth/{provider}/callback`          |                                                                                                                         | sets `ars_refresh`, 302 to redirect (`?authError=CODE` on failure)                                                                                                                                                                 |
+| `POST /auth/refresh`                     |                                                                                                                         | `{ accessToken, expiresIn, user }`                                                                                                                                                                                                 |
+| `POST /auth/logout`                      |                                                                                                                         | 204                                                                                                                                                                                                                                |
+| `GET /me` · `PATCH /me`                  | `{ displayName?, avatarUrl? }`                                                                                          | `User`                                                                                                                                                                                                                             |
+| `POST /me/providers/{provider}/link`     |                                                                                                                         | `{ url }` (navigate there)                                                                                                                                                                                                         |
+| `GET /schedule`                          | `from,to,species,class`                                                                                                 | `{ items: Race[], nextCursor }`                                                                                                                                                                                                    |
+| `GET /races`                             | `status,from,to,species,venueId,animalId,cursor,limit`                                                                  | `{ items: Race[], nextCursor }`                                                                                                                                                                                                    |
+| `GET /races/{id}`                        |                                                                                                                         | `Race` with `entrants`                                                                                                                                                                                                             |
+| `GET /races/{id}/result`                 |                                                                                                                         | `{ race, order, asRun, lapLeaders, incidents, markets: [{ marketId, type, params, status, winning: Selection[], order }], seed, seedHash, scriptHash, engineVersion, replay: { available, expiresAt } }` (409 `RACE_NOT_FINISHED`) |
+| `GET /races/{id}/ticks`                  | `fromTick`                                                                                                              | `RaceTick[]` (FINISHED only; 409 / 410 `REPLAY_EXPIRED`)                                                                                                                                                                           |
+| `GET /races/{id}/script`                 |                                                                                                                         | script JSON (FINISHED only)                                                                                                                                                                                                        |
+| `GET /races/{id}/markets`                | `status`                                                                                                                | `Market[]`                                                                                                                                                                                                                         |
+| `GET /races/{id}/stream`                 |                                                                                                                         | SSE (§10)                                                                                                                                                                                                                          |
+| `GET /markets/{id}`                      |                                                                                                                         | `Market`                                                                                                                                                                                                                           |
+| `POST /markets/{id}/quotes`              | `{ order: [a,b,c] }`                                                                                                    | `{ price, priceVersion, probability }`                                                                                                                                                                                             |
+| `POST /markets/{id}/bets`                | header `Idempotency-Key`; `{ selection, stake, acceptedPrice, priceVersion, acceptPriceChanges }`                       | 202 `Bet`                                                                                                                                                                                                                          |
+| `POST /bets/combos`                      | header `Idempotency-Key`; `{ legs: [{ marketId, selection, acceptedPrice, priceVersion }], stake, acceptPriceChanges }` | 202 `Bet`                                                                                                                                                                                                                          |
+| `POST /bets/combos/quote`                | `{ legs }`                                                                                                              | `{ combinedPrice, legs: [{ marketId, price, priceVersion }] }`                                                                                                                                                                     |
+| `GET /bets/{id}`                         |                                                                                                                         | `Bet`                                                                                                                                                                                                                              |
+| `GET /bets/{id}/cashout`                 |                                                                                                                         | `CashOutQuote` (409 `NOT_CASHABLE`)                                                                                                                                                                                                |
+| `POST /bets/{id}/cashout`                | header `Idempotency-Key`; `{ quoteId, minAmount }`                                                                      | 202 `Bet`                                                                                                                                                                                                                          |
+| `GET /me/bets`                           | `raceId,status,cursor,limit` (`status=OPEN` = PENDING+ACCEPTED)                                                         | `{ items: Bet[], nextCursor }`                                                                                                                                                                                                     |
+| `GET /me/wallet`                         |                                                                                                                         | `Wallet`                                                                                                                                                                                                                           |
+| `GET /me/wallet/ledger`                  | `cursor,limit`                                                                                                          | `{ items: LedgerEntry[], nextCursor }`                                                                                                                                                                                             |
+| `GET /me/rewards/daily` · `POST`         |                                                                                                                         | `DailyReward` · `{ amount, balance }` (409 `ALREADY_CLAIMED`)                                                                                                                                                                      |
+| `GET /me/notifications`                  | `unread=true,cursor,limit`                                                                                              | `{ items: Notification[], nextCursor, unreadCount }`                                                                                                                                                                               |
+| `POST /me/notifications/read`            | `{ ids }` or `{ all: true }`                                                                                            | `{ unreadCount }`                                                                                                                                                                                                                  |
+| `GET /me/notification-settings` · `PUT`  | `{ enabled, types }`                                                                                                    | `{ enabled, types }`                                                                                                                                                                                                               |
+| `GET /seasons` · `GET /seasons/current`  |                                                                                                                         | `Season[]` · `Season`                                                                                                                                                                                                              |
+| `GET /seasons/{id}/leaderboards/{board}` | `limit, around=me`                                                                                                      | `{ items: LeaderboardEntry[], me: LeaderboardEntry \| null }`                                                                                                                                                                      |
+| `GET /venues` · `GET /venues/{id}`       | `class` · `version`                                                                                                     | `Venue[]` · `Venue`                                                                                                                                                                                                                |
+| `GET /venues/{id}/history`               | `cursor`                                                                                                                | `{ items: Race[], nextCursor }`                                                                                                                                                                                                    |
+| `GET /animals`                           | `species,status,cursor,limit`                                                                                           | `{ items: AnimalSummary[], nextCursor }`                                                                                                                                                                                           |
+| `GET /animals/{id}`                      |                                                                                                                         | `Animal`                                                                                                                                                                                                                           |
+| `GET /animals/{id}/history`              | `cursor`                                                                                                                | `{ items: [{ raceId, finishedAt, class, venueId, venueName, position, resultStatus, timeSec, lapsLed, statsSnapshot, fieldSize }], nextCursor }`                                                                                   |
 
 Admin (`/v1/admin`, role ADMIN, every write audited):
 
-| Method & path | Body | Response |
-|---|---|---|
-| `GET /admin/programme` · `PUT` | `{ racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes }` | programme (new version) |
-| `POST /admin/races` | `{ startAt, species, class, venueId?, fieldSize? }` | 202 `{ raceId }` |
-| `POST /admin/races/{id}/cancel` | `{ reason }` | 202 |
-| `GET /admin/races/{id}/debug` | | `{ race, script }` (409 before FINISHED) |
-| `GET /admin/market-templates/{class}` · `PUT` | `{ markets: [...] }` | template (new version) |
-| `POST /admin/markets/{id}/suspend` · `/resume` · `/void` | `{ reason? }` | 202 |
-| `GET /admin/venues` · `POST` · `PUT /admin/venues/{id}` · `POST /admin/venues/{id}/retire` | `Venue` fields | `Venue` |
-| `GET /admin/engine/versions` · `PUT /admin/engine/active` · `GET/PUT /admin/engine/params/{version}` | `{ engineVersion }` · `{ params }` | versions |
-| `GET /admin/animals` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size` | `{ species, size }` | |
-| `GET /admin/seasons` · `POST` · `PUT /admin/seasons/{id}` | `{ name, startsAt, endsAt, startingGrant, dailyGrant }` | `Season` |
-| `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` · `POST /admin/users/{id}/ban` | `{ amount, reason }` · `{ reason, banned }` | |
-| `GET /admin/users` | `q` | `{ items }` |
-| `GET /admin/dlq` · `POST /admin/dlq/{id}/replay` | | |
-| `GET /admin/audit` | `cursor` | `{ items, nextCursor }` |
+| Method & path                                                                                                             | Body                                                                         | Response                                 |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------- |
+| `GET /admin/programme` · `PUT`                                                                                            | `{ racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes }` | programme (new version)                  |
+| `POST /admin/races`                                                                                                       | `{ startAt, species, class, venueId?, fieldSize? }`                          | 202 `{ raceId }`                         |
+| `POST /admin/races/{id}/cancel`                                                                                           | `{ reason }`                                                                 | 202                                      |
+| `GET /admin/races/{id}/debug`                                                                                             |                                                                              | `{ race, script }` (409 before FINISHED) |
+| `GET /admin/market-templates/{class}` · `PUT`                                                                             | `{ markets: [...] }`                                                         | template (new version)                   |
+| `POST /admin/markets/{id}/suspend` · `/resume` · `/void`                                                                  | `{ reason? }`                                                                | 202                                      |
+| `GET /admin/venues` · `POST` · `PUT /admin/venues/{id}` · `POST /admin/venues/{id}/retire`                                | `Venue` fields                                                               | `Venue`                                  |
+| `GET /admin/engine/versions` · `PUT /admin/engine/active` · `GET/PUT /admin/engine/params/{version}`                      | `{ engineVersion }` · `{ params }`                                           | versions                                 |
+| `GET /admin/animals` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                  | `{ species, size }`                                                          |                                          |
+| `GET /admin/seasons` · `POST` · `PUT /admin/seasons/{id}`                                                                 | `{ name, startsAt, endsAt, startingGrant, dailyGrant }`                      | `Season`                                 |
+| `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` · `POST /admin/users/{id}/ban` | `{ amount, reason }` · `{ reason, banned }`                                  |                                          |
+| `GET /admin/users`                                                                                                        | `q`                                                                          | `{ items }`                              |
+| `GET /admin/dlq` · `POST /admin/dlq/{id}/replay`                                                                          |                                                                              |                                          |
+| `GET /admin/audit`                                                                                                        | `cursor`                                                                     | `{ items, nextCursor }`                  |
 
 Error codes add to the OpenAPI enum: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
 `VALIDATION_FAILED`, `BANNED`, `IDEMPOTENCY_KEY_REQUIRED`,
@@ -304,42 +462,42 @@ Error codes add to the OpenAPI enum: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
 Authenticated by the `ars_refresh` cookie; anonymous connections get public
 events only. Events (`event:` name, `data:` JSON):
 
-| Event | Data |
-|---|---|
-| `snapshot` | `{ race: Race (with entrants), tick: RaceTick \| null, markets: Market[], myBets: Bet[] }` |
-| `race.lifecycle` | `{ status, at }` |
-| `race.tick` | `{ tick, lap, entrants: TickEntrant[], events: TickEvent[] }` |
-| `race.lap` | `{ lap, leaderEntrantId, standings }` |
-| `market.opened` | `Market` |
-| `market.price` | `{ marketId, priceVersion, tick, selections: Selection[] }` |
-| `market.suspended` / `market.resumed` / `market.closed` | `{ marketId, tick, reason? , priceVersion? }` |
-| `market.resulted` | `{ marketId, winning: string[], order: string[] }` |
-| `market.voided` | `{ marketId, reason }` |
-| `bet.updated` | `Bet` |
-| `cashout.updated` | `{ betId, amount, quoteId, expiresAtTick }` |
-| `notification` | `{ notification: Notification, unreadCount }` |
-| `ping` | `{}` |
+| Event                                                   | Data                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `snapshot`                                              | `{ race: Race (with entrants), tick: RaceTick \| null, markets: Market[], myBets: Bet[] }` |
+| `race.lifecycle`                                        | `{ status, at }`                                                                           |
+| `race.tick`                                             | `{ tick, lap, entrants: TickEntrant[], events: TickEvent[] }`                              |
+| `race.lap`                                              | `{ lap, leaderEntrantId, standings }`                                                      |
+| `market.opened`                                         | `Market`                                                                                   |
+| `market.price`                                          | `{ marketId, priceVersion, tick, selections: Selection[] }`                                |
+| `market.suspended` / `market.resumed` / `market.closed` | `{ marketId, tick, reason? , priceVersion? }`                                              |
+| `market.resulted`                                       | `{ marketId, winning: string[], order: string[] }`                                         |
+| `market.voided`                                         | `{ marketId, reason }`                                                                     |
+| `bet.updated`                                           | `Bet`                                                                                      |
+| `cashout.updated`                                       | `{ betId, amount, quoteId, expiresAtTick }`                                                |
+| `notification`                                          | `{ notification: Notification, unreadCount }`                                              |
+| `ping`                                                  | `{}`                                                                                       |
 
 ## 11. Decisions and deviations from the design docs
 
-| Topic | What the code does | Why |
-|---|---|---|
-| Kafka partitioning | Rust producers use librdkafka's `murmur2_random` partitioner (Java-compatible, same as kafkajs) | Otherwise the scheduler's and broadcaster's events for one race land on different `race.lifecycle` partitions and lose their order |
-| Ledger | Extra entry type `BET_LOST` (amount 0) when a bet loses | Every wallet change emits `LedgerEntryAppended` with `balanceAfter` and `openStakeAfter`, so leaderboards can track `rankScore = balance + open_stake` from one topic |
-| Live ticks | `GET /races/{id}/ticks` and `/script` serve only FINISHED/SETTLED races (409 before) | `platform.md` §6: no catch-up for live races; late joiners get the SSE snapshot |
-| Pre-race markets at lock | FINISH_POSITION / TOP_N are `SUSPENDED` (reason `LOCK`) between `startAt − 60 s` and the start, then resume in-running; TRICAST closes at lock | Makes the betting window visible in market state as well as race state |
-| Suspensions | Any incident suspends open in-running markets for 4 ticks; an overtake by a top-3 runner for 2 ticks; leader-at-lap markets close 6 ticks before their checkpoint | `betting-design.md` §5 |
-| Final lap | The engine emits `LAP` and the broadcaster `LapCompleted` for the final lap too | Its leader is the as-run winner; leader-at-lap markets never use it |
-| Engine params hash | SHA-256 of the canonical params JSON (sorted keys, compact) | The file and the JSONB copy hash identically |
-| Animal stats | Base stats within ≈ ±3 % per species and ageing within ≈ ±2.5 % (`shared/species.json`) | A 5 % top-speed edge already gives ≈ 40 % win share in an 8-runner field |
-| Broadcaster discovery | Polls Postgres (1 Hz) with an advisory-lock leader instead of consuming `race.lifecycle` | Standby takeover and wall-clock resume without partition-assignment coupling |
-| Admin commands | Schedule, cancel and market suspend/resume/void are commands on `race.commands`; the API answers 202 | Owning services stay the only writers of their state |
-| Unread counter | `notif:unread:{userId}` is maintained, but the API returns exact counts from Postgres | Counts never drift; Redis stays rebuildable |
-| Scheduler horizon | `SCHEDULER_MAX_HORIZON_HOURS` caps the programme horizon (dev compose: 2 h, CI: 1 h, production: the programme's 24 h) | Keeps local and CI start-up light |
-| SSE extras | `race.lifecycle` adds `order` on FINISHED and `reason` on CANCELLED | Lets the client render results without a refetch |
-| Odds env | `ODDS_STALE_MS` (default 2500) drops stale ticks after a restart; live repricing is coalesced per race | Keeps the odds engine current under load |
-| Engine logging | The Rust services log through `tracing` with a hand-written JSON layer instead of the old `log` module | Same field names and order as the TypeScript services, plus trace ids |
-| Broadcaster resume log | "resumed at tick N" logs the wall-clock tick, not one capped at the finish tick | The capped value revealed the finish tick after a late restart |
+| Topic                    | What the code does                                                                                                                                                | Why                                                                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kafka partitioning       | Rust producers use librdkafka's `murmur2_random` partitioner (Java-compatible, same as kafkajs)                                                                   | Otherwise the scheduler's and broadcaster's events for one race land on different `race.lifecycle` partitions and lose their order                                    |
+| Ledger                   | Extra entry type `BET_LOST` (amount 0) when a bet loses                                                                                                           | Every wallet change emits `LedgerEntryAppended` with `balanceAfter` and `openStakeAfter`, so leaderboards can track `rankScore = balance + open_stake` from one topic |
+| Live ticks               | `GET /races/{id}/ticks` and `/script` serve only FINISHED/SETTLED races (409 before)                                                                              | `platform.md` §6: no catch-up for live races; late joiners get the SSE snapshot                                                                                       |
+| Pre-race markets at lock | FINISH_POSITION / TOP_N are `SUSPENDED` (reason `LOCK`) between `startAt − 60 s` and the start, then resume in-running; TRICAST closes at lock                    | Makes the betting window visible in market state as well as race state                                                                                                |
+| Suspensions              | Any incident suspends open in-running markets for 4 ticks; an overtake by a top-3 runner for 2 ticks; leader-at-lap markets close 6 ticks before their checkpoint | `betting-design.md` §5                                                                                                                                                |
+| Final lap                | The engine emits `LAP` and the broadcaster `LapCompleted` for the final lap too                                                                                   | Its leader is the as-run winner; leader-at-lap markets never use it                                                                                                   |
+| Engine params hash       | SHA-256 of the canonical params JSON (sorted keys, compact)                                                                                                       | The file and the JSONB copy hash identically                                                                                                                          |
+| Animal stats             | Base stats within ≈ ±3 % per species and ageing within ≈ ±2.5 % (`shared/species.json`)                                                                           | A 5 % top-speed edge already gives ≈ 40 % win share in an 8-runner field                                                                                              |
+| Broadcaster discovery    | Polls Postgres (1 Hz) with an advisory-lock leader instead of consuming `race.lifecycle`                                                                          | Standby takeover and wall-clock resume without partition-assignment coupling                                                                                          |
+| Admin commands           | Schedule, cancel and market suspend/resume/void are commands on `race.commands`; the API answers 202                                                              | Owning services stay the only writers of their state                                                                                                                  |
+| Unread counter           | `notif:unread:{userId}` is maintained, but the API returns exact counts from Postgres                                                                             | Counts never drift; Redis stays rebuildable                                                                                                                           |
+| Scheduler horizon        | `SCHEDULER_MAX_HORIZON_HOURS` caps the programme horizon (dev compose: 2 h, CI: 1 h, production: the programme's 24 h)                                            | Keeps local and CI start-up light                                                                                                                                     |
+| SSE extras               | `race.lifecycle` adds `order` on FINISHED and `reason` on CANCELLED                                                                                               | Lets the client render results without a refetch                                                                                                                      |
+| Odds env                 | `ODDS_STALE_MS` (default 2500) drops stale ticks after a restart; live repricing is coalesced per race                                                            | Keeps the odds engine current under load                                                                                                                              |
+| Engine logging           | The Rust services log through `tracing` with a hand-written JSON layer instead of the old `log` module                                                            | Same field names and order as the TypeScript services, plus trace ids                                                                                                 |
+| Broadcaster resume log   | "resumed at tick N" logs the wall-clock tick, not one capped at the finish tick                                                                                   | The capped value revealed the finish tick after a late restart                                                                                                        |
 
 ## 12. Telemetry
 

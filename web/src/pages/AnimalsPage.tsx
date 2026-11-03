@@ -1,7 +1,15 @@
 import { AgingChart } from '../components/charts';
 import { Empty, ErrorNotice, Form, Loading, Pager, StatBars } from '../components/ui';
 import { api, qs } from '../lib/api';
-import { CLASS_LABEL, fmtDateTime, fmtRelative, fmtStat, SPECIES_ICON, TEMPERAMENT_LABEL, titleCase } from '../lib/format';
+import {
+  CLASS_LABEL,
+  fmtDateTime,
+  fmtRelative,
+  fmtStat,
+  SPECIES_ICON,
+  TEMPERAMENT_LABEL,
+  titleCase,
+} from '../lib/format';
 import { useAsync, usePaged } from '../lib/hooks';
 import { Link, setQuery, useLocation } from '../lib/router';
 import type { Animal, AnimalHistoryItem, AnimalSummary, Page } from '../lib/types';
@@ -14,7 +22,12 @@ function pct(part: number, whole: number): string {
 
 export function AnimalCard({ animal }: { animal: AnimalSummary }) {
   return (
-    <Link to={`/animals/${animal.id}`} className="card animal-card" data-testid="animal-card" data-animal-id={animal.id}>
+    <Link
+      to={`/animals/${animal.id}`}
+      className="card animal-card"
+      data-testid="animal-card"
+      data-animal-id={animal.id}
+    >
       <div className="animal-head">
         <span className="animal-icon">{SPECIES_ICON[animal.species]}</span>
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -23,7 +36,11 @@ export function AnimalCard({ animal }: { animal: AnimalSummary }) {
             {titleCase(animal.lifeStage)} · {age(animal.ageWeeks)} · {TEMPERAMENT_LABEL[animal.temperament]}
           </div>
         </div>
-        {animal.status === 'RETIRED' ? <span className="chip grey">Retired</span> : animal.restingUntil ? <span className="chip blue">Resting</span> : null}
+        {animal.status === 'RETIRED' ? (
+          <span className="chip grey">Retired</span>
+        ) : animal.restingUntil ? (
+          <span className="chip blue">Resting</span>
+        ) : null}
       </div>
       <StatBars stats={animal.current} />
       <div className="row">
@@ -41,14 +58,22 @@ export function AnimalsPage() {
   const { query } = useLocation();
   const species = query.get('species') ?? '';
   const status = query.get('status') ?? 'ACTIVE';
-  const paged = usePaged((cursor) => api<Page<AnimalSummary>>(`/v1/animals${qs({ species, status: status === 'ALL' ? null : status, cursor, limit: 30 })}`), [species, status]);
+  const paged = usePaged(
+    (cursor) =>
+      api<Page<AnimalSummary>>(
+        `/v1/animals${qs({ species, status: status === 'ALL' ? null : status, cursor, limit: 30 })}`,
+      ),
+    [species, status],
+  );
   return (
     <div>
       <div className="page-head">
         <div>
           <div className="eyebrow">The stable</div>
           <h1>Animals</h1>
-          <p>Every stat is public. Animals age one week per real day, peak in their prime and retire after five seasons.</p>
+          <p>
+            Every stat is public. Animals age one week per real day, peak in their prime and retire after five seasons.
+          </p>
         </div>
       </div>
       <div className="filters">
@@ -58,7 +83,11 @@ export function AnimalsPage() {
             ['HORSE', '🐎 Horses'],
             ['GIRAFFE', '🦒 Giraffes'],
           ].map(([value, label]) => (
-            <button key={value} className={species === value ? 'active' : ''} onClick={() => setQuery({ species: value || null })}>
+            <button
+              key={value}
+              className={species === value ? 'active' : ''}
+              onClick={() => setQuery({ species: value || null })}
+            >
               {label}
             </button>
           ))}
@@ -69,7 +98,11 @@ export function AnimalsPage() {
             ['RETIRED', 'Retired'],
             ['ALL', 'Everyone'],
           ].map(([value, label]) => (
-            <button key={value} className={status === value ? 'active' : ''} onClick={() => setQuery({ status: value === 'ACTIVE' ? null : value })}>
+            <button
+              key={value}
+              className={status === value ? 'active' : ''}
+              onClick={() => setQuery({ status: value === 'ACTIVE' ? null : value })}
+            >
               {label}
             </button>
           ))}
@@ -94,7 +127,10 @@ export function AnimalsPage() {
 
 export function AnimalPage({ id }: { id: string }) {
   const animal = useAsync(() => api<Animal>(`/v1/animals/${id}`), [id]);
-  const history = usePaged((cursor) => api<Page<AnimalHistoryItem>>(`/v1/animals/${id}/history${qs({ cursor, limit: 20 })}`), [id]);
+  const history = usePaged(
+    (cursor) => api<Page<AnimalHistoryItem>>(`/v1/animals/${id}/history${qs({ cursor, limit: 20 })}`),
+    [id],
+  );
   if (animal.error) return <ErrorNotice error={animal.error} onRetry={animal.reload} />;
   if (!animal.data) return <Loading />;
   const a = animal.data;
@@ -109,8 +145,11 @@ export function AnimalPage({ id }: { id: string }) {
             <span className="animal-icon">{SPECIES_ICON[a.species]}</span> {a.name}
           </h1>
           <p>
-            {titleCase(a.lifeStage)} · {age(a.ageWeeks)} old · career day {a.careerDay} · {TEMPERAMENT_LABEL[a.temperament]}
-            {a.status === 'RETIRED' ? ` · retired ${fmtDateTime(a.retiredAt)}${a.retireReason ? ` (${titleCase(a.retireReason)})` : ''}` : ''}
+            {titleCase(a.lifeStage)} · {age(a.ageWeeks)} old · career day {a.careerDay} ·{' '}
+            {TEMPERAMENT_LABEL[a.temperament]}
+            {a.status === 'RETIRED'
+              ? ` · retired ${fmtDateTime(a.retiredAt)}${a.retireReason ? ` (${titleCase(a.retireReason)})` : ''}`
+              : ''}
             {a.restingUntil ? ` · resting until ${fmtDateTime(a.restingUntil)}` : ''}
           </p>
         </div>
@@ -246,7 +285,13 @@ export function AnimalPage({ id }: { id: string }) {
                     </td>
                     <td className="right num">
                       {item.resultStatus && item.resultStatus !== 'FINISHED' ? (
-                        <span className="chip red">{item.resultStatus === 'DISQUALIFIED' ? 'DQ' : item.resultStatus === 'NON_RUNNER' ? 'NR' : item.resultStatus}</span>
+                        <span className="chip red">
+                          {item.resultStatus === 'DISQUALIFIED'
+                            ? 'DQ'
+                            : item.resultStatus === 'NON_RUNNER'
+                              ? 'NR'
+                              : item.resultStatus}
+                        </span>
                       ) : (
                         <>
                           <b>{item.position ?? '—'}</b>
@@ -267,4 +312,3 @@ export function AnimalPage({ id }: { id: string }) {
     </div>
   );
 }
-

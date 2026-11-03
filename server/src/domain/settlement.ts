@@ -2,7 +2,9 @@ import { payoutFor, product, round4 } from './pricing.ts';
 
 export type LegState = { status: 'OPEN' | 'WON' | 'LOST' | 'VOID'; lockedPrice: number };
 
-export type ComboOutcome = { status: 'OPEN' } | { status: 'WON' | 'LOST' | 'VOID'; payout: number; effectivePrice: number };
+export type ComboOutcome =
+  | { status: 'OPEN' }
+  | { status: 'WON' | 'LOST' | 'VOID'; payout: number; effectivePrice: number };
 
 export function foldCombo(stake: number, legs: readonly LegState[]): ComboOutcome {
   if (legs.some((leg) => leg.status === 'LOST')) return { status: 'LOST', payout: 0, effectivePrice: 0 };
@@ -12,7 +14,11 @@ export function foldCombo(stake: number, legs: readonly LegState[]): ComboOutcom
   return { status: 'WON', payout: payoutFor(stake, effectivePrice), effectivePrice };
 }
 
-export function singleOutcome(stake: number, lockedPrice: number, legStatus: 'WON' | 'LOST' | 'VOID'): { status: 'WON' | 'LOST' | 'VOID'; payout: number } {
+export function singleOutcome(
+  stake: number,
+  lockedPrice: number,
+  legStatus: 'WON' | 'LOST' | 'VOID',
+): { status: 'WON' | 'LOST' | 'VOID'; payout: number } {
   if (legStatus === 'WON') return { status: 'WON', payout: payoutFor(stake, lockedPrice) };
   if (legStatus === 'VOID') return { status: 'VOID', payout: stake };
   return { status: 'LOST', payout: 0 };

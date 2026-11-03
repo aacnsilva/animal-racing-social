@@ -1,7 +1,18 @@
 import { hostname } from 'node:os';
 import {
-  context, metrics, propagation, ROOT_CONTEXT, SpanKind, SpanStatusCode, trace,
-  type Attributes, type Context, type Counter, type Histogram, type Link, type Span,
+  context,
+  metrics,
+  propagation,
+  ROOT_CONTEXT,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+  type Attributes,
+  type Context,
+  type Counter,
+  type Histogram,
+  type Link,
+  type Span,
 } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
@@ -22,18 +33,26 @@ export function telemetryEnabled(): boolean {
 
 export function initTelemetry(service: string): void {
   if (tracerProvider) return;
-  const resource = resourceFromAttributes({ 'service.name': service, 'service.instance.id': hostname() })
-    .merge(detectResources({ detectors: [envDetector] }));
+  const resource = resourceFromAttributes({ 'service.name': service, 'service.instance.id': hostname() }).merge(
+    detectResources({ detectors: [envDetector] }),
+  );
   const enabled = telemetryEnabled();
   tracerProvider = new NodeTracerProvider({
     resource,
-    spanProcessors: enabled ? [new BatchSpanProcessor(new OTLPTraceExporter(), { maxQueueSize: 4096, scheduledDelayMillis: 1000 })] : [],
+    spanProcessors: enabled
+      ? [new BatchSpanProcessor(new OTLPTraceExporter(), { maxQueueSize: 4096, scheduledDelayMillis: 1000 })]
+      : [],
   });
   tracerProvider.register({ propagator: new W3CTraceContextPropagator() });
   if (enabled) {
     meterProvider = new MeterProvider({
       resource,
-      readers: [new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter(), exportIntervalMillis: Number(process.env.OTEL_METRIC_EXPORT_INTERVAL ?? 15_000) })],
+      readers: [
+        new PeriodicExportingMetricReader({
+          exporter: new OTLPMetricExporter(),
+          exportIntervalMillis: Number(process.env.OTEL_METRIC_EXPORT_INTERVAL ?? 15_000),
+        }),
+      ],
     });
     metrics.setGlobalMeterProvider(meterProvider);
   }
@@ -56,22 +75,31 @@ export type SpanOptions = {
 };
 
 export async function withSpan<T>(name: string, options: SpanOptions, fn: (span: Span) => Promise<T>): Promise<T> {
-  const parent = options.root ? ROOT_CONTEXT : options.parent ?? context.active();
-  return tracer().startActiveSpan(name, { kind: options.kind ?? SpanKind.INTERNAL, attributes: options.attributes, links: options.links }, parent, async (span) => {
-    try {
-      return await fn(span);
-    } catch (error) {
-      failSpan(span, error);
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+  const parent = options.root ? ROOT_CONTEXT : (options.parent ?? context.active());
+  return tracer().startActiveSpan(
+    name,
+    { kind: options.kind ?? SpanKind.INTERNAL, attributes: options.attributes, links: options.links },
+    parent,
+    async (span) => {
+      try {
+        return await fn(span);
+      } catch (error) {
+        failSpan(span, error);
+        throw error;
+      } finally {
+        span.end();
+      }
+    },
+  );
 }
 
 export function startSpan(name: string, options: SpanOptions = {}): Span {
-  const parent = options.root ? ROOT_CONTEXT : options.parent ?? context.active();
-  return tracer().startSpan(name, { kind: options.kind ?? SpanKind.INTERNAL, attributes: options.attributes, links: options.links }, parent);
+  const parent = options.root ? ROOT_CONTEXT : (options.parent ?? context.active());
+  return tracer().startSpan(
+    name,
+    { kind: options.kind ?? SpanKind.INTERNAL, attributes: options.attributes, links: options.links },
+    parent,
+  );
 }
 
 export function failSpan(span: Span, error: unknown): void {
@@ -81,7 +109,9 @@ export function failSpan(span: Span, error: unknown): void {
 
 export function activeSpan(): Span | undefined {
   const span = trace.getActiveSpan();
-  return span && span.spanContext().traceFlags !== undefined && trace.isSpanContextValid(span.spanContext()) ? span : undefined;
+  return span && span.spanContext().traceFlags !== undefined && trace.isSpanContextValid(span.spanContext())
+    ? span
+    : undefined;
 }
 
 export function tracing(): boolean {
@@ -125,7 +155,13 @@ export function hasRemoteParent(ctx: Context): boolean {
 export function setIdAttributes(span: Span, value: unknown): void {
   if (!value || typeof value !== 'object') return;
   const record = value as Record<string, unknown>;
-  for (const [field, attribute] of [['raceId', 'ars.race_id'], ['betId', 'ars.bet_id'], ['marketId', 'ars.market_id'], ['userId', 'ars.user_id'], ['seasonId', 'ars.season_id']] as const) {
+  for (const [field, attribute] of [
+    ['raceId', 'ars.race_id'],
+    ['betId', 'ars.bet_id'],
+    ['marketId', 'ars.market_id'],
+    ['userId', 'ars.user_id'],
+    ['seasonId', 'ars.season_id'],
+  ] as const) {
     const id = record[field];
     if (typeof id === 'string' && id !== '' && id !== '0') span.setAttribute(attribute, id);
   }
@@ -144,14 +180,21 @@ function lazy<T>(key: string, create: () => T): T {
 }
 
 export function histogram(name: string, unit: string, description: string, buckets: number[]): Histogram {
-  return lazy(name, () => meter().createHistogram(name, { unit, description, advice: { explicitBucketBoundaries: buckets } }));
+  return lazy(name, () =>
+    meter().createHistogram(name, { unit, description, advice: { explicitBucketBoundaries: buckets } }),
+  );
 }
 
 export function counter(name: string, description: string): Counter {
   return lazy(name, () => meter().createCounter(name, { description }));
 }
 
-export function gauge(name: string, description: string, unit: string, read: () => Promise<{ value: number; attributes?: Attributes }[]>): void {
+export function gauge(
+  name: string,
+  description: string,
+  unit: string,
+  read: () => Promise<{ value: number; attributes?: Attributes }[]>,
+): void {
   lazy(name, () => {
     const instrument = meter().createObservableGauge(name, { description, unit });
     instrument.addCallback(async (result) => {

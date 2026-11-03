@@ -4,7 +4,8 @@ import { fmtClock, fmtCountdown } from '../lib/format';
 import { readLocal, writeLocal } from '../lib/hooks';
 import type { Race, RaceTick, Venue } from '../lib/types';
 import { eventText, nameLookup, type Tone } from './events';
-import { LivePlayback, ReplayPlayback, StaticPlayback, type FrameSource } from './playback';
+import type { ReplayPlayback } from './playback';
+import { LivePlayback, StaticPlayback, type FrameSource } from './playback';
 import type { CameraMode, RaceScene } from './scene';
 import type { FeedItem, RaceStream } from './stream';
 
@@ -31,7 +32,11 @@ function ReplayBar({ replay, onExit }: { replay: ReplayPlayback; onExit: () => v
   );
   return (
     <div className="replay-bar">
-      <button className="btn small" onClick={() => (playing ? replay.pause() : replay.play())} aria-label={playing ? 'Pause' : 'Play'}>
+      <button
+        className="btn small"
+        onClick={() => (playing ? replay.pause() : replay.play())}
+        aria-label={playing ? 'Pause' : 'Play'}
+      >
         {playing ? '❚❚' : '▶'}
       </button>
       <input
@@ -148,8 +153,17 @@ export function RaceViewer({
         entrants.map((e) => ({
           id: e.entrantId,
           lane: e.lane,
-          dist: e.result ? (e.result.resultStatus === 'FINISHED' || e.result.resultStatus === 'DISQUALIFIED' ? totalLength : e.result.distanceCovered) : 0,
-          state: e.result && (e.result.resultStatus === 'DNF' || e.result.resultStatus === 'NON_RUNNER') ? 'DNF' : e.result ? 'FINISHED' : 'RUNNING',
+          dist: e.result
+            ? e.result.resultStatus === 'FINISHED' || e.result.resultStatus === 'DISQUALIFIED'
+              ? totalLength
+              : e.result.distanceCovered
+            : 0,
+          state:
+            e.result && (e.result.resultStatus === 'DNF' || e.result.resultStatus === 'NON_RUNNER')
+              ? 'DNF'
+              : e.result
+                ? 'FINISHED'
+                : 'RUNNING',
           pos: e.result?.officialPosition,
         })),
       );
@@ -201,7 +215,9 @@ export function RaceViewer({
           <div className="stack" style={{ alignItems: 'center', maxWidth: 420 }}>
             <div style={{ fontSize: '2rem' }}>🏟️</div>
             <b>3D view unavailable</b>
-            <span className="small">Your browser could not start WebGL ({webglError}). Live standings, the race feed and betting keep working.</span>
+            <span className="small">
+              Your browser could not start WebGL ({webglError}). Live standings, the race feed and betting keep working.
+            </span>
           </div>
         </div>
       )}
@@ -222,13 +238,27 @@ export function RaceViewer({
                 Lap {lap}/{race.laps}
               </span>
             )}
-            {replay && <span className="chip gold" style={{ marginLeft: 8 }}>Replay</span>}
-            {!replay && race.status === 'LIVE' && <span className="status status-LIVE" style={{ marginLeft: 8 }}>LIVE</span>}
+            {replay && (
+              <span className="chip gold" style={{ marginLeft: 8 }}>
+                Replay
+              </span>
+            )}
+            {!replay && race.status === 'LIVE' && (
+              <span className="status status-LIVE" style={{ marginLeft: 8 }}>
+                LIVE
+              </span>
+            )}
           </div>
           {!webglError && (
             <div className="hud-cams" role="group" aria-label="Camera">
               {CAMERAS.map((camera) => (
-                <button key={camera.mode} className={mode === camera.mode ? 'active' : ''} onClick={() => chooseMode(camera.mode)} aria-label={camera.label} title={camera.label}>
+                <button
+                  key={camera.mode}
+                  className={mode === camera.mode ? 'active' : ''}
+                  onClick={() => chooseMode(camera.mode)}
+                  aria-label={camera.label}
+                  title={camera.label}
+                >
                   <span className="hide-sm">{camera.label}</span>
                   <span className="show-sm">{camera.short}</span>
                 </button>
@@ -285,5 +315,7 @@ export function RaceViewer({
 }
 
 export function useReplayTick(replay: ReplayPlayback | null): RaceTick | null {
-  return useSyncExternalStore(replay ? (listener) => replay.subscribe(listener) : noopSubscribe, () => (replay ? replay.tickAt(replay.positionMs) : null));
+  return useSyncExternalStore(replay ? (listener) => replay.subscribe(listener) : noopSubscribe, () =>
+    replay ? replay.tickAt(replay.positionMs) : null,
+  );
 }

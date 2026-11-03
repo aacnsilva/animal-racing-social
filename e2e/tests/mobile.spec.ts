@@ -7,7 +7,8 @@ async function overflowingElements(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const width = document.documentElement.clientWidth;
     const found: string[] = [];
-    if (document.documentElement.scrollWidth > width) found.push(`document scrollWidth ${document.documentElement.scrollWidth} > ${width}`);
+    if (document.documentElement.scrollWidth > width)
+      found.push(`document scrollWidth ${document.documentElement.scrollWidth} > ${width}`);
     for (const element of document.querySelectorAll<HTMLElement>('body *')) {
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height || (rect.left >= -1 && rect.right <= width + 1)) continue;
@@ -22,7 +23,9 @@ async function overflowingElements(page: Page): Promise<string[]> {
       }
       if (scrollable) continue;
       const testId = element.dataset.testid ? `[data-testid="${element.dataset.testid}"]` : '';
-      found.push(`${element.tagName.toLowerCase()}.${String(element.className).trim().replace(/\s+/g, '.')}${testId} spans ${Math.round(rect.left)}..${Math.round(rect.right)}`);
+      found.push(
+        `${element.tagName.toLowerCase()}.${String(element.className).trim().replace(/\s+/g, '.')}${testId} spans ${Math.round(rect.left)}..${Math.round(rect.right)}`,
+      );
     }
     return found.slice(0, 10);
   });
@@ -34,12 +37,19 @@ async function expectFitsScreen(page: Page, label: string) {
 
 async function expectTouchFriendly(page: Page, label: string) {
   const small = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>('.btn, .price, .tabs button, .tabs a, .race-tabs button, .tabbar a, .tabbar button, .hud-cams button')]
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '.btn, .price, .tabs button, .tabs a, .race-tabs button, .tabbar a, .tabbar button, .hud-cams button',
+      ),
+    ]
       .filter((element) => {
         const rect = element.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0 && rect.height < 30;
       })
-      .map((element) => `${element.className} "${element.textContent?.trim().slice(0, 20)}" ${Math.round(element.getBoundingClientRect().height)}px`),
+      .map(
+        (element) =>
+          `${element.className} "${element.textContent?.trim().slice(0, 20)}" ${Math.round(element.getBoundingClientRect().height)}px`,
+      ),
   );
   expect(small, `${label} has tap targets under 30px`).toEqual([]);
 }

@@ -45,8 +45,8 @@ export function matchPath(pattern: string, path: string): Record<string, string>
   if (patternParts.length !== pathParts.length) return null;
   const params: Record<string, string> = {};
   for (let i = 0; i < patternParts.length; i += 1) {
-    const part = patternParts[i]!;
-    const value = pathParts[i]!;
+    const part = patternParts[i];
+    const value = pathParts[i];
     if (part.startsWith(':')) params[part.slice(1)] = decodeURIComponent(value);
     else if (part !== value) return null;
   }
@@ -58,7 +58,15 @@ type LinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; replace
 export function Link({ to, replace, onClick, ...rest }: LinkProps) {
   const handle = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
     if (rest.target && rest.target !== '_self') return;
     event.preventDefault();
     navigate(to, { replace });

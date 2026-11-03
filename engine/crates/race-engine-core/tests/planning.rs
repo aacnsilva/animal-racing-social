@@ -12,7 +12,8 @@ fn every_venue_and_species_plans_inside_its_class_window() {
             let window = params.params.classes[&venue.class];
             assert!(plan.laps >= venue.laps_range[0] && plan.laps <= venue.laps_range[1]);
             assert!(
-                plan.median_duration_sec >= window.min_sec && plan.median_duration_sec <= window.max_sec,
+                plan.median_duration_sec >= window.min_sec
+                    && plan.median_duration_sec <= window.max_sec,
                 "{} {} laps {} median {:.0}s outside {}-{}",
                 venue.id,
                 species,

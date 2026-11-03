@@ -26,20 +26,42 @@ export function venueJson(row: Record<string, any>) {
   };
 }
 
-async function namesFor(deps: Deps, userIds: string[]): Promise<Map<string, { displayName: string; avatarUrl: string | null }>> {
+async function namesFor(
+  deps: Deps,
+  userIds: string[],
+): Promise<Map<string, { displayName: string; avatarUrl: string | null }>> {
   if (userIds.length === 0) return new Map();
-  const rows = await many(deps.pool, 'SELECT user_id, display_name, avatar_url FROM identity.users WHERE user_id = ANY($1)', [userIds]);
+  const rows = await many(
+    deps.pool,
+    'SELECT user_id, display_name, avatar_url FROM identity.users WHERE user_id = ANY($1)',
+    [userIds],
+  );
   return new Map(rows.map((row) => [row.user_id, { displayName: row.display_name, avatarUrl: row.avatar_url }]));
 }
 
-async function leaderboard(deps: Deps, season: SeasonRow, board: Board, limit: number, me: string | null, around: boolean) {
+async function leaderboard(
+  deps: Deps,
+  season: SeasonRow,
+  board: Board,
+  limit: number,
+  me: string | null,
+  around: boolean,
+) {
   let entries: { rank: number; userId: string; score: number }[];
   let mine: { rank: number; userId: string; score: number } | null = null;
   if (season.status === 'ENDED') {
-    const rows = await many(deps.pool, 'SELECT rank, user_id, score FROM season.season_results WHERE season_id = $1 AND board = $2 ORDER BY rank LIMIT $3', [season.season_id, board, limit]);
+    const rows = await many(
+      deps.pool,
+      'SELECT rank, user_id, score FROM season.season_results WHERE season_id = $1 AND board = $2 ORDER BY rank LIMIT $3',
+      [season.season_id, board, limit],
+    );
     entries = rows.map((row) => ({ rank: row.rank, userId: row.user_id, score: Number(row.score) }));
     if (me) {
-      const row = await one(deps.pool, 'SELECT rank, user_id, score FROM season.season_results WHERE season_id = $1 AND board = $2 AND user_id = $3', [season.season_id, board, me]);
+      const row = await one(
+        deps.pool,
+        'SELECT rank, user_id, score FROM season.season_results WHERE season_id = $1 AND board = $2 AND user_id = $3',
+        [season.season_id, board, me],
+      );
       mine = row ? { rank: row.rank, userId: row.user_id, score: Number(row.score) } : null;
     }
   } else {
@@ -80,7 +102,9 @@ export function catalogRoutes(router: Router, deps: Deps): void {
   });
 
   router.get('/v1/seasons/:seasonId/leaderboards/:board', async (ctx) => {
-    const season = await one<SeasonRow>(deps.pool, 'SELECT * FROM season.seasons WHERE season_id = $1', [pathId(ctx, 'seasonId')]);
+    const season = await one<SeasonRow>(deps.pool, 'SELECT * FROM season.seasons WHERE season_id = $1', [
+      pathId(ctx, 'seasonId'),
+    ]);
     if (!season) throw new ApiError(404, 'NOT_FOUND', 'Unknown season');
     const board = v.oneOf(ctx.params.board, 'board', BOARDS);
     const limit = ctx.query.get('limit') ? v.int(ctx.query.get('limit'), 'limit', { min: 1, max: 200 }) : 50;
@@ -94,7 +118,7 @@ export function catalogRoutes(router: Router, deps: Deps): void {
       [ctx.query.get('class')],
     );
     const order = { SPRINT: 0, STANDARD: 1, ENDURANCE: 2 } as Record<string, number>;
-    return rows.map(venueJson).sort((a, b) => (order[a.class]! - order[b.class]!) || a.name.localeCompare(b.name));
+    return rows.map(venueJson).sort((a, b) => order[a.class] - order[b.class] || a.name.localeCompare(b.name));
   });
 
   router.get('/v1/venues/:venueId', async (ctx) => {
@@ -118,14 +142,20 @@ export function catalogRoutes(router: Router, deps: Deps): void {
        ORDER BY r.start_at DESC, r.race_id DESC LIMIT $4`,
       [ctx.params.venueId, cursor?.[0] ?? null, cursor?.[1] ?? '0', limit + 1],
     );
-    return page(rows.map((row) => raceJson(row)), limit, (race) => [race.startAt!, race.id]);
+    return page(
+      rows.map((row) => raceJson(row)),
+      limit,
+      (race) => [race.startAt!, race.id],
+    );
   });
 
   router.get('/v1/animals', async (ctx) => {
     const limit = pageLimit(ctx.query, 50);
     const cursor = decodeCursor(ctx.query.get('cursor'));
     const status = ctx.query.get('status') ? v.oneOf(ctx.query.get('status'), 'status', ['ACTIVE', 'RETIRED']) : null;
-    const species = ctx.query.get('species') ? v.oneOf(ctx.query.get('species'), 'species', ['HORSE', 'GIRAFFE']) : null;
+    const species = ctx.query.get('species')
+      ? v.oneOf(ctx.query.get('species'), 'species', ['HORSE', 'GIRAFFE'])
+      : null;
     const rows = await many(
       deps.pool,
       `SELECT * FROM stable.animals WHERE ($1::text IS NULL OR species = $1) AND ($2::text IS NULL OR status = $2)
@@ -146,7 +176,9 @@ export function catalogRoutes(router: Router, deps: Deps): void {
        FROM stable.animal_venue_form f WHERE f.animal_id = $1 ORDER BY f.wins DESC, f.races DESC`,
       [animalId],
     );
-    const aging = await many(deps.pool, 'SELECT * FROM stable.animal_daily_stats WHERE animal_id = $1 ORDER BY day', [animalId]);
+    const aging = await many(deps.pool, 'SELECT * FROM stable.animal_daily_stats WHERE animal_id = $1 ORDER BY day', [
+      animalId,
+    ]);
     return animalDetail(row, venueForm, aging);
   });
 
@@ -177,7 +209,10 @@ export function catalogRoutes(router: Router, deps: Deps): void {
         venueName: row.venue_name,
         position: row.official_position,
         resultStatus: row.result_status,
-        timeSec: row.finish_time_ms === null || !['FINISHED', 'DISQUALIFIED'].includes(row.result_status) ? null : row.finish_time_ms / 1000,
+        timeSec:
+          row.finish_time_ms === null || !['FINISHED', 'DISQUALIFIED'].includes(row.result_status)
+            ? null
+            : row.finish_time_ms / 1000,
         lapsLed: row.laps_led ?? [],
         statsSnapshot: row.stats_snapshot,
         fieldSize: row.field_size,

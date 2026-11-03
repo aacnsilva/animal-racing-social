@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22.18"
-  },
   "scripts": {
     "gen": "node scripts/gen-proto.ts",
     "typecheck": "tsc --noEmit -p .",
@@ -32,5 +29,8 @@
     "@types/pg": "8.23.1",
     "ts-proto": "2.18.3",
     "typescript": "6.0.2"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

@@ -29,7 +29,13 @@ export function useStore<T>(store: Store<T>): T {
   return useSyncExternalStore(store.subscribe, store.get);
 }
 
-export type AsyncState<T> = { data: T | null; error: unknown; loading: boolean; reload: () => void; setData: (data: T | null) => void };
+export type AsyncState<T> = {
+  data: T | null;
+  error: unknown;
+  loading: boolean;
+  reload: () => void;
+  setData: (data: T | null) => void;
+};
 
 export function useAsync<T>(load: (signal: AbortSignal) => Promise<T>, deps: unknown[]): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
@@ -162,10 +168,13 @@ export function writeLocal(key: string, value: unknown): void {
 }
 
 export function useMediaQuery(query: string): boolean {
-  const subscribe = useCallback((listener: () => void) => {
-    const list = window.matchMedia(query);
-    list.addEventListener('change', listener);
-    return () => list.removeEventListener('change', listener);
-  }, [query]);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const list = window.matchMedia(query);
+      list.addEventListener('change', listener);
+      return () => list.removeEventListener('change', listener);
+    },
+    [query],
+  );
   return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches);
 }

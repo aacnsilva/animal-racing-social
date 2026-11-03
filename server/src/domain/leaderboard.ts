@@ -13,11 +13,27 @@ export type Board = (typeof BOARDS)[number];
 export const MIN_SETTLED_FOR_RANKING = 20;
 
 export function emptyStats(): SeasonStats {
-  return { settledBets: 0, totalStaked: 0, totalReturned: 0, biggestPayout: 0, biggestPayoutBet: null, currentStreak: 0, bestStreak: 0 };
+  return {
+    settledBets: 0,
+    totalStaked: 0,
+    totalReturned: 0,
+    biggestPayout: 0,
+    biggestPayoutBet: null,
+    currentStreak: 0,
+    bestStreak: 0,
+  };
 }
 
-export function applySettled(stats: SeasonStats, event: { betId: string; outcome: 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT'; stake: number; returned: number }): SeasonStats {
-  const next = { ...stats, settledBets: stats.settledBets + 1, totalStaked: stats.totalStaked + event.stake, totalReturned: stats.totalReturned + event.returned };
+export function applySettled(
+  stats: SeasonStats,
+  event: { betId: string; outcome: 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT'; stake: number; returned: number },
+): SeasonStats {
+  const next = {
+    ...stats,
+    settledBets: stats.settledBets + 1,
+    totalStaked: stats.totalStaked + event.stake,
+    totalReturned: stats.totalReturned + event.returned,
+  };
   if (event.outcome === 'WON') {
     next.currentStreak = stats.currentStreak + 1;
     next.bestStreak = Math.max(stats.bestStreak, next.currentStreak);
@@ -50,7 +66,10 @@ export function boardScore(board: Board, stats: SeasonStats, rankScore: number):
 
 export const RANK_THRESHOLDS = [10, 100] as const;
 
-export function thresholdCrossings(fromRank: number | null, toRank: number | null): { threshold: number; entered: boolean }[] {
+export function thresholdCrossings(
+  fromRank: number | null,
+  toRank: number | null,
+): { threshold: number; entered: boolean }[] {
   const inside = (rank: number | null, threshold: number) => rank !== null && rank <= threshold;
   const crossings: { threshold: number; entered: boolean }[] = [];
   for (const threshold of RANK_THRESHOLDS) {
@@ -67,5 +86,5 @@ export const PODIUM_TIERS = ['gold', 'silver', 'bronze'] as const;
 export type PodiumTier = (typeof PODIUM_TIERS)[number];
 
 export function podiumTier(rank: number): PodiumTier | null {
-  return Number.isInteger(rank) && rank >= 1 && rank <= PODIUM_TIERS.length ? PODIUM_TIERS[rank - 1]! : null;
+  return Number.isInteger(rank) && rank >= 1 && rank <= PODIUM_TIERS.length ? PODIUM_TIERS[rank - 1] : null;
 }

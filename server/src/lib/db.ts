@@ -11,7 +11,8 @@ export function summarizeSql(text: string): { operation: string; table: string }
   const normalized = text.replace(/\s+/g, ' ').trim();
   const words = normalized.split(' ');
   let operation = (words[0] ?? '').toUpperCase();
-  if (operation === 'WITH') operation = (normalized.match(/\)\s*(SELECT|INSERT|UPDATE|DELETE)\b/i)?.[1] ?? 'WITH').toUpperCase();
+  if (operation === 'WITH')
+    operation = (normalized.match(/\)\s*(SELECT|INSERT|UPDATE|DELETE)\b/i)?.[1] ?? 'WITH').toUpperCase();
   const table = normalized.match(/\b(?:FROM|INTO|UPDATE|JOIN)\s+([a-z_]+\.[a-z_]+|[a-z_]+)/i)?.[1] ?? '';
   return { operation, table };
 }
@@ -25,7 +26,12 @@ function traced<T extends (...args: any[]) => any>(original: T): T {
     if (UNTRACED_STATEMENTS.has(operation) || UNTRACED_STATEMENTS.has(text.trim())) return original.apply(this, args);
     const span = startSpan(table ? `${operation} ${table}` : operation, {
       kind: SpanKind.CLIENT,
-      attributes: { 'db.system.name': 'postgresql', 'db.operation.name': operation, 'db.collection.name': table, 'db.query.summary': `${operation} ${table}`.trim() },
+      attributes: {
+        'db.system.name': 'postgresql',
+        'db.operation.name': operation,
+        'db.collection.name': table,
+        'db.query.summary': `${operation} ${table}`.trim(),
+      },
     });
     return Promise.resolve(original.apply(this, args)).then(
       (result) => {
@@ -69,7 +75,11 @@ export async function tx<T>(pool: pg.Pool, fn: (client: pg.PoolClient) => Promis
   }
 }
 
-export async function one<T = Record<string, any>>(db: Queryable, sql: string, params: unknown[] = []): Promise<T | undefined> {
+export async function one<T = Record<string, any>>(
+  db: Queryable,
+  sql: string,
+  params: unknown[] = [],
+): Promise<T | undefined> {
   const result = await db.query(sql, params);
   return result.rows[0] as T | undefined;
 }

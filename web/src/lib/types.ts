@@ -160,7 +160,13 @@ export type Bet = {
   settledAt: string | null;
 };
 
-export type CashOutQuote = { quoteId: string; amount: number; priceVersion: number; expiresAtTick: number | null; expiresAt: string };
+export type CashOutQuote = {
+  quoteId: string;
+  amount: number;
+  priceVersion: number;
+  expiresAtTick: number | null;
+  expiresAt: string;
+};
 
 export type Wallet = { seasonId: string; balance: number; inOpenBets: number; rankScore: number };
 
@@ -174,7 +180,13 @@ export type LedgerEntry = {
   createdAt: string;
 };
 
-export type DailyReward = { claimable: boolean; amount: number; nextClaimAt: string; streak: number; bestStreak: number };
+export type DailyReward = {
+  claimable: boolean;
+  amount: number;
+  nextClaimAt: string;
+  streak: number;
+  bestStreak: number;
+};
 
 export type Season = {
   id: string;
@@ -187,7 +199,14 @@ export type Season = {
   dailyGrant: number;
 };
 
-export type LeaderboardEntry = { rank: number; userId: string; displayName: string; avatarUrl: string | null; score: number; frame?: Frame | null };
+export type LeaderboardEntry = {
+  rank: number;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  score: number;
+  frame?: Frame | null;
+};
 
 export type Segment = {
   type: 'STRAIGHT' | 'CURVE' | 'UPHILL' | 'DOWNHILL';
@@ -248,8 +267,21 @@ export type RaceResultResponse = {
   order: string[];
   asRun: string[];
   lapLeaders: { lap: number; entrantId: string; tick: number }[];
-  incidents: { seq: number; tick: number; type: string; entrantId: string | null; data: Record<string, unknown> | null }[];
-  markets: { marketId: string; type: MarketType; params: Record<string, number>; status: MarketStatus; winning: Selection[]; order: string[] }[];
+  incidents: {
+    seq: number;
+    tick: number;
+    type: string;
+    entrantId: string | null;
+    data: Record<string, unknown> | null;
+  }[];
+  markets: {
+    marketId: string;
+    type: MarketType;
+    params: Record<string, number>;
+    status: MarketStatus;
+    winning: Selection[];
+    order: string[];
+  }[];
   seed: string | null;
   seedHash: string | null;
   scriptHash: string | null;

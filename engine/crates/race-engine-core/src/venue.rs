@@ -62,21 +62,33 @@ impl Venue {
     pub fn segment_length(spec: &SegmentSpec) -> Result<f64, EngineError> {
         match spec.kind.as_str() {
             "CURVE" => {
-                let radius = spec.radius.ok_or_else(|| EngineError::InvalidVenue("curve without radius".into()))?;
-                let angle = spec.angle.ok_or_else(|| EngineError::InvalidVenue("curve without angle".into()))?;
+                let radius = spec
+                    .radius
+                    .ok_or_else(|| EngineError::InvalidVenue("curve without radius".into()))?;
+                let angle = spec
+                    .angle
+                    .ok_or_else(|| EngineError::InvalidVenue("curve without angle".into()))?;
                 if radius <= 0.0 || angle <= 0.0 {
-                    return Err(EngineError::InvalidVenue("curve radius/angle must be positive".into()));
+                    return Err(EngineError::InvalidVenue(
+                        "curve radius/angle must be positive".into(),
+                    ));
                 }
                 Ok(radius * angle * core::f64::consts::PI / 180.0)
             }
             "STRAIGHT" | "UPHILL" | "DOWNHILL" => {
-                let length = spec.length.ok_or_else(|| EngineError::InvalidVenue(format!("{} without length", spec.kind)))?;
+                let length = spec.length.ok_or_else(|| {
+                    EngineError::InvalidVenue(format!("{} without length", spec.kind))
+                })?;
                 if length <= 0.0 {
-                    return Err(EngineError::InvalidVenue("segment length must be positive".into()));
+                    return Err(EngineError::InvalidVenue(
+                        "segment length must be positive".into(),
+                    ));
                 }
                 Ok(length)
             }
-            other => Err(EngineError::InvalidVenue(format!("unknown segment type {other}"))),
+            other => Err(EngineError::InvalidVenue(format!(
+                "unknown segment type {other}"
+            ))),
         }
     }
 
@@ -85,7 +97,9 @@ impl Venue {
             return Err(EngineError::InvalidVenue("no segments".into()));
         }
         if !(self.lap_length.is_finite() && self.lap_length > 0.0) {
-            return Err(EngineError::InvalidVenue("lapLength must be positive".into()));
+            return Err(EngineError::InvalidVenue(
+                "lapLength must be positive".into(),
+            ));
         }
         if self.lanes == 0 || self.lanes > 20 {
             return Err(EngineError::InvalidVenue("lanes out of range".into()));
@@ -121,7 +135,12 @@ pub(crate) struct Track {
 }
 
 impl Track {
-    pub fn build(venue: &Venue, laps: u32, species: &SpeciesParams, params: &EngineParams) -> Result<Track, EngineError> {
+    pub fn build(
+        venue: &Venue,
+        laps: u32,
+        species: &SpeciesParams,
+        params: &EngineParams,
+    ) -> Result<Track, EngineError> {
         venue.validate()?;
         let surface_grip = params
             .surfaces
@@ -131,7 +150,9 @@ impl Track {
         let surface_affinity = *species
             .surface_affinity
             .get(&venue.surface)
-            .ok_or_else(|| EngineError::InvalidVenue(format!("no surface affinity for {}", venue.surface)))?;
+            .ok_or_else(|| {
+                EngineError::InvalidVenue(format!("no surface affinity for {}", venue.surface))
+            })?;
         let surface_drain = species.surface_stamina_drain[&venue.surface];
         let surface_stumble = species.surface_stumble[&venue.surface];
         let physics = &params.physics;
@@ -180,7 +201,11 @@ impl Track {
             weighted_drain += drain_factor * length;
             segments.push(TrackSegment {
                 end: position,
-                radius: if matches!(kind, SegmentKind::Curve | SegmentKind::TightCurve) { radius } else { 0.0 },
+                radius: if matches!(kind, SegmentKind::Curve | SegmentKind::TightCurve) {
+                    radius
+                } else {
+                    0.0
+                },
                 speed_factor: surface_affinity * affinity * grade_speed,
                 speed_cap,
                 drain_factor,
@@ -193,7 +218,7 @@ impl Track {
         Ok(Track {
             lap_length: venue.lap_length,
             laps,
-            length: venue.lap_length * laps as f64,
+            length: venue.lap_length * f64::from(laps),
             segments,
             average_drain_factor: weighted_drain / venue.lap_length,
             surface_affinity,
@@ -202,7 +227,7 @@ impl Track {
 
     #[inline]
     pub fn segment_end(&self, lap: u32, index: usize) -> f64 {
-        lap as f64 * self.lap_length + self.segments[index].end
+        f64::from(lap) * self.lap_length + self.segments[index].end
     }
 
     pub fn locate(&self, dist: f64) -> (u32, usize) {
@@ -238,14 +263,21 @@ impl Track {
 }
 
 pub fn parse_venues(text: &str) -> Result<Vec<Venue>, EngineError> {
-    let value: serde_json::Value =
-        serde_json::from_str(text).map_err(|err| EngineError::InvalidVenue(format!("not valid JSON: {err}")))?;
+    let value: serde_json::Value = serde_json::from_str(text)
+        .map_err(|err| EngineError::InvalidVenue(format!("not valid JSON: {err}")))?;
     let list = match value {
         serde_json::Value::Array(items) => items,
         object @ serde_json::Value::Object(_) => vec![object],
-        _ => return Err(EngineError::InvalidVenue("expected an array or an object".into())),
+        _ => {
+            return Err(EngineError::InvalidVenue(
+                "expected an array or an object".into(),
+            ));
+        }
     };
     list.into_iter()
-        .map(|item| serde_json::from_value::<Venue>(item).map_err(|err| EngineError::InvalidVenue(err.to_string())))
+        .map(|item| {
+            serde_json::from_value::<Venue>(item)
+                .map_err(|err| EngineError::InvalidVenue(err.to_string()))
+        })
         .collect()
 }

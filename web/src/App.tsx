@@ -22,14 +22,14 @@ type Route = [string, (params: Record<string, string>) => ReactNode, string];
 const ROUTES: Route[] = [
   ['/', () => <RaceCardPage view="upcoming" />, 'Race card'],
   ['/results', () => <RaceCardPage view="results" />, 'Results'],
-  ['/races/:id', (p) => <RacePage key={p.id} id={p.id!} />, 'Race'],
+  ['/races/:id', (p) => <RacePage key={p.id} id={p.id} />, 'Race'],
   ['/bets', () => <MyBetsPage />, 'My bets'],
   ['/wallet', () => <WalletPage />, 'Wallet'],
   ['/leaderboards', () => <LeaderboardsPage />, 'Leaderboards'],
   ['/animals', () => <AnimalsPage />, 'Animals'],
-  ['/animals/:id', (p) => <AnimalPage key={p.id} id={p.id!} />, 'Animal'],
+  ['/animals/:id', (p) => <AnimalPage key={p.id} id={p.id} />, 'Animal'],
   ['/venues', () => <VenuesPage />, 'Venues'],
-  ['/venues/:id', (p) => <VenuePage key={p.id} id={p.id!} />, 'Venue'],
+  ['/venues/:id', (p) => <VenuePage key={p.id} id={p.id} />, 'Venue'],
   ['/notifications', () => <NotificationsPage />, 'Notifications'],
   ['/me', () => <ProfilePage />, 'Profile'],
   ['/admin', () => <AdminPage />, 'Admin'],
@@ -130,7 +130,8 @@ export function App({ authError }: { authError: string | null }) {
       )}
       <main className="main">{content}</main>
       <footer className="footer">
-        Animal Racing Social is a portfolio project. Fictional animals, fictional points: no real money, prizes or wagering of any kind.
+        Animal Racing Social is a portfolio project. Fictional animals, fictional points: no real money, prizes or
+        wagering of any kind.
       </footer>
       {!matchPath('/races/:id', path) && <ComboSlip />}
       <Toasts />

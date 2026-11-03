@@ -28,11 +28,14 @@ window.addEventListener('storage', (event) => {
   comboStore.set({ ...initial, ...readLocal<Partial<ComboState>>(KEY, {}) });
 });
 
-export const selectionKey = (selection: BetSelection) => ('order' in selection ? selection.order.join('>') : selection.entrantId);
+export const selectionKey = (selection: BetSelection) =>
+  'order' in selection ? selection.order.join('>') : selection.entrantId;
 
 export function addComboLeg(leg: ComboLeg): 'added' | 'duplicate' | 'replaced' {
   const state = comboStore.get();
-  const same = state.legs.find((l) => l.marketId === leg.marketId && selectionKey(l.selection) === selectionKey(leg.selection));
+  const same = state.legs.find(
+    (l) => l.marketId === leg.marketId && selectionKey(l.selection) === selectionKey(leg.selection),
+  );
   if (same) {
     comboStore.set({ ...state, open: true });
     return 'duplicate';

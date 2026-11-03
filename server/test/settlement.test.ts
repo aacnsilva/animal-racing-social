@@ -13,20 +13,50 @@ describe('single settlement', () => {
 
 describe('combo folding', () => {
   it('loses as soon as any leg loses', () => {
-    assert.deepEqual(foldCombo(200, [{ status: 'LOST', lockedPrice: 3 }, { status: 'OPEN', lockedPrice: 2 }]), { status: 'LOST', payout: 0, effectivePrice: 0 });
+    assert.deepEqual(
+      foldCombo(200, [
+        { status: 'LOST', lockedPrice: 3 },
+        { status: 'OPEN', lockedPrice: 2 },
+      ]),
+      { status: 'LOST', payout: 0, effectivePrice: 0 },
+    );
   });
 
   it('waits while legs are open', () => {
-    assert.deepEqual(foldCombo(200, [{ status: 'WON', lockedPrice: 3 }, { status: 'OPEN', lockedPrice: 2 }]), { status: 'OPEN' });
+    assert.deepEqual(
+      foldCombo(200, [
+        { status: 'WON', lockedPrice: 3 },
+        { status: 'OPEN', lockedPrice: 2 },
+      ]),
+      { status: 'OPEN' },
+    );
   });
 
   it('pays the product of winning legs and treats void legs as 1.00', () => {
-    assert.deepEqual(foldCombo(200, [{ status: 'WON', lockedPrice: 3.1 }, { status: 'WON', lockedPrice: 1.8 }]), { status: 'WON', payout: 1116, effectivePrice: 5.58 });
-    assert.deepEqual(foldCombo(200, [{ status: 'WON', lockedPrice: 3.1 }, { status: 'VOID', lockedPrice: 1.8 }]), { status: 'WON', payout: 620, effectivePrice: 3.1 });
+    assert.deepEqual(
+      foldCombo(200, [
+        { status: 'WON', lockedPrice: 3.1 },
+        { status: 'WON', lockedPrice: 1.8 },
+      ]),
+      { status: 'WON', payout: 1116, effectivePrice: 5.58 },
+    );
+    assert.deepEqual(
+      foldCombo(200, [
+        { status: 'WON', lockedPrice: 3.1 },
+        { status: 'VOID', lockedPrice: 1.8 },
+      ]),
+      { status: 'WON', payout: 620, effectivePrice: 3.1 },
+    );
   });
 
   it('refunds when every leg is void', () => {
-    assert.deepEqual(foldCombo(200, [{ status: 'VOID', lockedPrice: 3.1 }, { status: 'VOID', lockedPrice: 1.8 }]), { status: 'VOID', payout: 200, effectivePrice: 1 });
+    assert.deepEqual(
+      foldCombo(200, [
+        { status: 'VOID', lockedPrice: 3.1 },
+        { status: 'VOID', lockedPrice: 1.8 },
+      ]),
+      { status: 'VOID', payout: 200, effectivePrice: 1 },
+    );
   });
 });
 
@@ -38,6 +68,12 @@ describe('combo rules', () => {
     assert.equal(comboViolation([leg('1'), leg('2')], 8), null);
     assert.equal(comboViolation([leg('1'), leg('1')], 8), 'COMBO_SAME_RACE');
     assert.equal(comboViolation([leg('1'), leg('2', 's2')], 8), 'COMBO_CROSS_SEASON');
-    assert.equal(comboViolation(Array.from({ length: 9 }, (_, i) => leg(String(i))), 8), 'COMBO_TOO_MANY_LEGS');
+    assert.equal(
+      comboViolation(
+        Array.from({ length: 9 }, (_, i) => leg(String(i))),
+        8,
+      ),
+      'COMBO_TOO_MANY_LEGS',
+    );
   });
 });

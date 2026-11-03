@@ -6,13 +6,13 @@ broadcast and priced.
 
 ## 1. Languages
 
-| Rust (heavy / hot path) | TypeScript (everything else) |
-|---|---|
-| `race-engine-core` crate (physics, RNG, incidents) | API gateway, Bet Service, Wallet |
-| `race-engine` service (script generation + sealing) | Scheduler, Stable (aging), Seasons, Leaderboards |
-| `odds-engine` (Monte Carlo per tick, all live races) | Market Manager, Settlement |
-| `race-broadcaster` (tick timers for concurrent races) | SSE Gateway, social services |
-| `race-engine-core` → **WASM** build for the browser verifier | Frontend (three.js) |
+| Rust (heavy / hot path)                                      | TypeScript (everything else)                     |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| `race-engine-core` crate (physics, RNG, incidents)           | API gateway, Bet Service, Wallet                 |
+| `race-engine` service (script generation + sealing)          | Scheduler, Stable (aging), Seasons, Leaderboards |
+| `odds-engine` (Monte Carlo per tick, all live races)         | Market Manager, Settlement                       |
+| `race-broadcaster` (tick timers for concurrent races)        | SSE Gateway, social services                     |
+| `race-engine-core` → **WASM** build for the browser verifier | Frontend (three.js)                              |
 
 Rust ↔ TS contracts are the Kafka event schemas (JSON v1, moving to
 Protobuf/Avro when stable) plus the shared `venue` / `script` JSON schemas.
@@ -35,13 +35,13 @@ script = simulate(engineVersion, params, venue@version, entrants[], laps, seed)
 
 ## 3. Library API (`race-engine-core`)
 
-| Function | Input | Output | Used by |
-|---|---|---|---|
-| `plan_race` | venue, entrants, class target window | `laps`, `estimated_duration_sec` | Scheduler (via service) |
-| `simulate` | venue, entrants, laps, seed | `RaceScript` | race-engine |
+| Function        | Input                                              | Output                                           | Used by                    |
+| --------------- | -------------------------------------------------- | ------------------------------------------------ | -------------------------- |
+| `plan_race`     | venue, entrants, class target window               | `laps`, `estimated_duration_sec`                 | Scheduler (via service)    |
+| `simulate`      | venue, entrants, laps, seed                        | `RaceScript`                                     | race-engine                |
 | `simulate_from` | venue, entrants, laps, `RevealedState @ tick`, rng | `Outcome` (finish order, lap leaders, incidents) | odds-engine (2k–5k ×/tick) |
-| `price_race` | venue, entrants, laps, runs | probabilities per market | odds-engine (pre-race) |
-| `verify` | inputs, revealed seed, `scriptHash` | `Ok` / `Mismatch` | CLI, browser (WASM) |
+| `price_race`    | venue, entrants, laps, runs                        | probabilities per market                         | odds-engine (pre-race)     |
+| `verify`        | inputs, revealed seed, `scriptHash`                | `Ok` / `Mismatch`                                | CLI, browser (WASM)        |
 
 `plan_race` runs a few dry simulations on throwaway seeds and picks the lap
 count (within `venue.lapsRange`) whose median finish lands in the class window
@@ -91,12 +91,12 @@ lane     : 1D blocking model; overtakes when gap & lane free
 
 ### Temperament (public, fixed for life)
 
-| Temperament | Behaviour |
-|---|---|
+| Temperament    | Behaviour                                                                         |
+| -------------- | --------------------------------------------------------------------------------- |
 | `FRONT_RUNNER` | Pushes early to lead; fades if stamina is short. Strong in LEADER_AT_LAP markets. |
-| `STALKER` | Sits 2nd–4th, pushes in the last third. |
-| `CLOSER` | Conserves, big surge in the final lap(s). Odds drift then crash late. |
-| `STEADY` | Even pace; low variance, rarely spectacular. |
+| `STALKER`      | Sits 2nd–4th, pushes in the last third.                                           |
+| `CLOSER`       | Conserves, big surge in the final lap(s). Odds drift then crash late.             |
+| `STEADY`       | Even pace; low variance, rarely spectacular.                                      |
 
 Shown on the animal profile with stats; the odds engine uses it like any
 other public stat.
@@ -105,13 +105,13 @@ other public stat.
 
 Rates are engine `params` (defaults below, tuned so most races have none).
 
-| Incident | When | Default rate | Effect | Market rules |
-|---|---|---|---|---|
-| `STUMBLE` | any tick | ∝ (1−consistency) × curve × surface | speed drop for 2–6 ticks | none |
-| `FALSE_START` | tick 0 | 1% per race | offender starts +3 s late | none (race stands) |
-| `REFUSED_TO_RUN` | tick 0 | 0.5% per entrant | never starts | classified **last** (`NON_RUNNER`); bets on it LOST; other bets stand |
-| `PULLED_UP` | mid-race | 0.3% per entrant | stops, `state: DNF` | classified **last** (`DNF`); bets on it LOST; already resulted lap markets stand |
-| `DISQUALIFIED` | after finish | 0.2% per race | moved to **last** (`DISQUALIFIED`), others promoted | position/podium/tricast settle on **official** order; `LEADER_AT_LAP` settles as run |
+| Incident         | When         | Default rate                        | Effect                                              | Market rules                                                                         |
+| ---------------- | ------------ | ----------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `STUMBLE`        | any tick     | ∝ (1−consistency) × curve × surface | speed drop for 2–6 ticks                            | none                                                                                 |
+| `FALSE_START`    | tick 0       | 1% per race                         | offender starts +3 s late                           | none (race stands)                                                                   |
+| `REFUSED_TO_RUN` | tick 0       | 0.5% per entrant                    | never starts                                        | classified **last** (`NON_RUNNER`); bets on it LOST; other bets stand                |
+| `PULLED_UP`      | mid-race     | 0.3% per entrant                    | stops, `state: DNF`                                 | classified **last** (`DNF`); bets on it LOST; already resulted lap markets stand     |
+| `DISQUALIFIED`   | after finish | 0.2% per race                       | moved to **last** (`DISQUALIFIED`), others promoted | position/podium/tricast settle on **official** order; `LEADER_AT_LAP` settles as run |
 
 **No bets are voided by incidents.** Non-runners, DNFs and DQs all count as
 last place. When several entrants are classified last, the official order is:
@@ -162,14 +162,14 @@ reveals them live and markets suspend). DQ is announced at `RaceFinished`
 **Max career: 5 seasons = 140 days** (= 140 animal weeks ≈ 2.7 animal years).
 Life stages are expressed in career days:
 
-| | Horse | Giraffe |
-|---|---|---|
-| ROOKIE | days 0–25 | days 0–35 (slower to mature) |
-| PRIME | days 25–95 | days 35–110 |
-| VETERAN | days 95–140 | days 110–140 |
-| Retire | ≤ day 140, earlier if stats decline below threshold | same |
-| Strengths | acceleration, tight curves, DIRT/GRASS | top speed on long straights, stamina, SAND |
-| Weaknesses | stamina on MUD | tight curves (hairpins), ICE stumble risk |
+|            | Horse                                               | Giraffe                                    |
+| ---------- | --------------------------------------------------- | ------------------------------------------ |
+| ROOKIE     | days 0–25                                           | days 0–35 (slower to mature)               |
+| PRIME      | days 25–95                                          | days 35–110                                |
+| VETERAN    | days 95–140                                         | days 110–140                               |
+| Retire     | ≤ day 140, earlier if stats decline below threshold | same                                       |
+| Strengths  | acceleration, tight curves, DIRT/GRASS              | top speed on long straights, stamina, SAND |
+| Weaknesses | stamina on MUD                                      | tight curves (hairpins), ICE stumble risk  |
 
 Animals enter the roster at a random age within ROOKIE so retirements are
 staggered; the Stable keeps each species' active pool sized for its race

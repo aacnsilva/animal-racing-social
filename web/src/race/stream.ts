@@ -25,7 +25,9 @@ const TYPE_ORDER: Record<string, number> = { FINISH_POSITION: 1, TOP_N: 2, LEADE
 const paramKey = (market: Market) => market.params.position ?? market.params.n ?? market.params.lap ?? 0;
 
 export function sortMarkets(markets: Market[]): Market[] {
-  return [...markets].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9) || paramKey(a) - paramKey(b));
+  return [...markets].sort(
+    (a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9) || paramKey(a) - paramKey(b),
+  );
 }
 
 const BACKOFF = [500, 1000, 2000, 5000];
@@ -122,7 +124,7 @@ export class RaceStream {
 
   private scheduleReconnect(): void {
     if (this.stopped) return;
-    const delay = BACKOFF[Math.min(this.attempt, BACKOFF.length - 1)]!;
+    const delay = BACKOFF[Math.min(this.attempt, BACKOFF.length - 1)];
     this.attempt += 1;
     this.set({ connection: 'reconnecting' });
     clearTimeout(this.reconnectTimer);
@@ -135,7 +137,7 @@ export class RaceStream {
     const es = new EventSource(`/v1/races/${encodeURIComponent(this.raceId)}/stream`);
     this.es = es;
     this.lastEventAt = Date.now();
-    const on = <T,>(name: string, handler: (data: T) => void) => {
+    const on = <T>(name: string, handler: (data: T) => void) => {
       es.addEventListener(name, (event) => {
         if (this.es !== es) return;
         this.lastEventAt = Date.now();
@@ -148,19 +150,38 @@ export class RaceStream {
         handler(data);
       });
     };
-    on('snapshot', (data: { race: Race; tick: RaceTick | null; markets: Market[]; myBets: Bet[] }) => this.onSnapshot(data));
-    on('race.lifecycle', (data: { status: Race['status']; at: string; order?: string[]; reason?: string }) => this.onLifecycle(data));
+    on('snapshot', (data: { race: Race; tick: RaceTick | null; markets: Market[]; myBets: Bet[] }) =>
+      this.onSnapshot(data),
+    );
+    on('race.lifecycle', (data: { status: Race['status']; at: string; order?: string[]; reason?: string }) =>
+      this.onLifecycle(data),
+    );
     on('race.tick', (data: RaceTick) => this.onRaceTick(data));
-    on('race.lap', (data: { lap: number; leaderEntrantId: string; standings: string[] }) => this.set({ lastLap: data }));
+    on('race.lap', (data: { lap: number; leaderEntrantId: string; standings: string[] }) =>
+      this.set({ lastLap: data }),
+    );
     on('market.opened', (data: Market) => this.onMarketOpened(data));
-    on('market.price', (data: { marketId: string; priceVersion: number; tick: number; selections: Selection[] }) => this.onPrice(data));
+    on('market.price', (data: { marketId: string; priceVersion: number; tick: number; selections: Selection[] }) =>
+      this.onPrice(data),
+    );
     on('market.suspended', (data: { marketId: string }) => this.patchMarket(data.marketId, { status: 'SUSPENDED' }));
     on('market.resumed', (data: { marketId: string; priceVersion?: number }) =>
-      this.patchMarket(data.marketId, data.priceVersion ? { status: 'OPEN', priceVersion: Math.max(data.priceVersion, this.marketById(data.marketId)?.priceVersion ?? 0) } : { status: 'OPEN' }),
+      this.patchMarket(
+        data.marketId,
+        data.priceVersion
+          ? {
+              status: 'OPEN',
+              priceVersion: Math.max(data.priceVersion, this.marketById(data.marketId)?.priceVersion ?? 0),
+            }
+          : { status: 'OPEN' },
+      ),
     );
     on('market.closed', (data: { marketId: string }) => this.patchMarket(data.marketId, { status: 'CLOSED' }));
     on('market.resulted', (data: { marketId: string; winning: string[]; order: string[] }) => {
-      this.patchMarket(data.marketId, { status: 'RESULTED', result: { winning: data.winning ?? [], order: data.order ?? [] } });
+      this.patchMarket(data.marketId, {
+        status: 'RESULTED',
+        result: { winning: data.winning ?? [], order: data.order ?? [] },
+      });
       this.set({ resultVersion: this.state.resultVersion + 1 });
     });
     on('market.voided', (data: { marketId: string }) => this.patchMarket(data.marketId, { status: 'VOID' }));
@@ -174,9 +195,16 @@ export class RaceStream {
     on('notification', (data: { notification: Notification; unreadCount: number | null }) => {
       if (typeof data.unreadCount === 'number') unreadStore.set(data.unreadCount);
       else unreadStore.set((n) => n + 1);
-      toast(notificationText(data.notification), data.notification.type === 'BET_WON' || data.notification.type === 'CASHOUT_DONE' ? 'success' : 'info');
+      toast(
+        notificationText(data.notification),
+        data.notification.type === 'BET_WON' || data.notification.type === 'CASHOUT_DONE' ? 'success' : 'info',
+      );
       if (/^(BET_|CASHOUT_)/.test(data.notification.type)) refreshWallet(200);
-      if (data.notification.type === 'CASHOUT_REJECTED') publishCashoutRejected(String(data.notification.payload?.betId ?? ''), String(data.notification.payload?.reason ?? ''));
+      if (data.notification.type === 'CASHOUT_REJECTED')
+        publishCashoutRejected(
+          String(data.notification.payload?.betId ?? ''),
+          String(data.notification.payload?.reason ?? ''),
+        );
     });
     es.onerror = () => {
       if (this.es !== es) return;
@@ -192,7 +220,11 @@ export class RaceStream {
 
   private onSnapshot(data: { race: Race; tick: RaceTick | null; markets: Market[]; myBets: Bet[] }): void {
     this.attempt = 0;
-    const feed: FeedItem[] = (data.tick?.events ?? []).map((event) => ({ seq: ++this.feedSeq, tick: data.tick!.tick, event }));
+    const feed: FeedItem[] = (data.tick?.events ?? []).map((event) => ({
+      seq: ++this.feedSeq,
+      tick: data.tick!.tick,
+      event,
+    }));
     this.set({
       race: data.race,
       tick: data.tick,
@@ -224,7 +256,17 @@ export class RaceStream {
   private onRaceTick(tick: RaceTick): void {
     if (this.state.tick && tick.tick <= this.state.tick.tick) return;
     const race = this.state.race;
-    const nextRace = race ? { ...race, status: race.status === 'LOCKED' || race.status === 'OPEN' || race.status === 'SCHEDULED' ? 'LIVE' as const : race.status, currentTick: tick.tick, currentLap: tick.lap } : race;
+    const nextRace = race
+      ? {
+          ...race,
+          status:
+            race.status === 'LOCKED' || race.status === 'OPEN' || race.status === 'SCHEDULED'
+              ? ('LIVE' as const)
+              : race.status,
+          currentTick: tick.tick,
+          currentLap: tick.lap,
+        }
+      : race;
     const added = (tick.events ?? []).map((event) => ({ seq: ++this.feedSeq, tick: tick.tick, event }));
     const feed = added.length ? [...this.state.feed, ...added].slice(-FEED_LIMIT) : this.state.feed;
     this.set({ tick, race: nextRace, feed });
@@ -240,11 +282,16 @@ export class RaceStream {
   private onPrice(data: { marketId: string; priceVersion: number; selections: Selection[] }): void {
     const market = this.marketById(data.marketId);
     if (!market || data.priceVersion < market.priceVersion) return;
-    this.patchMarket(data.marketId, { priceVersion: data.priceVersion, selections: data.selections ?? market.selections });
+    this.patchMarket(data.marketId, {
+      priceVersion: data.priceVersion,
+      selections: data.selections ?? market.selections,
+    });
   }
 
   private patchMarket(marketId: string, patch: Partial<Market>): void {
     if (!this.marketById(marketId)) return;
-    this.set({ markets: this.state.markets.map((market) => (market.id === marketId ? { ...market, ...patch } : market)) });
+    this.set({
+      markets: this.state.markets.map((market) => (market.id === marketId ? { ...market, ...patch } : market)),
+    });
   }
 }

@@ -12,7 +12,9 @@ use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
 use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use opentelemetry_sdk::resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector};
+use opentelemetry_sdk::resource::{
+    EnvResourceDetector, ResourceDetector, TelemetryResourceDetector,
+};
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
@@ -51,27 +53,37 @@ impl Settings {
     }
 
     pub fn from_lookup(default_service: &str, lookup: impl Fn(&str) -> Option<String>) -> Settings {
-        let value = |name: &str| lookup(name).map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+        let value = |name: &str| {
+            lookup(name)
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        };
         let attribute_service = value("OTEL_RESOURCE_ATTRIBUTES").and_then(|attributes| {
             attributes.split(',').find_map(|entry| {
                 let (key, value) = entry.split_once('=')?;
-                (key.trim() == "service.name" && !value.trim().is_empty()).then(|| value.trim().to_string())
+                (key.trim() == "service.name" && !value.trim().is_empty())
+                    .then(|| value.trim().to_string())
             })
         });
-        let service = value("OTEL_SERVICE_NAME").or(attribute_service).unwrap_or_else(|| default_service.to_string());
-        let sdk_disabled = value("OTEL_SDK_DISABLED").is_some_and(|flag| flag.eq_ignore_ascii_case("true"));
+        let service = value("OTEL_SERVICE_NAME")
+            .or(attribute_service)
+            .unwrap_or_else(|| default_service.to_string());
+        let sdk_disabled =
+            value("OTEL_SDK_DISABLED").is_some_and(|flag| flag.eq_ignore_ascii_case("true"));
         let endpoint = value("OTEL_EXPORTER_OTLP_ENDPOINT").is_some();
         Settings {
             service,
             sdk_disabled,
-            export_traces: !sdk_disabled && (endpoint || value("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT").is_some()),
-            export_metrics: !sdk_disabled && (endpoint || value("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT").is_some()),
+            export_traces: !sdk_disabled
+                && (endpoint || value("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT").is_some()),
+            export_metrics: !sdk_disabled
+                && (endpoint || value("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT").is_some()),
         }
     }
 }
 
 pub fn service_name() -> &'static str {
-    SERVICE.get().map(String::as_str).unwrap_or("engine")
+    SERVICE.get().map_or("engine", String::as_str)
 }
 
 pub fn hostname() -> String {
@@ -85,7 +97,10 @@ pub fn hostname() -> String {
 }
 
 fn resource(service: &str) -> Resource {
-    let detectors: [Box<dyn ResourceDetector>; 2] = [Box::new(TelemetryResourceDetector), Box::new(EnvResourceDetector::new())];
+    let detectors: [Box<dyn ResourceDetector>; 2] = [
+        Box::new(TelemetryResourceDetector),
+        Box::new(EnvResourceDetector::new()),
+    ];
     Resource::builder_empty()
         .with_attribute(KeyValue::new("service.instance.id", hostname()))
         .with_detectors(&detectors)
@@ -94,7 +109,9 @@ fn resource(service: &str) -> Resource {
 }
 
 fn log_filter() -> EnvFilter {
-    EnvFilter::builder().with_default_directive(LevelFilter::INFO.into()).from_env_lossy()
+    EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env_lossy()
 }
 
 pub fn init(default_service: &str) {
@@ -114,20 +131,32 @@ pub fn init_with(settings: Settings) {
     let mut tracer_builder = SdkTracerProvider::builder().with_resource(resource.clone());
     if settings.export_traces {
         match SpanExporter::builder().with_http().build() {
-            Ok(exporter) => tracer_builder = tracer_builder.with_span_processor(BatchSpanProcessor::builder(exporter, Tokio).build()),
+            Ok(exporter) => {
+                tracer_builder = tracer_builder
+                    .with_span_processor(BatchSpanProcessor::builder(exporter, Tokio).build())
+            }
             Err(err) => failures.push(format!("trace exporter disabled: {err}")),
         }
     }
     let tracer_provider = tracer_builder.build();
     let mut meter_provider = None;
     if settings.export_metrics {
-        match MetricExporter::builder().with_http().with_temporality(Temporality::Cumulative).build() {
+        match MetricExporter::builder()
+            .with_http()
+            .with_temporality(Temporality::Cumulative)
+            .build()
+        {
             Ok(exporter) => {
                 let mut reader = PeriodicReader::builder(exporter, Tokio);
                 if std::env::var_os("OTEL_METRIC_EXPORT_INTERVAL").is_none() {
                     reader = reader.with_interval(METRIC_INTERVAL);
                 }
-                meter_provider = Some(SdkMeterProvider::builder().with_resource(resource).with_reader(reader.build()).build());
+                meter_provider = Some(
+                    SdkMeterProvider::builder()
+                        .with_resource(resource)
+                        .with_reader(reader.build())
+                        .build(),
+                );
             }
             Err(err) => failures.push(format!("metric exporter disabled: {err}")),
         }
@@ -144,15 +173,23 @@ pub fn init_with(settings: Settings) {
         .with_target(false)
         .with_tracked_inactivity(false)
         .with_filter(LevelFilter::INFO);
-    let _ = tracing_subscriber::registry().with(logs).with(traces).try_init();
-    let _ = PROVIDERS.set(Providers { tracer: tracer_provider, meter: meter_provider });
+    let _ = tracing_subscriber::registry()
+        .with(logs)
+        .with(traces)
+        .try_init();
+    let _ = PROVIDERS.set(Providers {
+        tracer: tracer_provider,
+        meter: meter_provider,
+    });
     for failure in failures {
         tracing::warn!("{failure}");
     }
 }
 
 pub async fn shutdown() {
-    let Some(providers) = PROVIDERS.get().cloned() else { return };
+    let Some(providers) = PROVIDERS.get().cloned() else {
+        return;
+    };
     let tracer = tokio::task::spawn_blocking(move || {
         let _ = providers.tracer.force_flush();
         let _ = providers.tracer.shutdown();
@@ -176,13 +213,14 @@ pub async fn exit(code: i32) -> ! {
 
 pub fn exit_on_signal() {
     tokio::spawn(async {
-        let mut terminate = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            Ok(stream) => stream,
-            Err(err) => {
-                tracing::warn!("cannot install SIGTERM handler: {err}");
-                return;
-            }
-        };
+        let mut terminate =
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(stream) => stream,
+                Err(err) => {
+                    tracing::warn!("cannot install SIGTERM handler: {err}");
+                    return;
+                }
+            };
         tokio::select! {
             _ = terminate.recv() => tracing::info!("SIGTERM received; exiting"),
             _ = tokio::signal::ctrl_c() => tracing::info!("SIGINT received; exiting"),
@@ -191,7 +229,10 @@ pub fn exit_on_signal() {
     });
 }
 
-pub async fn traced<T, E>(span: &tracing::Span, work: impl Future<Output = Result<T, E>>) -> Result<T, E> {
+pub async fn traced<T, E>(
+    span: &tracing::Span,
+    work: impl Future<Output = Result<T, E>>,
+) -> Result<T, E> {
     let result = work.instrument(span.clone()).await;
     if result.is_err() {
         span.record("otel.status_code", "error");
@@ -208,7 +249,12 @@ mod tests {
     use super::*;
 
     fn lookup(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
-        move |name| pairs.iter().find(|(key, _)| *key == name).map(|(_, value)| value.to_string())
+        move |name| {
+            pairs
+                .iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| value.to_string())
+        }
     }
 
     #[test]
@@ -216,7 +262,12 @@ mod tests {
         let settings = Settings::from_lookup("race-engine", lookup(&[]));
         assert_eq!(
             settings,
-            Settings { service: "race-engine".into(), sdk_disabled: false, export_traces: false, export_metrics: false }
+            Settings {
+                service: "race-engine".into(),
+                sdk_disabled: false,
+                export_traces: false,
+                export_metrics: false
+            }
         );
     }
 
@@ -224,18 +275,27 @@ mod tests {
     fn settings_honour_service_name_endpoint_and_disable_flag() {
         let settings = Settings::from_lookup(
             "odds-engine",
-            lookup(&[("OTEL_SERVICE_NAME", "odds-a"), ("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")]),
+            lookup(&[
+                ("OTEL_SERVICE_NAME", "odds-a"),
+                ("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318"),
+            ]),
         );
         assert_eq!(settings.service, "odds-a");
         assert!(settings.export_traces && settings.export_metrics);
         let from_attributes = Settings::from_lookup(
             "odds-engine",
-            lookup(&[("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev,service.name=odds-b")]),
+            lookup(&[(
+                "OTEL_RESOURCE_ATTRIBUTES",
+                "deployment.environment=dev,service.name=odds-b",
+            )]),
         );
         assert_eq!(from_attributes.service, "odds-b");
         let disabled = Settings::from_lookup(
             "odds-engine",
-            lookup(&[("OTEL_SDK_DISABLED", "TRUE"), ("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")]),
+            lookup(&[
+                ("OTEL_SDK_DISABLED", "TRUE"),
+                ("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318"),
+            ]),
         );
         assert!(disabled.sdk_disabled && !disabled.export_traces && !disabled.export_metrics);
     }
@@ -244,7 +304,11 @@ mod tests {
     async fn init_without_endpoint_installs_no_exporters_and_shuts_down() {
         init_with(Settings::from_lookup("telemetry-test", lookup(&[])));
         assert_eq!(service_name(), "telemetry-test");
-        assert!(PROVIDERS.get().is_some_and(|providers| providers.meter.is_none()));
+        assert!(
+            PROVIDERS
+                .get()
+                .is_some_and(|providers| providers.meter.is_none())
+        );
         metrics::record_processed("group", "topic", "RaceTick", true, Duration::from_millis(3));
         let started = std::time::Instant::now();
         shutdown().await;

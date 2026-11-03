@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
-use race_engine_core::{EntrantInput, LoadedParams, Stats, Temperament, Venue, default_params, fast_rng, parse_venues};
+use race_engine_core::{
+    EntrantInput, LoadedParams, Stats, Temperament, Venue, default_params, fast_rng, parse_venues,
+};
 use rand_chacha::ChaCha8Rng;
 use rand_core::Rng;
 
@@ -15,16 +17,33 @@ pub fn venues() -> Vec<Venue> {
 }
 
 pub fn venue(id: &str) -> Venue {
-    venues().into_iter().find(|venue| venue.id == id).expect("venue exists")
+    venues()
+        .into_iter()
+        .find(|venue| venue.id == id)
+        .expect("venue exists")
 }
 
-pub const TEMPERAMENTS: [Temperament; 4] =
-    [Temperament::FrontRunner, Temperament::Stalker, Temperament::Closer, Temperament::Steady];
+pub const TEMPERAMENTS: [Temperament; 4] = [
+    Temperament::FrontRunner,
+    Temperament::Stalker,
+    Temperament::Closer,
+    Temperament::Steady,
+];
 
 pub fn typical_stats(species: &str) -> Stats {
     match species {
-        "GIRAFFE" => Stats { velocity: 13.6, stamina: 80.0, acceleration: 2.6, consistency: 0.74 },
-        _ => Stats { velocity: 15.1, stamina: 74.0, acceleration: 3.4, consistency: 0.78 },
+        "GIRAFFE" => Stats {
+            velocity: 13.6,
+            stamina: 80.0,
+            acceleration: 2.6,
+            consistency: 0.74,
+        },
+        _ => Stats {
+            velocity: 15.1,
+            stamina: 74.0,
+            acceleration: 3.4,
+            consistency: 0.78,
+        },
     }
 }
 
@@ -108,7 +127,11 @@ pub fn favourite(species: &str, field: &[EntrantInput]) -> usize {
     best
 }
 
-pub fn race_inputs(species: &str, laps: u32, entrants: Vec<EntrantInput>) -> race_engine_core::RaceInputs {
+pub fn race_inputs(
+    species: &str,
+    laps: u32,
+    entrants: Vec<EntrantInput>,
+) -> race_engine_core::RaceInputs {
     race_engine_core::RaceInputs {
         race_id: "1001".into(),
         engine_version: race_engine_core::ENGINE_VERSION.into(),

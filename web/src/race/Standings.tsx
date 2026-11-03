@@ -4,9 +4,23 @@ import type { Entrant, Race, RaceTick } from '../lib/types';
 import { eventText, nameLookup } from './events';
 import type { FeedItem } from './stream';
 
-type Row = { id: string; pos: number | null; lane: number; name: string; extra: string; stamina: number | null; state: string };
+type Row = {
+  id: string;
+  pos: number | null;
+  lane: number;
+  name: string;
+  extra: string;
+  stamina: number | null;
+  state: string;
+};
 
-const STATE_SHORT: Record<string, string> = { SPRINTING: 'sprint', TIRED: 'tired', STUMBLED: 'stumble', DNF: 'DNF', FINISHED: 'fin' };
+const STATE_SHORT: Record<string, string> = {
+  SPRINTING: 'sprint',
+  TIRED: 'tired',
+  STUMBLED: 'stumble',
+  DNF: 'DNF',
+  FINISHED: 'fin',
+};
 const RESULT_SHORT: Record<string, string> = { DISQUALIFIED: 'DQ', DNF: 'DNF', NON_RUNNER: 'NR' };
 
 function rowsFor(race: Race, tick: RaceTick | null): Row[] {
@@ -19,13 +33,21 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
       const entrant = byId.get(t.id);
       const gap = leaderDist - t.dist;
       const result = entrant?.result;
-      const finishedText = result && (result.resultStatus === 'FINISHED' || result.resultStatus === 'DISQUALIFIED') && result.finishTimeMs ? fmtRaceTime(result.finishTimeMs) : STATE_SHORT[t.state]!;
+      const finishedText =
+        result && (result.resultStatus === 'FINISHED' || result.resultStatus === 'DISQUALIFIED') && result.finishTimeMs
+          ? fmtRaceTime(result.finishTimeMs)
+          : STATE_SHORT[t.state];
       return {
         id: t.id,
         pos: t.pos,
         lane: entrant?.lane ?? Math.round(t.lane),
         name: entrant?.animal.name ?? t.id,
-        extra: t.state === 'FINISHED' || t.state === 'DNF' ? (result && result.resultStatus !== 'FINISHED' ? RESULT_SHORT[result.resultStatus] ?? finishedText : finishedText) : `${gap < 0.05 ? 'lead' : `+${gap.toFixed(1)} m`}${STATE_SHORT[t.state] ? ` · ${STATE_SHORT[t.state]}` : ''}`,
+        extra:
+          t.state === 'FINISHED' || t.state === 'DNF'
+            ? result && result.resultStatus !== 'FINISHED'
+              ? (RESULT_SHORT[result.resultStatus] ?? finishedText)
+              : finishedText
+            : `${gap < 0.05 ? 'lead' : `+${gap.toFixed(1)} m`}${STATE_SHORT[t.state] ? ` · ${STATE_SHORT[t.state]}` : ''}`,
         stamina: t.staminaPct,
         state: t.state,
       };
@@ -40,14 +62,27 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
         pos: e.result?.officialPosition ?? null,
         lane: e.lane,
         name: e.animal.name,
-        extra: e.result?.resultStatus === 'FINISHED' ? (e.result.finishTimeMs ? fmtRaceTime(e.result.finishTimeMs) : '') : RESULT_SHORT[e.result?.resultStatus ?? ''] ?? '',
+        extra:
+          e.result?.resultStatus === 'FINISHED'
+            ? e.result.finishTimeMs
+              ? fmtRaceTime(e.result.finishTimeMs)
+              : ''
+            : (RESULT_SHORT[e.result?.resultStatus ?? ''] ?? ''),
         stamina: null,
         state: e.result?.resultStatus ?? '',
       }));
   }
   return [...entrants]
     .sort((a, b) => a.lane - b.lane)
-    .map((e: Entrant) => ({ id: e.entrantId, pos: null, lane: e.lane, name: e.animal.name, extra: e.temperament.replace('_', ' ').toLowerCase(), stamina: null, state: '' }));
+    .map((e: Entrant) => ({
+      id: e.entrantId,
+      pos: null,
+      lane: e.lane,
+      name: e.animal.name,
+      extra: e.temperament.replace('_', ' ').toLowerCase(),
+      stamina: null,
+      state: '',
+    }));
 }
 
 export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | null; title: string }) {
@@ -64,7 +99,13 @@ export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | 
       </div>
       <div className="standings" data-testid="standings">
         {rows.map((row) => (
-          <div key={row.id} className={`standing-row${row.pos === 1 ? ' p1' : ''}`} data-testid="standing-row" data-entrant-id={row.id} data-pos={row.pos ?? ''}>
+          <div
+            key={row.id}
+            className={`standing-row${row.pos === 1 ? ' p1' : ''}`}
+            data-testid="standing-row"
+            data-entrant-id={row.id}
+            data-pos={row.pos ?? ''}
+          >
             <span className="pos">{row.pos ?? '–'}</span>
             <Lane lane={row.lane} small />
             <span style={{ minWidth: 0 }}>
@@ -73,7 +114,12 @@ export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | 
               </span>
               {row.stamina !== null && (
                 <span className="stamina" title={`Stamina ${Math.round(row.stamina)}%`}>
-                  <i style={{ width: `${Math.max(0, Math.min(100, row.stamina))}%`, background: row.stamina < 25 ? 'var(--warn)' : undefined }} />
+                  <i
+                    style={{
+                      width: `${Math.max(0, Math.min(100, row.stamina))}%`,
+                      background: row.stamina < 25 ? 'var(--warn)' : undefined,
+                    }}
+                  />
                 </span>
               )}
             </span>

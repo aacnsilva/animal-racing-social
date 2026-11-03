@@ -14,9 +14,16 @@ use tracing::field::Empty;
 use crate::{Context, Res};
 
 pub async fn serve(port: u16, router: Router) -> Res<()> {
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await.context("bind http port")?;
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+        .await
+        .context("bind http port")?;
     tracing::info!(port, "http listening on :{port}");
-    axum::serve(listener, router.route_layer(axum::middleware::from_fn(trace_internal))).await.context("http server")
+    axum::serve(
+        listener,
+        router.route_layer(axum::middleware::from_fn(trace_internal)),
+    )
+    .await
+    .context("http server")
 }
 
 struct HeaderReader<'a>(&'a HeaderMap);
@@ -27,7 +34,7 @@ impl Extractor for HeaderReader<'_> {
     }
 
     fn keys(&self) -> Vec<&str> {
-        self.0.keys().map(|name| name.as_str()).collect()
+        self.0.keys().map(axum::http::HeaderName::as_str).collect()
     }
 }
 
@@ -36,7 +43,10 @@ pub fn extract_context(headers: &HeaderMap) -> opentelemetry::Context {
 }
 
 async fn trace_internal(request: Request, next: Next) -> Response {
-    let route = request.extensions().get::<MatchedPath>().map(|path| path.as_str().to_string());
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|path| path.as_str().to_string());
     let Some(route) = route.filter(|route| route.starts_with("/internal/")) else {
         return next.run(request).await;
     };
@@ -66,7 +76,11 @@ async fn trace_internal(request: Request, next: Next) -> Response {
 }
 
 pub fn error(status: StatusCode, code: &str, message: impl Into<String>) -> Response {
-    (status, Json(serde_json::json!({ "code": code, "message": message.into() }))).into_response()
+    (
+        status,
+        Json(serde_json::json!({ "code": code, "message": message.into() })),
+    )
+        .into_response()
 }
 
 pub fn bad_request(message: impl Into<String>) -> Response {
@@ -84,7 +98,10 @@ pub fn internal(message: impl Into<String>) -> Response {
 pub fn classify(message: String) -> Response {
     if message.contains("NOT_FOUND") {
         not_found(message)
-    } else if message.contains("invalid") || message.contains("UNSUPPORTED") || message.contains("unknown") {
+    } else if message.contains("invalid")
+        || message.contains("UNSUPPORTED")
+        || message.contains("unknown")
+    {
         bad_request(message)
     } else {
         internal(message)

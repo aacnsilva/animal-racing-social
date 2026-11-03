@@ -31,10 +31,17 @@ export function buildRouter(deps: Deps): Router {
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('api', { outbox: ['betting', 'admin'], health: false });
-  const server = serve(buildRouter({ pool: runtime.pool, redis: runtime.redis, producer: runtime.producer }), envInt('PORT', 3000));
+  const server = serve(
+    buildRouter({ pool: runtime.pool, redis: runtime.redis, producer: runtime.producer }),
+    envInt('PORT', 3000),
+  );
   gauge('ars.dlq.open', 'Dead-lettered messages not yet replayed', '', async () => {
-    const { rows } = await runtime.pool.query('SELECT consumer, count(*)::int AS n FROM admin.dlq WHERE replayed_at IS NULL GROUP BY consumer');
-    return rows.length ? rows.map((row) => ({ value: row.n, attributes: { consumer_group: row.consumer } })) : [{ value: 0, attributes: { consumer_group: 'none' } }];
+    const { rows } = await runtime.pool.query(
+      'SELECT consumer, count(*)::int AS n FROM admin.dlq WHERE replayed_at IS NULL GROUP BY consumer',
+    );
+    return rows.length
+      ? rows.map((row) => ({ value: row.n, attributes: { consumer_group: row.consumer } }))
+      : [{ value: 0, attributes: { consumer_group: 'none' } }];
   });
   runtime.onStop(() => void server.close());
 }

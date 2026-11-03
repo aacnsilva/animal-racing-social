@@ -8,7 +8,10 @@ fn main() {
     println!("cargo:rerun-if-env-changed=PROTOC");
     let mut config = prost_build::Config::new();
     if std::env::var_os("PROTOC").is_none() {
-        let on_path = std::process::Command::new("protoc").arg("--version").output().is_ok();
+        let on_path = std::process::Command::new("protoc")
+            .arg("--version")
+            .output()
+            .is_ok();
         if !on_path {
             let vendored = protoc_bin_vendored::protoc_bin_path().expect("vendored protoc");
             config.protoc_executable(vendored);

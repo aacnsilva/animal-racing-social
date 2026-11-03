@@ -38,9 +38,13 @@ const box = (w: number, h: number, d: number) => cached(`box:${w}:${h}:${d}`, ()
 const cyl = (top: number, bottom: number, h: number, seg = 6) =>
   cached(`cyl:${top}:${bottom}:${h}:${seg}`, () => new THREE.CylinderGeometry(top, bottom, h, seg));
 const capsule = (r: number, l: number) => cached(`cap:${r}:${l}`, () => new THREE.CapsuleGeometry(r, l, 2, 7));
-const cone = (r: number, h: number, seg = 5) => cached(`cone:${r}:${h}:${seg}`, () => new THREE.ConeGeometry(r, h, seg));
+const cone = (r: number, h: number, seg = 5) =>
+  cached(`cone:${r}:${h}:${seg}`, () => new THREE.ConeGeometry(r, h, seg));
 
-function material(color: THREE.ColorRepresentation, extra: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
+function material(
+  color: THREE.ColorRepresentation,
+  extra: THREE.MeshStandardMaterialParameters = {},
+): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.75, metalness: 0.05, ...extra });
 }
 
@@ -84,13 +88,30 @@ function legGroup(
 }
 
 function addRingAndTrail(root: THREE.Group, color: THREE.Color, length: number) {
-  const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0, depthWrite: false });
-  const ring = new THREE.Mesh(cached('ring', () => new THREE.RingGeometry(0.9, 1.25, 24)), ringMaterial);
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd34d,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(
+    cached('ring', () => new THREE.RingGeometry(0.9, 1.25, 24)),
+    ringMaterial,
+  );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.06;
   root.add(ring);
-  const trailMaterial = new THREE.MeshBasicMaterial({ color: color.clone().lerp(new THREE.Color('#ffffff'), 0.5), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
-  const trail = new THREE.Mesh(cached(`trail:${length}`, () => new THREE.PlaneGeometry(0.9, length * 1.6)), trailMaterial);
+  const trailMaterial = new THREE.MeshBasicMaterial({
+    color: color.clone().lerp(new THREE.Color('#ffffff'), 0.5),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const trail = new THREE.Mesh(
+    cached(`trail:${length}`, () => new THREE.PlaneGeometry(0.9, length * 1.6)),
+    trailMaterial,
+  );
   trail.rotation.x = -Math.PI / 2;
   trail.position.set(0, 0.08, -length * 1.1);
   root.add(trail);
@@ -122,8 +143,24 @@ export function buildHorse(laneHex: string): AnimalRig {
   jockey.position.set(0, 0.48, 0.12);
   jockey.rotation.x = 0.55;
   jockey.add(mesh(box(0.34, 0.42, 0.24), silks, 0, 0.2, 0));
-  jockey.add(mesh(cached('head', () => new THREE.IcosahedronGeometry(0.13, 0)), skin, 0, 0.5, 0.03));
-  jockey.add(mesh(cached('helmet', () => new THREE.SphereGeometry(0.15, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2)), silks, 0, 0.53, 0.03));
+  jockey.add(
+    mesh(
+      cached('head', () => new THREE.IcosahedronGeometry(0.13, 0)),
+      skin,
+      0,
+      0.5,
+      0.03,
+    ),
+  );
+  jockey.add(
+    mesh(
+      cached('helmet', () => new THREE.SphereGeometry(0.15, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
+      silks,
+      0,
+      0.53,
+      0.03,
+    ),
+  );
   jockey.add(mesh(box(0.1, 0.1, 0.38), silks, -0.2, 0.08, 0.16));
   jockey.add(mesh(box(0.1, 0.1, 0.38), silks, 0.2, 0.08, 0.16));
   body.add(jockey);
@@ -249,8 +286,8 @@ export function buildGiraffe(laneHex: string): AnimalRig {
     legGroup(0.24, -0.25, 0.55, 0.95, 1.05, 0.075, coat, hoof, 0.5),
     legGroup(0.24, -0.25, -0.55, 0.85, 1.0, 0.08, coat, hoof, 0.56),
   ];
-  legs[1]!.pivot.position.y = -0.1;
-  legs[3]!.pivot.position.y = -0.1;
+  legs[1].pivot.position.y = -0.1;
+  legs[3].pivot.position.y = -0.1;
   for (const leg of legs) body.add(leg.pivot);
 
   const extras = addRingAndTrail(root, lane, 2.6);
@@ -311,7 +348,7 @@ export function animateRig(rig: AnimalRig, state: EntrantState, speed: number, d
   if (rig.lastState !== state) {
     rig.lastState = state;
     rig.materials.forEach((m, index) => {
-      const base = rig.baseColors[index]!;
+      const base = rig.baseColors[index];
       if (state === 'DNF') m.color.copy(base).lerp(GREY, 0.75);
       else if (state === 'TIRED' && index === 0) m.color.copy(base).lerp(TIRED_TINT, 0.35);
       else m.color.copy(base);

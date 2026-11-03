@@ -52,7 +52,7 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
     const closesAtLap = atLap === 'last' ? laps : typeof atLap === 'number' ? Math.min(atLap, laps) : null;
     specs.push({
       type: entry.type,
-      params: { ...(entry.params ?? {}) },
+      params: { ...entry.params },
       opensAt: entry.opens?.at === 'START' ? 'START' : 'OPEN',
       closesAtLap,
       closesAtLock: entry.closes?.at === 'LOCK',
@@ -69,9 +69,12 @@ export function validateTemplate(entries: unknown): TemplateEntry[] {
   return entries.map((raw, index) => {
     const entry = raw as TemplateEntry;
     if (!MARKET_TYPES.includes(entry.type)) throw new Error(`markets[${index}].type is invalid`);
-    if (entry.type === 'FINISH_POSITION' && ![1, 2, 3].includes(entry.params?.position ?? 0)) throw new Error(`markets[${index}].params.position must be 1, 2 or 3`);
-    if (entry.type === 'TOP_N' && !((entry.params?.n ?? 0) >= 2 && (entry.params?.n ?? 0) <= 5)) throw new Error(`markets[${index}].params.n must be 2..5`);
-    if (entry.type === 'LEADER_AT_LAP' && !((entry.every ?? 0) >= 1)) throw new Error(`markets[${index}].every must be ≥ 1`);
+    if (entry.type === 'FINISH_POSITION' && ![1, 2, 3].includes(entry.params?.position ?? 0))
+      throw new Error(`markets[${index}].params.position must be 1, 2 or 3`);
+    if (entry.type === 'TOP_N' && !((entry.params?.n ?? 0) >= 2 && (entry.params?.n ?? 0) <= 5))
+      throw new Error(`markets[${index}].params.n must be 2..5`);
+    if (entry.type === 'LEADER_AT_LAP' && !((entry.every ?? 0) >= 1))
+      throw new Error(`markets[${index}].every must be ≥ 1`);
     return entry;
   });
 }
@@ -105,11 +108,18 @@ export function suspensionFor(
   positions: ReadonlyMap<string, number>,
 ): { reason: 'INCIDENT'; ticks: number } | null {
   if (events.some((event) => INCIDENT_EVENTS.has(event.type))) return { reason: 'INCIDENT', ticks: 4 };
-  const topOvertake = events.some((event) => event.type === 'OVERTAKE' && event.a !== undefined && (positions.get(event.a) ?? 99) <= 3);
+  const topOvertake = events.some(
+    (event) => event.type === 'OVERTAKE' && event.a !== undefined && (positions.get(event.a) ?? 99) <= 3,
+  );
   return topOvertake ? { reason: 'INCIDENT', ticks: 2 } : null;
 }
 
-export function winningEntrants(type: MarketType, params: Record<string, number>, order: readonly string[], lapLeaders: ReadonlyMap<number, string>): string[] {
+export function winningEntrants(
+  type: MarketType,
+  params: Record<string, number>,
+  order: readonly string[],
+  lapLeaders: ReadonlyMap<number, string>,
+): string[] {
   switch (type) {
     case 'FINISH_POSITION': {
       const entrant = order[(params.position ?? 1) - 1];
@@ -128,7 +138,12 @@ export function winningEntrants(type: MarketType, params: Record<string, number>
 
 export type LegSelection = { entrantId?: string | null; order?: readonly string[] | null };
 
-export function legWins(type: MarketType, selection: LegSelection, winning: readonly string[], order: readonly string[]): boolean {
+export function legWins(
+  type: MarketType,
+  selection: LegSelection,
+  winning: readonly string[],
+  order: readonly string[],
+): boolean {
   if (type === 'TRICAST') {
     const picked = selection.order ?? [];
     return picked.length === 3 && picked.every((entrant, index) => order[index] === entrant);

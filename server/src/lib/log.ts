@@ -3,7 +3,14 @@ import { traceIds } from './telemetry.ts';
 type Fields = Record<string, unknown>;
 
 function write(level: string, msg: string, fields?: Fields): void {
-  const line = { t: new Date().toISOString(), level, service: process.env.SERVICE_NAME ?? 'ars', msg, ...traceIds(), ...fields };
+  const line = {
+    t: new Date().toISOString(),
+    level,
+    service: process.env.SERVICE_NAME ?? 'ars',
+    msg,
+    ...traceIds(),
+    ...fields,
+  };
   process.stdout.write(`${JSON.stringify(line)}\n`);
 }
 

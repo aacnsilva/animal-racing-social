@@ -3,7 +3,16 @@ import { before, describe, it } from 'node:test';
 import { summarizeSql } from '../src/lib/db.ts';
 import { log } from '../src/lib/log.ts';
 import {
-  extractContext, hasRemoteParent, initTelemetry, injectHeaders, shutdownTelemetry, spanContext, startSpan, telemetryEnabled, traceIds, withSpan,
+  extractContext,
+  hasRemoteParent,
+  initTelemetry,
+  injectHeaders,
+  shutdownTelemetry,
+  spanContext,
+  startSpan,
+  telemetryEnabled,
+  traceIds,
+  withSpan,
 } from '../src/lib/telemetry.ts';
 
 before(() => {
@@ -14,10 +23,10 @@ before(() => {
 function captureStdout(fn: () => void): string {
   const original = process.stdout.write.bind(process.stdout);
   let output = '';
-  process.stdout.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = (chunk: string | Uint8Array) => {
     output += chunk.toString();
     return true;
-  }) as typeof process.stdout.write;
+  };
   try {
     fn();
   } finally {
@@ -41,7 +50,10 @@ describe('W3C propagation', () => {
   it('round-trips through HTTP-style headers', async () => {
     await withSpan('producer', {}, async (span) => {
       const headers = injectHeaders();
-      assert.match(headers.traceparent ?? '', new RegExp(`^00-${span.spanContext().traceId}-${span.spanContext().spanId}-01$`));
+      assert.match(
+        headers.traceparent ?? '',
+        new RegExp(`^00-${span.spanContext().traceId}-${span.spanContext().spanId}-01$`),
+      );
       const parent = extractContext(headers);
       assert.equal(hasRemoteParent(parent), true);
       await withSpan('consumer', { parent }, async (child) => {
@@ -53,7 +65,7 @@ describe('W3C propagation', () => {
   it('extracts Kafka Buffer headers and ignores missing context', () => {
     const span = startSpan('kafka');
     const headers = injectHeaders(spanContext(span));
-    const kafkaHeaders = { traceparent: Buffer.from(headers.traceparent!), other: Buffer.from('x') };
+    const kafkaHeaders = { traceparent: Buffer.from(headers.traceparent), other: Buffer.from('x') };
     assert.equal(hasRemoteParent(extractContext(kafkaHeaders)), true);
     assert.equal(hasRemoteParent(extractContext({})), false);
     assert.equal(hasRemoteParent(extractContext(null)), false);
@@ -85,9 +97,21 @@ describe('log correlation', () => {
 
 describe('SQL span names', () => {
   it('summarizes operation and table without parameters', () => {
-    assert.deepEqual(summarizeSql('SELECT * FROM betting.bets WHERE user_id = $1'), { operation: 'SELECT', table: 'betting.bets' });
-    assert.deepEqual(summarizeSql('INSERT INTO wallet.ledger_entries (a) VALUES ($1)'), { operation: 'INSERT', table: 'wallet.ledger_entries' });
-    assert.deepEqual(summarizeSql(`UPDATE market.markets\n  SET status = 'OPEN'`), { operation: 'UPDATE', table: 'market.markets' });
-    assert.deepEqual(summarizeSql('WITH x AS (SELECT 1) SELECT * FROM racing.races'), { operation: 'SELECT', table: 'racing.races' });
+    assert.deepEqual(summarizeSql('SELECT * FROM betting.bets WHERE user_id = $1'), {
+      operation: 'SELECT',
+      table: 'betting.bets',
+    });
+    assert.deepEqual(summarizeSql('INSERT INTO wallet.ledger_entries (a) VALUES ($1)'), {
+      operation: 'INSERT',
+      table: 'wallet.ledger_entries',
+    });
+    assert.deepEqual(summarizeSql(`UPDATE market.markets\n  SET status = 'OPEN'`), {
+      operation: 'UPDATE',
+      table: 'market.markets',
+    });
+    assert.deepEqual(summarizeSql('WITH x AS (SELECT 1) SELECT * FROM racing.races'), {
+      operation: 'SELECT',
+      table: 'racing.races',
+    });
   });
 });

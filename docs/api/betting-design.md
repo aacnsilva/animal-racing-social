@@ -44,18 +44,18 @@ Scheduler ──► Race Engine ──(sealed script)──► Script Store
                        Wallet (ledger)
 ```
 
-| Service | Responsibility |
-|---|---|
-| Scheduler | Owns the daily race programme; picks entrants; triggers script generation before each race. |
-| Race Engine | Chooses track/laps for a target duration, simulates, seals the script. Stateless. |
+| Service          | Responsibility                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| Scheduler        | Owns the daily race programme; picks entrants; triggers script generation before each race.                 |
+| Race Engine      | Chooses track/laps for a target duration, simulates, seals the script. Stateless.                           |
 | Race Broadcaster | Publishes `RaceTick` at `startAt + tick × tickMs`. Many races run concurrently, one partition key per race. |
-| Odds Engine | On each tick: Monte Carlo rest-of-race from revealed state → prices for every open market. |
-| Market Manager | Opens/suspends/closes markets on race progress (e.g. opens `LEADER_AT_LAP`, suspends before checkpoints). |
-| Bet Service | Validates bets and cash-outs, applies acceptance delay, reserves stake. |
-| Settlement | Results markets on `LapCompleted` / `RaceFinished`; emits `BetSettled`. |
-| Wallet | Consumes bet events, writes ledger entries. |
-| Stable | Animal lifecycle: aging, form history, retirement, new recruits. |
-| SSE Gateway | Fans `race.ticks` + `market.events` + user's `bet.events` to browsers. |
+| Odds Engine      | On each tick: Monte Carlo rest-of-race from revealed state → prices for every open market.                  |
+| Market Manager   | Opens/suspends/closes markets on race progress (e.g. opens `LEADER_AT_LAP`, suspends before checkpoints).   |
+| Bet Service      | Validates bets and cash-outs, applies acceptance delay, reserves stake.                                     |
+| Settlement       | Results markets on `LapCompleted` / `RaceFinished`; emits `BetSettled`.                                     |
+| Wallet           | Consumes bet events, writes ledger entries.                                                                 |
+| Stable           | Animal lifecycle: aging, form history, retirement, new recruits.                                            |
+| SSE Gateway      | Fans `race.ticks` + `market.events` + user's `bet.events` to browsers.                                      |
 
 ## 3. Race lifecycle
 
@@ -91,11 +91,11 @@ rule applies to `LEADER_AT_LAP` checkpoints. Settlement never handles dead heats
   ends (it would leak the winner's pace). Public metadata shows `laps` and
   `estimatedDurationSec`.
 
-| Class | Laps | Approx. duration |
-|---|---|---|
-| SPRINT | 3–4 | 2–3 min |
-| STANDARD | 6–8 | ~5 min |
-| ENDURANCE | 12–15 | up to 10 min |
+| Class     | Laps  | Approx. duration |
+| --------- | ----- | ---------------- |
+| SPRINT    | 3–4   | 2–3 min          |
+| STANDARD  | 6–8   | ~5 min           |
+| ENDURANCE | 12–15 | up to 10 min     |
 
 ### Venues
 
@@ -105,8 +105,12 @@ rule applies to `LEADER_AT_LAP` checkpoints. Settlement never handles dead heats
 - A venue is versioned static data shared by engine and client:
 
 ```jsonc
-{ "id": "v_dune_loop", "version": 3, "class": "STANDARD",
-  "lanes": 8, "lapLength": 520,
+{
+  "id": "v_dune_loop",
+  "version": 3,
+  "class": "STANDARD",
+  "lanes": 8,
+  "lapLength": 520,
   "lapsRange": [6, 8],
   "surface": "SAND",
   "segments": [
@@ -114,9 +118,10 @@ rule applies to `LEADER_AT_LAP` checkpoints. Settlement never handles dead heats
     { "type": "CURVE", "radius": 45, "angle": 180 },
     { "type": "UPHILL", "length": 60, "grade": 0.08 },
     { "type": "STRAIGHT", "length": 90 },
-    { "type": "CURVE", "radius": 35, "angle": 180 }
+    { "type": "CURVE", "radius": 35, "angle": 180 },
   ],
-  "assets": { "model": "venues/dune_loop/v3.glb" } }
+  "assets": { "model": "venues/dune_loop/v3.glb" },
+}
 ```
 
 - **Races are single-species.** Entrants are always the same species; venues
@@ -125,20 +130,20 @@ rule applies to `LEADER_AT_LAP` checkpoints. Settlement never handles dead heats
 
 Draft venue roster:
 
-| Class | Venue | Surface | Character |
-|---|---|---|---|
-| SPRINT | Meadow Dash | GRASS | Flat, one gentle curve, pure speed |
-| SPRINT | Dune Drag | SAND | Straight sand strip, stamina tax |
-| SPRINT | Frost Strip | ICE | Short, slippery curves (stumble risk) |
-| SPRINT | Canyon Chute | DIRT | Downhill start, uphill finish |
-| STANDARD | Dune Loop | SAND | Classic oval with a hill |
-| STANDARD | Riverside Oval | GRASS | Wide, balanced, the "neutral" venue |
-| STANDARD | Mudflat Ring | MUD | Heavy going, favours stamina |
-| STANDARD | Hairpin Hollow | DIRT | Tight hairpins, favours acceleration |
-| ENDURANCE | Summit Circuit | DIRT | Long climbs and descents |
-| ENDURANCE | Glacier Grand | ICE | Long laps, consistency matters |
-| ENDURANCE | Jungle Marathon | MUD | Mixed terrain, attrition race |
-| ENDURANCE | Coastal Classic | SAND | Long straights, wind-swept sand |
+| Class     | Venue           | Surface | Character                             |
+| --------- | --------------- | ------- | ------------------------------------- |
+| SPRINT    | Meadow Dash     | GRASS   | Flat, one gentle curve, pure speed    |
+| SPRINT    | Dune Drag       | SAND    | Straight sand strip, stamina tax      |
+| SPRINT    | Frost Strip     | ICE     | Short, slippery curves (stumble risk) |
+| SPRINT    | Canyon Chute    | DIRT    | Downhill start, uphill finish         |
+| STANDARD  | Dune Loop       | SAND    | Classic oval with a hill              |
+| STANDARD  | Riverside Oval  | GRASS   | Wide, balanced, the "neutral" venue   |
+| STANDARD  | Mudflat Ring    | MUD     | Heavy going, favours stamina          |
+| STANDARD  | Hairpin Hollow  | DIRT    | Tight hairpins, favours acceleration  |
+| ENDURANCE | Summit Circuit  | DIRT    | Long climbs and descents              |
+| ENDURANCE | Glacier Grand   | ICE     | Long laps, consistency matters        |
+| ENDURANCE | Jungle Marathon | MUD     | Mixed terrain, attrition race         |
+| ENDURANCE | Coastal Classic | SAND    | Long straights, wind-swept sand       |
 
 - The engine simulates in 1D (`dist`, `lane`) and looks up the segment at each
   distance for modifiers (curves penalize velocity, uphill drains stamina,
@@ -156,14 +161,18 @@ Draft venue roster:
 
 ```jsonc
 {
-  "raceId": "r_…", "seed": "…", "tickMs": 500,
+  "raceId": "r_…",
+  "seed": "…",
+  "tickMs": 500,
   "track": { "length": 400, "laps": 7, "shape": "oval" },
   "ticks": [
-    { "tick": 0, "lap": 1,
-      "entrants": [{ "id": "e1", "dist": 0.0, "lane": 2, "speed": 0,
-                     "staminaPct": 100, "state": "RUNNING" }],
-      "events": [] }
-  ]
+    {
+      "tick": 0,
+      "lap": 1,
+      "entrants": [{ "id": "e1", "dist": 0.0, "lane": 2, "speed": 0, "staminaPct": 100, "state": "RUNNING" }],
+      "events": [],
+    },
+  ],
 }
 ```
 
@@ -207,12 +216,12 @@ The Odds Engine's pre-race prices use current stats; form is informational
 
 ## 5. Markets
 
-| Type | Params | Selection | Window |
-|---|---|---|---|
-| `FINISH_POSITION` | `position: 1\|2\|3` | entrant | OPEN → closes at configured lap (default: last lap) |
-| `TOP_N` | `n: 3` | entrant | OPEN → closes at configured lap |
-| `TRICAST` | — | exact `[1st,2nd,3rd]` | OPEN only (pre-race) |
-| `LEADER_AT_LAP` | `lap: k` | entrant | opened by Market Manager in-running; closes `suspendTicksBefore` ticks before lap `k` completes |
+| Type              | Params              | Selection             | Window                                                                                          |
+| ----------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `FINISH_POSITION` | `position: 1\|2\|3` | entrant               | OPEN → closes at configured lap (default: last lap)                                             |
+| `TOP_N`           | `n: 3`              | entrant               | OPEN → closes at configured lap                                                                 |
+| `TRICAST`         | —                   | exact `[1st,2nd,3rd]` | OPEN only (pre-race)                                                                            |
+| `LEADER_AT_LAP`   | `lap: k`            | entrant               | opened by Market Manager in-running; closes `suspendTicksBefore` ticks before lap `k` completes |
 
 `FINISH_POSITION{position:1}` is the plain win market.
 `LEADER_AT_LAP` markets are generated from the lap count (every 2–3 laps, never
@@ -224,14 +233,17 @@ Which markets a race gets comes from admin-editable templates per race
 class, not code:
 
 ```jsonc
-{ "class": "STANDARD", "markets": [
-  { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
-  { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
-  { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
-  { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
-  { "type": "TRICAST", "closes": { "at": "LOCK" } },
-  { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" },
-    "closes": { "ticksBeforeCheckpoint": 6 } } ] }
+{
+  "class": "STANDARD",
+  "markets": [
+    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
+    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
+    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+    { "type": "TRICAST", "closes": { "at": "LOCK" } },
+    { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } },
+  ],
+}
 ```
 
 Default: all classes share the same template; SPRINT omits `LEADER_AT_LAP`.

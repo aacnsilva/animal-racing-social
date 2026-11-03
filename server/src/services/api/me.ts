@@ -8,14 +8,34 @@ import { NOTIFICATION_TYPES } from '../../domain/notifications.ts';
 import { betsJson } from '../../read/bets.ts';
 import { requireActiveUser, requireUser, type Deps } from './context.ts';
 
-const BET_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED', 'WON', 'LOST', 'VOID', 'CASHED_OUT', 'OPEN', 'SETTLED'] as const;
+const BET_STATUSES = [
+  'PENDING',
+  'ACCEPTED',
+  'REJECTED',
+  'WON',
+  'LOST',
+  'VOID',
+  'CASHED_OUT',
+  'OPEN',
+  'SETTLED',
+] as const;
 
 function notificationJson(row: Record<string, any>) {
-  return { id: row.notification_id, type: row.type, payload: row.payload, createdAt: iso(row.created_at), readAt: iso(row.read_at) };
+  return {
+    id: row.notification_id,
+    type: row.type,
+    payload: row.payload,
+    createdAt: iso(row.created_at),
+    readAt: iso(row.read_at),
+  };
 }
 
 async function unreadCount(deps: Deps, userId: string): Promise<number> {
-  const row = await one(deps.pool, 'SELECT count(*)::int AS n FROM notification.notifications WHERE user_id = $1 AND read_at IS NULL', [userId]);
+  const row = await one(
+    deps.pool,
+    'SELECT count(*)::int AS n FROM notification.notifications WHERE user_id = $1 AND read_at IS NULL',
+    [userId],
+  );
   return row!.n;
 }
 
@@ -25,7 +45,14 @@ export function meRoutes(router: Router, deps: Deps): void {
     const limit = pageLimit(ctx.query);
     const cursor = decodeCursor(ctx.query.get('cursor'));
     const statusParam = ctx.query.get('status') ? v.oneOf(ctx.query.get('status'), 'status', BET_STATUSES) : null;
-    const statuses = statusParam === 'OPEN' ? ['PENDING', 'ACCEPTED'] : statusParam === 'SETTLED' ? ['WON', 'LOST', 'VOID', 'CASHED_OUT'] : statusParam ? [statusParam] : null;
+    const statuses =
+      statusParam === 'OPEN'
+        ? ['PENDING', 'ACCEPTED']
+        : statusParam === 'SETTLED'
+          ? ['WON', 'LOST', 'VOID', 'CASHED_OUT']
+          : statusParam
+            ? [statusParam]
+            : null;
     const raceId = ctx.query.get('raceId') ? v.id(ctx.query.get('raceId'), 'raceId') : null;
     const rows = await many(
       deps.pool,
@@ -60,8 +87,13 @@ export function meRoutes(router: Router, deps: Deps): void {
     const result = page(rows, limit, (row) => [row.created_at.toISOString(), row.entry_id]);
     return {
       items: result.items.map((row) => ({
-        entryId: row.entry_id, seasonId: row.season_id, type: row.type, amount: Number(row.amount), refId: row.ref_id,
-        balanceAfter: Number(row.balance_after), createdAt: iso(row.created_at),
+        entryId: row.entry_id,
+        seasonId: row.season_id,
+        type: row.type,
+        amount: Number(row.amount),
+        refId: row.ref_id,
+        balanceAfter: Number(row.balance_after),
+        createdAt: iso(row.created_at),
       })),
       nextCursor: result.nextCursor,
     };
@@ -73,7 +105,8 @@ export function meRoutes(router: Router, deps: Deps): void {
     const reward = await one(deps.pool, 'SELECT * FROM wallet.daily_rewards WHERE user_id = $1', [userId]);
     const today = utcDay();
     const claimedToday = reward?.last_claim_day === today;
-    const liveStreak = reward && (reward.last_claim_day === today || reward.last_claim_day === addDays(today, -1)) ? reward.streak : 0;
+    const liveStreak =
+      reward && (reward.last_claim_day === today || reward.last_claim_day === addDays(today, -1)) ? reward.streak : 0;
     return {
       claimable: !claimedToday && Boolean(season),
       amount: Number(season?.daily_grant ?? 50),
@@ -102,17 +135,27 @@ export function meRoutes(router: Router, deps: Deps): void {
       [userId, unreadOnly, cursor?.[0] ?? null, cursor?.[1] ?? '0', limit + 1],
     );
     const result = page(rows, limit, (row) => [row.created_at.toISOString(), row.notification_id]);
-    return { items: result.items.map(notificationJson), nextCursor: result.nextCursor, unreadCount: await unreadCount(deps, userId) };
+    return {
+      items: result.items.map(notificationJson),
+      nextCursor: result.nextCursor,
+      unreadCount: await unreadCount(deps, userId),
+    };
   });
 
   router.post('/v1/me/notifications/read', async (ctx) => {
     const { userId } = requireUser(ctx);
     const body = await ctx.body();
     if (body.all === true) {
-      await deps.pool.query('UPDATE notification.notifications SET read_at = now() WHERE user_id = $1 AND read_at IS NULL', [userId]);
+      await deps.pool.query(
+        'UPDATE notification.notifications SET read_at = now() WHERE user_id = $1 AND read_at IS NULL',
+        [userId],
+      );
     } else {
       const ids = v.arr(body.ids, 'ids', { min: 1, max: 200 }).map((id, index) => v.id(id, `ids[${index}]`));
-      await deps.pool.query('UPDATE notification.notifications SET read_at = now() WHERE user_id = $1 AND notification_id = ANY($2) AND read_at IS NULL', [userId, ids]);
+      await deps.pool.query(
+        'UPDATE notification.notifications SET read_at = now() WHERE user_id = $1 AND notification_id = ANY($2) AND read_at IS NULL',
+        [userId, ids],
+      );
     }
     const count = await unreadCount(deps, userId);
     await deps.redis.set(`notif:unread:${userId}`, String(count));
@@ -141,6 +184,6 @@ export function meRoutes(router: Router, deps: Deps): void {
        ON CONFLICT (user_id) DO UPDATE SET enabled = EXCLUDED.enabled, types = EXCLUDED.types, updated_at = now()`,
       [userId, enabled, JSON.stringify(types)],
     );
-    return { enabled, types: Object.fromEntries(NOTIFICATION_TYPES.map((type) => [type, types[type] !== false])) };
+    return { enabled, types: Object.fromEntries(NOTIFICATION_TYPES.map((type) => [type, types[type]])) };
   });
 }

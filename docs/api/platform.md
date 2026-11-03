@@ -54,16 +54,16 @@ POST /v1/me/rewards/daily   → 200 { amount, balance } | 409 ALREADY_CLAIMED
 `/v1/admin/*`, role `ADMIN` (granted manually to specific userIds). Every
 call writes an audit log entry (`admin.audit` topic: who, what, before/after).
 
-| Area | Endpoints |
-|---|---|
+| Area      | Endpoints                                                                                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Programme | `GET/PUT /admin/programme` (races/hour, class mix, species rotation) · `POST /admin/races` (schedule one-off) · `POST /admin/races/{id}/cancel` (all bets VOID) |
-| Markets | `GET/PUT /admin/market-templates/{class}` · `POST /admin/markets/{id}/suspend` · `/resume` · `/void` |
-| Venues | `GET/POST /admin/venues` · `PUT /admin/venues/{id}` (creates a new version) · `POST /admin/venues/{id}/retire` |
-| Engine | `GET /admin/engine/versions` · `PUT /admin/engine/active` (version for new races) · `GET/PUT /admin/engine/params/{version}` (draft params → new version) |
-| Stable | `GET /admin/animals?status=` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size` |
-| Seasons | `GET/POST /admin/seasons` · `PUT /admin/seasons/{id}` (only while UPCOMING) |
-| Users | `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` (ledger `ADMIN_ADJUST` with reason) · `POST /admin/users/{id}/ban` |
-| Ops | `GET /admin/dlq` · `POST /admin/dlq/{id}/replay` · `GET /admin/races/{id}/debug` (script access **only after FINISHED**) |
+| Markets   | `GET/PUT /admin/market-templates/{class}` · `POST /admin/markets/{id}/suspend` · `/resume` · `/void`                                                            |
+| Venues    | `GET/POST /admin/venues` · `PUT /admin/venues/{id}` (creates a new version) · `POST /admin/venues/{id}/retire`                                                  |
+| Engine    | `GET /admin/engine/versions` · `PUT /admin/engine/active` (version for new races) · `GET/PUT /admin/engine/params/{version}` (draft params → new version)       |
+| Stable    | `GET /admin/animals?status=` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                                                |
+| Seasons   | `GET/POST /admin/seasons` · `PUT /admin/seasons/{id}` (only while UPCOMING)                                                                                     |
+| Users     | `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` (ledger `ADMIN_ADJUST` with reason) · `POST /admin/users/{id}/ban`   |
+| Ops       | `GET /admin/dlq` · `POST /admin/dlq/{id}/replay` · `GET /admin/races/{id}/debug` (script access **only after FINISHED**)                                        |
 
 Rules: admins can't read a sealed script before `FINISHED`, the same
 fairness rule as everyone else. Engine params and venues are versioned, never
@@ -110,18 +110,18 @@ GET /v1/races/{raceId}/stream        (cookie auth; anonymous = public events onl
 - One Kafka-fed fan-out per race in the SSE Gateway; the user's own bet
   events are filtered per connection.
 
-| Event | Data (JSON) | Audience |
-|---|---|---|
-| `snapshot` | `{ race, tick?, markets[], myBets[] }` | on connect |
-| `race.lifecycle` | `{ status, at }` (OPEN→LOCKED→LIVE→FINISHED→SETTLED) | all |
-| `race.tick` | `RaceTick` | all (LIVE) |
-| `race.lap` | `{ lap, leaderEntrantId, standings[] }` | all |
-| `market.opened` / `market.closed` / `market.suspended` / `market.resumed` | `{ marketId, … }` | all |
-| `market.price` | `{ marketId, priceVersion, selections[{selectionId, price}] }` | all, ≤ 1 Hz |
-| `market.resulted` | `{ marketId, winning[] }` | all |
-| `bet.updated` | `Bet` | own bets only |
-| `cashout.updated` | `{ betId, amount, quoteId, expiresAtTick }` | own open bets, ≤ 1 Hz |
-| `ping` | `{}` | all |
+| Event                                                                     | Data (JSON)                                                    | Audience              |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------- |
+| `snapshot`                                                                | `{ race, tick?, markets[], myBets[] }`                         | on connect            |
+| `race.lifecycle`                                                          | `{ status, at }` (OPEN→LOCKED→LIVE→FINISHED→SETTLED)           | all                   |
+| `race.tick`                                                               | `RaceTick`                                                     | all (LIVE)            |
+| `race.lap`                                                                | `{ lap, leaderEntrantId, standings[] }`                        | all                   |
+| `market.opened` / `market.closed` / `market.suspended` / `market.resumed` | `{ marketId, … }`                                              | all                   |
+| `market.price`                                                            | `{ marketId, priceVersion, selections[{selectionId, price}] }` | all, ≤ 1 Hz           |
+| `market.resulted`                                                         | `{ marketId, winning[] }`                                      | all                   |
+| `bet.updated`                                                             | `Bet`                                                          | own bets only         |
+| `cashout.updated`                                                         | `{ betId, amount, quoteId, expiresAtTick }`                    | own open bets, ≤ 1 Hz |
+| `ping`                                                                    | `{}`                                                           | all                   |
 
 ## 7. Notifications: in-app inbox only
 
@@ -138,18 +138,18 @@ PUT  /v1/me/notification-settings              { enabled: bool, types: { [type]:
 - `enabled: false` turns everything off; per-type toggles otherwise
   (default all on).
 - A Notification Service (TS) consumes `bet.events`, `race.lifecycle`, `season.events`
-and leaderboard changes,
+  and leaderboard changes,
   checks settings, writes the inbox (Postgres, keyed by userId, 30-day
   retention) and pushes a `notification` event to any open race streams for
   that user, plus a badge count via `GET …?unread=true` polling.
 
-| Type | Trigger |
-|---|---|
-| `RACE_STARTING` | a race you bet on starts in 2 min |
-| `DAILY_REWARD_READY` | new UTC day, unclaimed |
-| `LEADERBOARD_MOVE` | entered/left top 10 / top 100 |
-| `SEASON_ENDING` | `endsAt − 24 h` |
-| `SEASON_RESULT` | `SeasonEnded` (your final rank) |
-| `BET_WON` / `BET_LOST` / `BET_VOID` | `BetSettled` |
-| `BET_REJECTED` | live bet not accepted |
-| `CASHOUT_DONE` / `CASHOUT_REJECTED` | cash-out result |
+| Type                                | Trigger                           |
+| ----------------------------------- | --------------------------------- |
+| `RACE_STARTING`                     | a race you bet on starts in 2 min |
+| `DAILY_REWARD_READY`                | new UTC day, unclaimed            |
+| `LEADERBOARD_MOVE`                  | entered/left top 10 / top 100     |
+| `SEASON_ENDING`                     | `endsAt − 24 h`                   |
+| `SEASON_RESULT`                     | `SeasonEnded` (your final rank)   |
+| `BET_WON` / `BET_LOST` / `BET_VOID` | `BetSettled`                      |
+| `BET_REJECTED`                      | live bet not accepted             |
+| `CASHOUT_DONE` / `CASHOUT_REJECTED` | cash-out result                   |

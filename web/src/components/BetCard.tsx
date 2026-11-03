@@ -54,14 +54,25 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
     () =>
       onCashoutRejected((betId, reason) => {
         if (betId !== bet.id) return;
-        setState({ kind: 'rejected', code: reason || undefined, message: `Cash-out rejected · ${friendlyCode(reason || 'NOT_CASHABLE')}` });
+        setState({
+          kind: 'rejected',
+          code: reason || undefined,
+          message: `Cash-out rejected · ${friendlyCode(reason || 'NOT_CASHABLE')}`,
+        });
       }),
     [bet.id],
   );
 
   useEffect(() => {
     if (state.kind !== 'pending') return;
-    const timer = setTimeout(() => setState({ kind: 'error', message: 'Cash-out not confirmed yet. It may have been rejected; check your notifications.' }), 20_000);
+    const timer = setTimeout(
+      () =>
+        setState({
+          kind: 'error',
+          message: 'Cash-out not confirmed yet. It may have been rejected; check your notifications.',
+        }),
+      20_000,
+    );
     const off = onBet((updated) => {
       if (updated.id === bet.id && updated.status !== 'ACCEPTED') clearTimeout(timer);
     });
@@ -73,7 +84,7 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
 
   const liveUsable = live && (!unavailable || live.at > unavailable.at) && (!fetched || live.at >= fetched.at);
   const current = liveUsable ? live : fetched;
-  const blocked = current ? null : unavailable?.code ?? null;
+  const blocked = current ? null : (unavailable?.code ?? null);
 
   const confirm = async (shown: LiveCashout, attempt = 0, floor?: number): Promise<void> => {
     setState({ kind: 'sending', message: 'Requesting cash-out…' });
@@ -104,7 +115,11 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
       if (code === 'QUOTE_EXPIRED' && attempt < 3) {
         const next = await fetchQuote();
         if (next && next.amount >= minAmount) return confirm(next, attempt + 1, minAmount);
-        setState({ kind: 'error', code, message: next ? `Value moved to ${fmtPoints(next.amount)} pts. Confirm again.` : friendlyError(error) });
+        setState({
+          kind: 'error',
+          code,
+          message: next ? `Value moved to ${fmtPoints(next.amount)} pts. Confirm again.` : friendlyError(error),
+        });
         return;
       }
       setState({ kind: 'error', code, message: friendlyError(error) });
@@ -136,7 +151,12 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
         </button>
       ) : (
         <span className="row" style={{ gap: 6 }}>
-          <button className="btn small primary" data-testid="cashout-confirm" disabled={!current || state.kind === 'sending'} onClick={() => current && void confirm(current)}>
+          <button
+            className="btn small primary"
+            data-testid="cashout-confirm"
+            disabled={!current || state.kind === 'sending'}
+            onClick={() => current && void confirm(current)}
+          >
             Confirm {current ? `${fmtPoints(current.amount)} pts` : ''}
           </button>
           <button className="btn small ghost" onClick={() => setConfirming(false)}>
@@ -145,7 +165,10 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
         </span>
       )}
       {state.kind !== 'idle' && state.message && (
-        <div className={`notice small ${state.kind === 'error' || state.kind === 'rejected' ? 'error' : 'info'}`} style={{ width: '100%' }}>
+        <div
+          className={`notice small ${state.kind === 'error' || state.kind === 'rejected' ? 'error' : 'info'}`}
+          style={{ width: '100%' }}
+        >
           {state.message}
           {state.code && <span className="code">{state.code}</span>}
         </div>
@@ -188,7 +211,12 @@ export function BetCard({
         : 'Bet';
   const dead = bet.status === 'LOST' || bet.status === 'REJECTED';
   return (
-    <div className={`bet-card${dead ? ' lost' : ''}`} data-testid="my-bet" data-bet-id={bet.id} data-bet-status={bet.status}>
+    <div
+      className={`bet-card${dead ? ' lost' : ''}`}
+      data-testid="my-bet"
+      data-bet-id={bet.id}
+      data-bet-status={bet.status}
+    >
       <div className="top">
         <b title={title}>{title}</b>
         <span className={`chip bet-status-${bet.status}`}>{STATUS_LABEL[bet.status] ?? bet.status}</span>

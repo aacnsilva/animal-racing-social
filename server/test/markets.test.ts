@@ -2,10 +2,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import {
-  expandTemplate, leaderLaps, legWins, shouldCloseInRunning, suspensionFor, validateTemplate, winningEntrants, type TemplateEntry,
+  expandTemplate,
+  leaderLaps,
+  legWins,
+  shouldCloseInRunning,
+  suspensionFor,
+  validateTemplate,
+  winningEntrants,
+  type TemplateEntry,
 } from '../src/domain/markets.ts';
 
-const templates = JSON.parse(readFileSync(new URL('../../shared/market-templates.json', import.meta.url), 'utf8')) as Record<string, { markets: TemplateEntry[] }>;
+const templates = JSON.parse(
+  readFileSync(new URL('../../shared/market-templates.json', import.meta.url), 'utf8'),
+) as Record<string, { markets: TemplateEntry[] }>;
 
 describe('market templates', () => {
   it('never offers a leader market on the final lap', () => {
@@ -15,9 +24,12 @@ describe('market templates', () => {
   });
 
   it('expands the standard template for a 7-lap race', () => {
-    const specs = expandTemplate(templates.STANDARD!.markets, 7);
+    const specs = expandTemplate(templates.STANDARD.markets, 7);
     assert.equal(specs.filter((s) => s.type === 'FINISH_POSITION').length, 3);
-    assert.deepEqual(specs.filter((s) => s.type === 'LEADER_AT_LAP').map((s) => s.params.lap), [2, 4, 6]);
+    assert.deepEqual(
+      specs.filter((s) => s.type === 'LEADER_AT_LAP').map((s) => s.params.lap),
+      [2, 4, 6],
+    );
     const win = specs.find((s) => s.type === 'FINISH_POSITION' && s.params.position === 1)!;
     assert.equal(win.closesAtLap, 7);
     assert.equal(win.opensAt, 'OPEN');
@@ -25,13 +37,16 @@ describe('market templates', () => {
   });
 
   it('omits leader markets for sprints', () => {
-    assert.equal(expandTemplate(templates.SPRINT!.markets, 4).some((s) => s.type === 'LEADER_AT_LAP'), false);
+    assert.equal(
+      expandTemplate(templates.SPRINT.markets, 4).some((s) => s.type === 'LEADER_AT_LAP'),
+      false,
+    );
   });
 
   it('validates admin templates', () => {
     assert.throws(() => validateTemplate([{ type: 'FINISH_POSITION', params: { position: 4 } }]));
     assert.throws(() => validateTemplate([]));
-    assert.equal(validateTemplate(templates.ENDURANCE!.markets).length, 6);
+    assert.equal(validateTemplate(templates.ENDURANCE.markets).length, 6);
   });
 });
 
@@ -49,15 +64,21 @@ describe('in-running rules', () => {
 
   it('closes leader markets a few ticks before the checkpoint', () => {
     const market = { type: 'LEADER_AT_LAP' as const, closesAtLap: 2, ticksBeforeCheckpoint: 6 };
-    assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0]!, dist: 900 }] }, 500, 500), false);
-    assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0]!, dist: 960 }] }, 500, 500), true);
-    assert.equal(shouldCloseInRunning(market, { lap: 3, entrants: [{ ...entrants[0]!, dist: 1001 }] }, 500, 500), true);
+    assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0], dist: 900 }] }, 500, 500), false);
+    assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0], dist: 960 }] }, 500, 500), true);
+    assert.equal(shouldCloseInRunning(market, { lap: 3, entrants: [{ ...entrants[0], dist: 1001 }] }, 500, 500), true);
   });
 
   it('suspends on incidents and top-three overtakes only', () => {
-    const positions = new Map([['e1', 1], ['e5', 5]]);
+    const positions = new Map([
+      ['e1', 1],
+      ['e5', 5],
+    ]);
     assert.deepEqual(suspensionFor([{ type: 'STUMBLE', id: 'e5' }], positions), { reason: 'INCIDENT', ticks: 4 });
-    assert.deepEqual(suspensionFor([{ type: 'OVERTAKE', a: 'e1', id: undefined }], positions), { reason: 'INCIDENT', ticks: 2 });
+    assert.deepEqual(suspensionFor([{ type: 'OVERTAKE', a: 'e1', id: undefined }], positions), {
+      reason: 'INCIDENT',
+      ticks: 2,
+    });
     assert.equal(suspensionFor([{ type: 'OVERTAKE', a: 'e5' }], positions), null);
     assert.equal(suspensionFor([{ type: 'LAP', id: 'e1' }], positions), null);
   });

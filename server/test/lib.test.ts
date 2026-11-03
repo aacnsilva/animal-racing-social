@@ -10,10 +10,10 @@ describe('ids', () => {
   it('are unique, time-ordered and carry the shard', () => {
     const ids = Array.from({ length: 2000 }, () => newId(37));
     assert.equal(new Set(ids).size, ids.length);
-    for (let i = 1; i < ids.length; i++) assert.ok(BigInt(ids[i]!) > BigInt(ids[i - 1]!));
-    assert.equal(shardOf(ids[0]!), 37);
-    assert.ok(Math.abs(idTime(ids[0]!).getTime() - Date.now()) < 5000);
-    assert.ok(BigInt(ids[0]!) < 2n ** 63n);
+    for (let i = 1; i < ids.length; i++) assert.ok(BigInt(ids[i]) > BigInt(ids[i - 1]));
+    assert.equal(shardOf(ids[0]), 37);
+    assert.ok(Math.abs(idTime(ids[0]).getTime() - Date.now()) < 5000);
+    assert.ok(BigInt(ids[0]) < 2n ** 63n);
   });
 
   it('maps entrant ids', () => {
@@ -38,20 +38,28 @@ describe('jwt', () => {
   });
 
   it('computes RFC 7636 PKCE challenges', () => {
-    assert.equal(pkceChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'), 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
+    assert.equal(
+      pkceChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'),
+      'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+    );
   });
 });
 
 describe('router & validation', () => {
   it('matches parameterised routes', () => {
-    const router = new Router().get('/v1/races/:raceId', async () => 'race').get('/v1/races/:raceId/result', async () => 'result');
+    const router = new Router()
+      .get('/v1/races/:raceId', async () => 'race')
+      .get('/v1/races/:raceId/result', async () => 'result');
     assert.deepEqual(router.match('GET', '/v1/races/123/result')?.params, { raceId: '123' });
     assert.equal(router.match('POST', '/v1/races/123'), null);
   });
 
   it('validates input with typed errors', () => {
     assert.equal(v.int('5', 'n', { min: 1 }), 5);
-    assert.throws(() => v.int(0, 'n', { min: 1 }), (error: unknown) => error instanceof ApiError && error.code === 'VALIDATION_FAILED');
+    assert.throws(
+      () => v.int(0, 'n', { min: 1 }),
+      (error: unknown) => error instanceof ApiError && error.code === 'VALIDATION_FAILED',
+    );
     assert.equal(v.oneOf('ANY', 'p', ['NONE', 'ANY']), 'ANY');
     assert.throws(() => v.id('12a', 'id'));
   });

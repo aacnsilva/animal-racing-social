@@ -4,8 +4,8 @@ x-logging: &logging
   logging:
     driver: json-file
     options:
-      max-size: "10m"
-      max-file: "3"
+      max-size: '10m'
+      max-file: '3'
 
 x-server: &server
   image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/server:${IMAGE_TAG:-latest}
@@ -40,11 +40,10 @@ x-script-keys: &script-keys
   SCRIPT_KEY_ID: ${SCRIPT_KEY_ID:-k1}
 
 x-health: &health
-  test: ["CMD-SHELL", "wget -qO- http://localhost:$$PORT/healthz > /dev/null"]
+  test: ['CMD-SHELL', 'wget -qO- http://localhost:$$PORT/healthz > /dev/null']
   interval: 10s
   timeout: 3s
   retries: 12
-
 
 services:
   postgres:
@@ -52,13 +51,13 @@ services:
     restart: unless-stopped
     mem_limit: 512m
     <<: *logging
-    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "work_mem=8MB", "-c", "max_connections=200"]
+    command: ['postgres', '-c', 'shared_buffers=128MB', '-c', 'work_mem=8MB', '-c', 'max_connections=200']
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ars
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ars"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d ars']
       interval: 5s
       timeout: 3s
       retries: 30
@@ -81,12 +80,13 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_NUM_PARTITIONS: 6
-      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+      KAFKA_HEAP_OPTS: '-Xms512m -Xmx512m'
     volumes: [kafkadata:/var/lib/kafka/data]
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      test:
+        ['CMD-SHELL', '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1']
       interval: 10s
       timeout: 10s
       retries: 30
@@ -96,16 +96,17 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     <<: *logging
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "volatile-lru"]
+    command:
+      ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '96mb', '--maxmemory-policy', 'volatile-lru']
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 30
 
   migrate:
     image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/server:${IMAGE_TAG:-latest}
-    command: ["migrate"]
+    command: ['migrate']
     <<: *logging
     environment:
       MIGRATE_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/ars
@@ -119,11 +120,11 @@ services:
 
   api:
     <<: *server
-    command: ["api"]
+    command: ['api']
     environment:
       <<: *env
-      NODE_ID: "1"
-      PORT: "3000"
+      NODE_ID: '1'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_api:${DB_SERVICE_PASSWORD}@postgres:5432/ars
       PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
@@ -136,127 +137,127 @@ services:
 
   sse:
     <<: *server
-    command: ["sse"]
+    command: ['sse']
     environment:
       <<: *env
-      NODE_ID: "2"
-      PORT: "3001"
+      NODE_ID: '2'
+      PORT: '3001'
       DATABASE_URL: postgres://ars_sse:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   wallet:
     <<: *server
-    command: ["wallet"]
+    command: ['wallet']
     environment:
       <<: *env
-      NODE_ID: "3"
-      PORT: "3002"
+      NODE_ID: '3'
+      PORT: '3002'
       DATABASE_URL: postgres://ars_wallet:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   scheduler:
     <<: *server
-    command: ["scheduler"]
+    command: ['scheduler']
     environment:
       <<: *env
-      NODE_ID: "4"
-      PORT: "3000"
+      NODE_ID: '4'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_scheduler:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   stable:
     <<: *server
-    command: ["stable"]
+    command: ['stable']
     environment:
       <<: *env
-      NODE_ID: "5"
-      PORT: "3000"
+      NODE_ID: '5'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_stable:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   market-manager:
     <<: *server
-    command: ["market-manager"]
+    command: ['market-manager']
     environment:
       <<: *env
-      NODE_ID: "6"
-      PORT: "3000"
+      NODE_ID: '6'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_market:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   bet-worker:
     <<: *server
-    command: ["bet-worker"]
+    command: ['bet-worker']
     environment:
       <<: *env
-      NODE_ID: "7"
-      PORT: "3000"
+      NODE_ID: '7'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_betting:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   settlement:
     <<: *server
-    command: ["settlement"]
+    command: ['settlement']
     environment:
       <<: *env
-      NODE_ID: "8"
-      PORT: "3000"
+      NODE_ID: '8'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_betting:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   combo-aggregator:
     <<: *server
-    command: ["combo-aggregator"]
+    command: ['combo-aggregator']
     environment:
       <<: *env
-      NODE_ID: "9"
-      PORT: "3000"
+      NODE_ID: '9'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_betting:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   season:
     <<: *server
-    command: ["season"]
+    command: ['season']
     environment:
       <<: *env
-      NODE_ID: "10"
-      PORT: "3000"
+      NODE_ID: '10'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_season:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   notification:
     <<: *server
-    command: ["notification"]
+    command: ['notification']
     environment:
       <<: *env
-      NODE_ID: "11"
-      PORT: "3000"
+      NODE_ID: '11'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_notification:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
   race-engine:
     <<: *engine
-    command: ["race-engine"]
+    command: ['race-engine']
     environment:
       <<: [*env, *script-keys]
-      PORT: "7001"
+      PORT: '7001'
       DATABASE_URL: postgres://ars_race_engine:${DB_SERVICE_PASSWORD}@postgres:5432/ars
 
   race-broadcaster:
     <<: *engine
-    command: ["race-broadcaster"]
+    command: ['race-broadcaster']
     environment:
       <<: [*env, *script-keys]
-      PORT: "7002"
+      PORT: '7002'
       DATABASE_URL: postgres://ars_broadcaster:${DB_SERVICE_PASSWORD}@postgres:5432/ars
 
   odds-engine:
     <<: *engine
-    command: ["odds-engine"]
+    command: ['odds-engine']
     mem_limit: 384m
     environment:
       <<: *env
-      PORT: "7003"
+      PORT: '7003'
       DATABASE_URL: postgres://ars_odds:${DB_SERVICE_PASSWORD}@postgres:5432/ars
       ODDS_RUNS_PRERACE: ${ODDS_RUNS_PRERACE:-3000}
       ODDS_RUNS_LIVE: ${ODDS_RUNS_LIVE:-1500}
@@ -267,7 +268,7 @@ services:
     restart: unless-stopped
     mem_limit: 128m
     <<: *logging
-    ports: ["80:80", "443:443", "443:443/udp"]
+    ports: ['80:80', '443:443', '443:443/udp']
     environment:
       SITE_ADDRESS: ${DOMAIN}
       API_UPSTREAM: api:3000
@@ -285,10 +286,10 @@ services:
     restart: unless-stopped
     mem_limit: 256m
     <<: *logging
-    command: ["-storageDataPath=/storage", "-retentionPeriod=${METRICS_RETENTION:-30d}", "-memory.allowedPercent=50"]
+    command: ['-storageDataPath=/storage', '-retentionPeriod=${METRICS_RETENTION:-30d}', '-memory.allowedPercent=50']
     volumes: [vmdata:/storage]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8428/health']
       interval: 10s
       timeout: 3s
       retries: 12
@@ -298,7 +299,7 @@ services:
     restart: unless-stopped
     mem_limit: 256m
     <<: *logging
-    command: ["-storageDataPath=/storage", "-retentionPeriod=${LOGS_RETENTION:-14d}", "-memory.allowedPercent=50"]
+    command: ['-storageDataPath=/storage', '-retentionPeriod=${LOGS_RETENTION:-14d}', '-memory.allowedPercent=50']
     volumes: [vldata:/storage]
 
   jaeger:
@@ -311,7 +312,7 @@ services:
       GOMEMLIMIT: 200MiB
     volumes: [jaegerdata:/badger]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:13133/status"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:13133/status']
       interval: 10s
       timeout: 3s
       retries: 12
@@ -346,11 +347,11 @@ services:
     environment:
       GF_SERVER_ROOT_URL: https://${DOMAIN}/grafana/
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
-      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SECURE: 'true'
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?set DISCORD_WEBHOOK_URL in .env}
     volumes: [grafanadata:/var/lib/grafana]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
       interval: 10s
       timeout: 3s
       retries: 12

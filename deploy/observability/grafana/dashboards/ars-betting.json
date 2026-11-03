@@ -2,9 +2,7 @@
   "uid": "ars-betting",
   "title": "ARS \u00b7 Betting & wallet",
   "description": "Bet funnel, acceptance and settlement latency, cash-outs, the points economy and ledger reconciliation",
-  "tags": [
-    "ars"
-  ],
+  "tags": ["ars"],
   "timezone": "browser",
   "editable": false,
   "graphTooltip": 1,
@@ -18,9 +16,7 @@
   "links": [
     {
       "type": "dashboards",
-      "tags": [
-        "ars"
-      ],
+      "tags": ["ars"],
       "asDropdown": true,
       "title": "ARS dashboards",
       "includeVars": false,
@@ -708,9 +704,7 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -841,9 +835,7 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -904,9 +896,7 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -967,9 +957,7 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -1030,9 +1018,7 @@
         "justifyMode": "auto",
         "textMode": "auto",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },

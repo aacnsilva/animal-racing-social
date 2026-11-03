@@ -49,14 +49,16 @@ export function raceJson(row: Record<string, any>, live: LiveState | null = null
     bettingClosesAt: iso(row.betting_closes_at),
     startedAt: iso(row.started_at),
     finishedAt: iso(row.finished_at),
-    currentTick: isLive ? live.tick : row.finish_tick ?? null,
+    currentTick: isLive ? live.tick : (row.finish_tick ?? null),
     currentLap: isLive ? live.lap : null,
     seedHash: hex(row.seed_hash),
     scriptHash: hex(row.script_hash),
     cancelledReason: row.cancelled_reason,
     entrantCount: row.entrant_count ?? 0,
     result: null as string[] | null,
-    winner: row.winner_entrant ? { entrantId: entrantKey(row.winner_entrant), animalId: row.winner_animal, name: row.winner_name } : null,
+    winner: row.winner_entrant
+      ? { entrantId: entrantKey(row.winner_entrant), animalId: row.winner_animal, name: row.winner_name }
+      : null,
   };
 }
 
@@ -76,12 +78,12 @@ export async function entrantsJson(db: Queryable, raceId: string) {
     animal: animalSummary(row),
     result: row.result_status
       ? {
-        officialPosition: row.official_position,
-        asRunPosition: row.as_run_position,
-        resultStatus: row.result_status,
-        finishTimeMs: row.finish_time_ms,
-        distanceCovered: Number(row.distance_covered ?? 0),
-      }
+          officialPosition: row.official_position,
+          asRunPosition: row.as_run_position,
+          resultStatus: row.result_status,
+          finishTimeMs: row.finish_time_ms,
+          distanceCovered: Number(row.distance_covered ?? 0),
+        }
       : null,
   }));
 }
@@ -92,6 +94,8 @@ export async function loadRace(db: Queryable, redis: Redis, raceId: string) {
   const live = row.status === 'LIVE' ? await liveState(redis, raceId) : null;
   const race = raceJson(row, live);
   const entrants = await entrantsJson(db, raceId);
-  const finished = entrants.filter((entrant) => entrant.result).sort((a, b) => a.result!.officialPosition - b.result!.officialPosition);
+  const finished = entrants
+    .filter((entrant) => entrant.result)
+    .sort((a, b) => a.result!.officialPosition - b.result!.officialPosition);
   return { ...race, result: finished.length ? finished.map((entrant) => entrant.entrantId) : null, entrants };
 }

@@ -24,8 +24,16 @@ type OpenLeg = {
   season_id: string;
 };
 
-async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: OpenLeg) => 'WON' | 'LOST' | 'VOID'): Promise<void> {
-  const race = await one(runtime.pool, 'SELECT r.finished_at FROM market.markets m JOIN racing.races r USING (race_id) WHERE m.market_id = $1', [marketId]);
+async function settleMarket(
+  runtime: Runtime,
+  marketId: string,
+  decide: (leg: OpenLeg) => 'WON' | 'LOST' | 'VOID',
+): Promise<void> {
+  const race = await one(
+    runtime.pool,
+    'SELECT r.finished_at FROM market.markets m JOIN racing.races r USING (race_id) WHERE m.market_id = $1',
+    [marketId],
+  );
   const finishedAt: Date | null = race?.finished_at ?? null;
   activeSpan()?.setAttribute('ars.flow', 'settlement');
   const legs = await many<OpenLeg>(
@@ -45,9 +53,19 @@ async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: Op
       );
       if (updated.rowCount === 0 || leg.bet_status !== 'ACCEPTED') return;
       if (leg.bet_type === 'COMBO') {
-        await enqueue(client, 'betting', Topics.betEvents, leg.bet_id, payload('legSettled', {
-          betId: leg.bet_id, legNo: leg.leg_no, marketId, outcome, userId: leg.user_id,
-        }));
+        await enqueue(
+          client,
+          'betting',
+          Topics.betEvents,
+          leg.bet_id,
+          payload('legSettled', {
+            betId: leg.bet_id,
+            legNo: leg.leg_no,
+            marketId,
+            outcome,
+            userId: leg.user_id,
+          }),
+        );
         return;
       }
       const result = singleOutcome(Number(leg.stake), leg.locked_price ?? leg.accepted_price, outcome);
@@ -56,11 +74,30 @@ async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: Op
         [leg.user_id, leg.bet_id, result.status, result.payout],
       );
       if (bet.rowCount === 0) return;
-      await enqueue(client, 'betting', Topics.betEvents, leg.user_id, payload('betSettled', {
-        betId: leg.bet_id, userId: leg.user_id, outcome: result.status, payout: String(result.payout), stake: leg.stake, seasonId: leg.season_id, betType: 'SINGLE',
-      }));
-      if (finishedAt) instruments.settlementLag().record(Math.max(0, (Date.now() - finishedAt.getTime()) / 1000), { bet_type: 'SINGLE', outcome: result.status });
-      if (result.payout > 0) instruments.pointsReturned().add(result.payout, { bet_type: 'SINGLE', kind: result.status === 'VOID' ? 'refund' : 'payout' });
+      await enqueue(
+        client,
+        'betting',
+        Topics.betEvents,
+        leg.user_id,
+        payload('betSettled', {
+          betId: leg.bet_id,
+          userId: leg.user_id,
+          outcome: result.status,
+          payout: String(result.payout),
+          stake: leg.stake,
+          seasonId: leg.season_id,
+          betType: 'SINGLE',
+        }),
+      );
+      if (finishedAt)
+        instruments.settlementLag().record(Math.max(0, (Date.now() - finishedAt.getTime()) / 1000), {
+          bet_type: 'SINGLE',
+          outcome: result.status,
+        });
+      if (result.payout > 0)
+        instruments
+          .pointsReturned()
+          .add(result.payout, { bet_type: 'SINGLE', kind: result.status === 'VOID' ? 'refund' : 'payout' });
       settled++;
     });
   }
@@ -69,35 +106,53 @@ async function settleMarket(runtime: Runtime, marketId: string, decide: (leg: Op
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('settlement', { outbox: ['betting'] });
-  gauge('ars.legs.unsettled_on_finished_races', 'Open bet legs on races that finished more than 30 s ago', '', async () => {
-    const { rows } = await runtime.pool.query(
-      `SELECT count(*)::int AS n FROM betting.bet_legs l JOIN betting.bets b USING (user_id, bet_id) JOIN racing.races r ON r.race_id = l.race_id
+  gauge(
+    'ars.legs.unsettled_on_finished_races',
+    'Open bet legs on races that finished more than 30 s ago',
+    '',
+    async () => {
+      const { rows } = await runtime.pool.query(
+        `SELECT count(*)::int AS n FROM betting.bet_legs l JOIN betting.bets b USING (user_id, bet_id) JOIN racing.races r ON r.race_id = l.race_id
        WHERE l.status = 'OPEN' AND b.status = 'ACCEPTED' AND r.status IN ('FINISHED', 'SETTLED') AND r.finished_at < now() - interval '30 seconds'`,
-    );
-    return [{ value: rows[0].n }];
-  });
-  runtime.consumers.push(await runConsumer({
-    kafka: runtime.kafka,
-    groupId: 'settlement',
-    topics: [Topics.marketEvents],
-    pool: runtime.pool,
-    concurrency: 6,
-    handler: async (envelope) => {
-      const event = envelope.payload;
-      if (event?.$case === 'marketResulted') {
-        const market = await one(runtime.pool, 'SELECT type, params, result FROM market.markets WHERE market_id = $1', [event.value.marketId]);
-        if (!market) return;
-        const winning: string[] = market.result?.winningEntrants ?? [];
-        const order: string[] = event.value.order.length ? event.value.order : winning;
-        await settleMarket(runtime, event.value.marketId, (leg) => (legWins(
-          market.type as MarketType,
-          { entrantId: leg.entrant_id === null ? null : entrantKey(leg.entrant_id), order: (leg.tricast_order ?? []).map(entrantKey) },
-          winning,
-          order,
-        ) ? 'WON' : 'LOST'));
-      } else if (event?.$case === 'marketVoided') {
-        await settleMarket(runtime, event.value.marketId, () => 'VOID');
-      }
+      );
+      return [{ value: rows[0].n }];
     },
-  }));
+  );
+  runtime.consumers.push(
+    await runConsumer({
+      kafka: runtime.kafka,
+      groupId: 'settlement',
+      topics: [Topics.marketEvents],
+      pool: runtime.pool,
+      concurrency: 6,
+      handler: async (envelope) => {
+        const event = envelope.payload;
+        if (event?.$case === 'marketResulted') {
+          const market = await one(
+            runtime.pool,
+            'SELECT type, params, result FROM market.markets WHERE market_id = $1',
+            [event.value.marketId],
+          );
+          if (!market) return;
+          const winning: string[] = market.result?.winningEntrants ?? [];
+          const order: string[] = event.value.order.length ? event.value.order : winning;
+          await settleMarket(runtime, event.value.marketId, (leg) =>
+            legWins(
+              market.type as MarketType,
+              {
+                entrantId: leg.entrant_id === null ? null : entrantKey(leg.entrant_id),
+                order: (leg.tricast_order ?? []).map(entrantKey),
+              },
+              winning,
+              order,
+            )
+              ? 'WON'
+              : 'LOST',
+          );
+        } else if (event?.$case === 'marketVoided') {
+          await settleMarket(runtime, event.value.marketId, () => 'VOID');
+        }
+      },
+    }),
+  );
 }

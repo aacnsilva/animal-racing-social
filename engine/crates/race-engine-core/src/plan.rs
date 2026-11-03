@@ -38,7 +38,7 @@ pub fn dry_run_durations(
         let seed: [u8; 32] = Sha256::digest(label.as_bytes()).into();
         let mut rng = fast_rng(seed);
         let outcome = simulate_from(&race, None, &mut rng)?;
-        durations.push(outcome.finish_tick as f64 * race.tick_ms() as f64 / 1000.0);
+        durations.push(f64::from(outcome.finish_tick) * f64::from(race.tick_ms()) / 1000.0);
     }
     Ok(durations)
 }
@@ -48,9 +48,13 @@ pub fn median(values: &[f64]) -> f64 {
         return 0.0;
     }
     let mut sorted = values.to_vec();
-    sorted.sort_by(|left, right| left.total_cmp(right));
+    sorted.sort_by(f64::total_cmp);
     let middle = sorted.len() / 2;
-    if sorted.len() % 2 == 1 { sorted[middle] } else { (sorted[middle - 1] + sorted[middle]) / 2.0 }
+    if sorted.len() % 2 == 1 {
+        sorted[middle]
+    } else {
+        f64::midpoint(sorted[middle - 1], sorted[middle])
+    }
 }
 
 pub fn plan_race(
@@ -60,17 +64,19 @@ pub fn plan_race(
     race_class: &str,
     entrants: &[EntrantInput],
 ) -> Result<Plan, EngineError> {
-    let window = *params
-        .params
-        .classes
-        .get(race_class)
-        .ok_or_else(|| EngineError::InvalidInputs(format!("unknown race class {race_class}")))?;
+    let window =
+        *params.params.classes.get(race_class).ok_or_else(|| {
+            EngineError::InvalidInputs(format!("unknown race class {race_class}"))
+        })?;
     venue.validate()?;
     let runs = params.params.planning.dry_runs.max(1);
     let mut candidates = Vec::new();
     for laps in venue.laps_range[0]..=venue.laps_range[1] {
         let durations = dry_run_durations(params, venue, species, laps, entrants, runs)?;
-        candidates.push(LapEstimate { laps, median_duration_sec: median(&durations) });
+        candidates.push(LapEstimate {
+            laps,
+            median_duration_sec: median(&durations),
+        });
     }
     let distance_outside = |value: f64| {
         if value < window.min_sec {
@@ -84,9 +90,19 @@ pub fn plan_race(
     let best = candidates
         .iter()
         .min_by(|left, right| {
-            let left_key = (distance_outside(left.median_duration_sec), (left.median_duration_sec - window.target_sec).abs());
-            let right_key = (distance_outside(right.median_duration_sec), (right.median_duration_sec - window.target_sec).abs());
-            left_key.0.total_cmp(&right_key.0).then(left_key.1.total_cmp(&right_key.1)).then(left.laps.cmp(&right.laps))
+            let left_key = (
+                distance_outside(left.median_duration_sec),
+                (left.median_duration_sec - window.target_sec).abs(),
+            );
+            let right_key = (
+                distance_outside(right.median_duration_sec),
+                (right.median_duration_sec - window.target_sec).abs(),
+            );
+            left_key
+                .0
+                .total_cmp(&right_key.0)
+                .then(left_key.1.total_cmp(&right_key.1))
+                .then(left.laps.cmp(&right.laps))
         })
         .cloned()
         .ok_or_else(|| EngineError::InvalidVenue("empty lapsRange".into()))?;

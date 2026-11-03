@@ -14,7 +14,8 @@ pub struct Catalog {
 
 pub fn venue_from_row(row: &tokio_postgres::Row) -> Res<Venue> {
     let segments: serde_json::Value = row.try_get("segments").context("venue segments")?;
-    let segments: Vec<SegmentSpec> = serde_json::from_value(segments).context("venue segments json")?;
+    let segments: Vec<SegmentSpec> =
+        serde_json::from_value(segments).context("venue segments json")?;
     let venue = Venue {
         id: row.try_get("venue_id").context("venue_id")?,
         version: row.try_get::<_, i32>("version").context("version")? as u32,
@@ -42,10 +43,17 @@ impl Catalog {
 
     pub async fn venue(&self, client: &Client, venue_id: &str, version: u32) -> Res<Venue> {
         let key = (venue_id.to_string(), version);
-        if let Some(venue) = self.venues.lock().ok().and_then(|cache| cache.get(&key).cloned()) {
+        if let Some(venue) = self
+            .venues
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(&key).cloned())
+        {
             return Ok(venue);
         }
-        let query = format!("SELECT {VENUE_COLUMNS} FROM racing.venues WHERE venue_id = $1 AND version = $2");
+        let query = format!(
+            "SELECT {VENUE_COLUMNS} FROM racing.venues WHERE venue_id = $1 AND version = $2"
+        );
         let row = client
             .query_opt(&query, &[&venue_id, &(version as i32)])
             .await
@@ -59,16 +67,27 @@ impl Catalog {
     }
 
     pub async fn params(&self, client: &Client, engine_version: &str) -> Res<Arc<LoadedParams>> {
-        if let Some(params) = self.params.lock().ok().and_then(|cache| cache.get(engine_version).cloned()) {
+        if let Some(params) = self
+            .params
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(engine_version).cloned())
+        {
             return Ok(params);
         }
         let row = client
-            .query_opt("SELECT params FROM racing.engine_versions WHERE engine_version = $1", &[&engine_version])
+            .query_opt(
+                "SELECT params FROM racing.engine_versions WHERE engine_version = $1",
+                &[&engine_version],
+            )
             .await
             .context("load engine params")?
             .context(&format!("ENGINE_VERSION_NOT_FOUND {engine_version}"))?;
         let value: serde_json::Value = row.try_get("params").context("params column")?;
-        let params = Arc::new(LoadedParams::from_value(&value).map_err(|err| format!("PARAMS_INVALID {engine_version}: {err}"))?);
+        let params = Arc::new(
+            LoadedParams::from_value(&value)
+                .map_err(|err| format!("PARAMS_INVALID {engine_version}: {err}"))?,
+        );
         if race_engine_core::core_version(engine_version) != race_engine_core::ENGINE_VERSION {
             return Err(format!("ENGINE_VERSION_UNSUPPORTED {engine_version}"));
         }
@@ -80,9 +99,15 @@ impl Catalog {
 
     pub async fn active_engine_version(&self, client: &Client) -> Res<String> {
         let row = client
-            .query_opt("SELECT engine_version FROM racing.engine_versions WHERE is_active", &[])
+            .query_opt(
+                "SELECT engine_version FROM racing.engine_versions WHERE is_active",
+                &[],
+            )
             .await
             .context("load active engine version")?;
-        Ok(row.map(|row| row.get::<_, String>(0)).unwrap_or_else(|| race_engine_core::ENGINE_VERSION.to_string()))
+        Ok(row.map_or_else(
+            || race_engine_core::ENGINE_VERSION.to_string(),
+            |row| row.get::<_, String>(0),
+        ))
     }
 }

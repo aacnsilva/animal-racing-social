@@ -15,7 +15,12 @@ function Filters({ species, raceClass }: { species: string; raceClass: string })
           ['HORSE', '🐎 Horses'],
           ['GIRAFFE', '🦒 Giraffes'],
         ].map(([value, label]) => (
-          <button key={value} className={species === value ? 'active' : ''} onClick={() => setQuery({ species: value || null })} data-filter-species={value || 'ALL'}>
+          <button
+            key={value}
+            className={species === value ? 'active' : ''}
+            onClick={() => setQuery({ species: value || null })}
+            data-filter-species={value || 'ALL'}
+          >
             {label}
           </button>
         ))}
@@ -27,7 +32,12 @@ function Filters({ species, raceClass }: { species: string; raceClass: string })
           ['STANDARD', 'Standard'],
           ['ENDURANCE', 'Endurance'],
         ].map(([value, label]) => (
-          <button key={value} className={raceClass === value ? 'active' : ''} onClick={() => setQuery({ class: value || null })} data-filter-class={value || 'ALL'}>
+          <button
+            key={value}
+            className={raceClass === value ? 'active' : ''}
+            onClick={() => setQuery({ class: value || null })}
+            data-filter-class={value || 'ALL'}
+          >
             {label}
           </button>
         ))}
@@ -53,10 +63,20 @@ export function RaceRow({ race, now }: { race: Race; now: number }) {
     sub = race.cancelledReason ?? '';
   } else {
     when = startsIn > 0 ? fmtCountdown(startsIn) : 'Due off';
-    sub = race.status === 'OPEN' && closesIn > 0 ? `bets close in ${fmtCountdown(closesIn)}` : race.status === 'LOCKED' ? 'betting closed' : 'opening soon';
+    sub =
+      race.status === 'OPEN' && closesIn > 0
+        ? `bets close in ${fmtCountdown(closesIn)}`
+        : race.status === 'LOCKED'
+          ? 'betting closed'
+          : 'opening soon';
   }
   return (
-    <Link to={`/races/${race.id}`} className={`race-row${race.status === 'LIVE' ? ' live' : ''}`} data-testid="race-card-item" data-race-id={race.id}>
+    <Link
+      to={`/races/${race.id}`}
+      className={`race-row${race.status === 'LIVE' ? ' live' : ''}`}
+      data-testid="race-card-item"
+      data-race-id={race.id}
+    >
       <span className="time">{fmtTime(race.startAt)}</span>
       <span>
         <RaceStatus status={race.status} />
@@ -102,8 +122,16 @@ function NextRaceHero({ races, now }: { races: Race[]; now: number }) {
           <span className="chip">{featured.laps} laps</span>
           <span className="chip">{featured.entrantCount} runners</span>
         </div>
-        <div className="big">{featured.status === 'LIVE' ? `Lap ${Math.min(featured.currentLap ?? 1, featured.laps)}/${featured.laps}` : fmtCountdown(startsIn)}</div>
-        <span className="small muted">{featured.status === 'LIVE' ? 'Jump in: the 3D view and in-running markets are live.' : `Off at ${fmtTime(featured.startAt)} · tap to see the runners and prices`}</span>
+        <div className="big">
+          {featured.status === 'LIVE'
+            ? `Lap ${Math.min(featured.currentLap ?? 1, featured.laps)}/${featured.laps}`
+            : fmtCountdown(startsIn)}
+        </div>
+        <span className="small muted">
+          {featured.status === 'LIVE'
+            ? 'Jump in: the 3D view and in-running markets are live.'
+            : `Off at ${fmtTime(featured.startAt)} · tap to see the runners and prices`}
+        </span>
       </Link>
       <div className="hero-side">
         <div className="stat-tile">
@@ -127,7 +155,10 @@ function NextRaceHero({ races, now }: { races: Race[]; now: number }) {
 
 function Upcoming({ species, raceClass }: { species: string; raceClass: string }) {
   const now = useNow(1000);
-  const schedule = useAsync(() => api<Page<Race>>(`/v1/schedule${qs({ species, class: raceClass, limit: 100 })}`), [species, raceClass]);
+  const schedule = useAsync(
+    () => api<Page<Race>>(`/v1/schedule${qs({ species, class: raceClass, limit: 100 })}`),
+    [species, raceClass],
+  );
   useEffect(() => {
     const id = setInterval(schedule.reload, 15_000);
     return () => clearInterval(id);
@@ -141,7 +172,9 @@ function Upcoming({ species, raceClass }: { species: string; raceClass: string }
       {!schedule.data && schedule.loading ? (
         <Loading label="Loading the race card…" />
       ) : races.length === 0 ? (
-        <Empty>No races on the card right now. The scheduler books races up to 24 hours ahead; check back in a minute.</Empty>
+        <Empty>
+          No races on the card right now. The scheduler books races up to 24 hours ahead; check back in a minute.
+        </Empty>
       ) : (
         <div className="race-list">
           {races.map((race) => (
@@ -155,7 +188,10 @@ function Upcoming({ species, raceClass }: { species: string; raceClass: string }
 
 function Results({ species, raceClass }: { species: string; raceClass: string }) {
   const now = useNow(30_000);
-  const paged = usePaged((cursor) => api<Page<Race>>(`/v1/races${qs({ status: 'FINISHED', species, cursor, limit: 30 })}`), [species]);
+  const paged = usePaged(
+    (cursor) => api<Page<Race>>(`/v1/races${qs({ status: 'FINISHED', species, cursor, limit: 30 })}`),
+    [species],
+  );
   const items = raceClass ? paged.items.filter((race) => race.class === raceClass) : paged.items;
   return (
     <>
@@ -199,7 +235,11 @@ export function RaceCardPage({ view }: { view: 'upcoming' | 'results' }) {
           </Link>
         </div>
       </div>
-      {view === 'upcoming' ? <Upcoming species={species} raceClass={raceClass} /> : <Results species={species} raceClass={raceClass} />}
+      {view === 'upcoming' ? (
+        <Upcoming species={species} raceClass={raceClass} />
+      ) : (
+        <Results species={species} raceClass={raceClass} />
+      )}
     </div>
   );
 }

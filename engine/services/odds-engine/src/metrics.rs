@@ -24,13 +24,20 @@ fn instruments() -> &'static Instruments {
 }
 
 pub fn monte_carlo(phase: &'static str, race_class: &str, elapsed: Duration) {
-    instruments()
-        .monte_carlo
-        .record(elapsed.as_secs_f64(), &[KeyValue::new("phase", phase), KeyValue::new("race_class", class_label(race_class))]);
+    instruments().monte_carlo.record(
+        elapsed.as_secs_f64(),
+        &[
+            KeyValue::new("phase", phase),
+            KeyValue::new("race_class", class_label(race_class)),
+        ],
+    );
 }
 
 pub fn reprice_interval(race_class: &str, interval: Duration) {
-    instruments().reprice_interval.record(interval.as_secs_f64(), &[KeyValue::new("race_class", class_label(race_class))]);
+    instruments().reprice_interval.record(
+        interval.as_secs_f64(),
+        &[KeyValue::new("race_class", class_label(race_class))],
+    );
 }
 
 pub fn stale_tick() {

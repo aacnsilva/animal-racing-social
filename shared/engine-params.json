@@ -53,24 +53,60 @@
   },
   "temperaments": {
     "FRONT_RUNNER": {
-      "effortBias": -0.003, "earlyBoost": 0.02, "earlyUntil": 0.4, "kickBoost": 0.005,
-      "kickFraction": 0.12, "kickMaxDistance": 400, "kickJitter": 0.25, "discipline": 0.8,
-      "preferredMinPosition": 1, "preferredMaxPosition": 1, "chaseBonus": 0.01, "easeOff": 0
+      "effortBias": -0.003,
+      "earlyBoost": 0.02,
+      "earlyUntil": 0.4,
+      "kickBoost": 0.005,
+      "kickFraction": 0.12,
+      "kickMaxDistance": 400,
+      "kickJitter": 0.25,
+      "discipline": 0.8,
+      "preferredMinPosition": 1,
+      "preferredMaxPosition": 1,
+      "chaseBonus": 0.01,
+      "easeOff": 0
     },
     "STALKER": {
-      "effortBias": 0.0, "earlyBoost": 0.0, "earlyUntil": 0.0, "kickBoost": 0.055,
-      "kickFraction": 0.28, "kickMaxDistance": 800, "kickJitter": 0.25, "discipline": 0.9,
-      "preferredMinPosition": 2, "preferredMaxPosition": 4, "chaseBonus": 0.008, "easeOff": 0.006
+      "effortBias": 0.0,
+      "earlyBoost": 0.0,
+      "earlyUntil": 0.0,
+      "kickBoost": 0.055,
+      "kickFraction": 0.28,
+      "kickMaxDistance": 800,
+      "kickJitter": 0.25,
+      "discipline": 0.9,
+      "preferredMinPosition": 2,
+      "preferredMaxPosition": 4,
+      "chaseBonus": 0.008,
+      "easeOff": 0.006
     },
     "CLOSER": {
-      "effortBias": 0.0, "earlyBoost": -0.005, "earlyUntil": 0.5, "kickBoost": 0.09,
-      "kickFraction": 0.2, "kickMaxDistance": 650, "kickJitter": 0.25, "discipline": 0.9,
-      "preferredMinPosition": 1, "preferredMaxPosition": 10, "chaseBonus": 0, "easeOff": 0
+      "effortBias": 0.0,
+      "earlyBoost": -0.005,
+      "earlyUntil": 0.5,
+      "kickBoost": 0.09,
+      "kickFraction": 0.2,
+      "kickMaxDistance": 650,
+      "kickJitter": 0.25,
+      "discipline": 0.9,
+      "preferredMinPosition": 1,
+      "preferredMaxPosition": 10,
+      "chaseBonus": 0,
+      "easeOff": 0
     },
     "STEADY": {
-      "effortBias": 0.0, "earlyBoost": 0.0, "earlyUntil": 0.0, "kickBoost": 0.02,
-      "kickFraction": 0.1, "kickMaxDistance": 350, "kickJitter": 0.2, "discipline": 0.9,
-      "preferredMinPosition": 1, "preferredMaxPosition": 10, "chaseBonus": 0, "easeOff": 0
+      "effortBias": 0.0,
+      "earlyBoost": 0.0,
+      "earlyUntil": 0.0,
+      "kickBoost": 0.02,
+      "kickFraction": 0.1,
+      "kickMaxDistance": 350,
+      "kickJitter": 0.2,
+      "discipline": 0.9,
+      "preferredMinPosition": 1,
+      "preferredMaxPosition": 10,
+      "chaseBonus": 0,
+      "easeOff": 0
     }
   },
   "incidents": {

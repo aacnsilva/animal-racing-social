@@ -3,7 +3,13 @@
     "species": "HORSE",
     "maxCareerDays": 140,
     "lifeStages": { "ROOKIE": [0, 25], "PRIME": [25, 95], "VETERAN": [95, 140] },
-    "ageCurve": [[0, 0.965], [25, 0.99], [60, 1.0], [95, 0.99], [140, 0.955]],
+    "ageCurve": [
+      [0, 0.965],
+      [25, 0.99],
+      [60, 1.0],
+      [95, 0.99],
+      [140, 0.955]
+    ],
     "retireThreshold": 0.96,
     "targetPoolSize": 60,
     "baseRanges": {
@@ -17,7 +23,13 @@
     "species": "GIRAFFE",
     "maxCareerDays": 140,
     "lifeStages": { "ROOKIE": [0, 35], "PRIME": [35, 110], "VETERAN": [110, 140] },
-    "ageCurve": [[0, 0.96], [35, 0.99], [75, 1.0], [110, 0.99], [140, 0.96]],
+    "ageCurve": [
+      [0, 0.96],
+      [35, 0.99],
+      [75, 1.0],
+      [110, 0.99],
+      [140, 0.96]
+    ],
     "retireThreshold": 0.965,
     "targetPoolSize": 60,
     "baseRanges": {

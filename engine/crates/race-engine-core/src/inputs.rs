@@ -61,14 +61,22 @@ pub struct RaceInputs {
 }
 
 pub fn entrant_number(entrant_id: &str) -> Option<u32> {
-    entrant_id.strip_prefix('e').and_then(|digits| digits.parse::<u32>().ok())
+    entrant_id
+        .strip_prefix('e')
+        .and_then(|digits| digits.parse::<u32>().ok())
 }
 
 pub fn sorted_entrants(entrants: &[EntrantInput]) -> Vec<EntrantInput> {
     let mut sorted = entrants.to_vec();
     sorted.sort_by(|left, right| {
-        let left_key = (entrant_number(&left.entrant_id).unwrap_or(u32::MAX), left.entrant_id.as_str());
-        let right_key = (entrant_number(&right.entrant_id).unwrap_or(u32::MAX), right.entrant_id.as_str());
+        let left_key = (
+            entrant_number(&left.entrant_id).unwrap_or(u32::MAX),
+            left.entrant_id.as_str(),
+        );
+        let right_key = (
+            entrant_number(&right.entrant_id).unwrap_or(u32::MAX),
+            right.entrant_id.as_str(),
+        );
         left_key.cmp(&right_key)
     });
     sorted
@@ -87,7 +95,10 @@ pub fn validate_entrants(entrants: &[EntrantInput], venue: &Venue) -> Result<(),
             return Err(EngineError::InvalidInputs("empty entrantId".into()));
         }
         if entrant.lane == 0 || entrant.lane > venue.lanes {
-            return Err(EngineError::InvalidInputs(format!("lane {} out of range", entrant.lane)));
+            return Err(EngineError::InvalidInputs(format!(
+                "lane {} out of range",
+                entrant.lane
+            )));
         }
         let stats = entrant.stats;
         let finite = stats.velocity.is_finite()
@@ -95,17 +106,29 @@ pub fn validate_entrants(entrants: &[EntrantInput], venue: &Venue) -> Result<(),
             && stats.acceleration.is_finite()
             && stats.consistency.is_finite();
         if !finite || stats.velocity <= 0.0 || stats.acceleration <= 0.0 || stats.stamina < 0.0 {
-            return Err(EngineError::InvalidInputs(format!("stats of {} out of range", entrant.entrant_id)));
+            return Err(EngineError::InvalidInputs(format!(
+                "stats of {} out of range",
+                entrant.entrant_id
+            )));
         }
         if !(0.0..=1.0).contains(&stats.consistency) || stats.stamina > 100.0 {
-            return Err(EngineError::InvalidInputs(format!("stats of {} out of range", entrant.entrant_id)));
+            return Err(EngineError::InvalidInputs(format!(
+                "stats of {} out of range",
+                entrant.entrant_id
+            )));
         }
         for other in &entrants[index + 1..] {
             if other.entrant_id == entrant.entrant_id {
-                return Err(EngineError::InvalidInputs(format!("duplicate entrant {}", entrant.entrant_id)));
+                return Err(EngineError::InvalidInputs(format!(
+                    "duplicate entrant {}",
+                    entrant.entrant_id
+                )));
             }
             if other.lane == entrant.lane {
-                return Err(EngineError::InvalidInputs(format!("duplicate lane {}", entrant.lane)));
+                return Err(EngineError::InvalidInputs(format!(
+                    "duplicate lane {}",
+                    entrant.lane
+                )));
             }
         }
     }

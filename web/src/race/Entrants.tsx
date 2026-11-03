@@ -42,7 +42,8 @@ function EntrantsInner({ entrants, winMarket }: { entrants: Entrant[]; winMarket
                       {SPECIES_ICON[entrant.animal.species]} {entrant.animal.name}
                     </Link>
                     <div className="tiny muted">
-                      {titleCase(entrant.animal.lifeStage)} · {Math.floor(entrant.animal.ageWeeks / 52)}y {entrant.animal.ageWeeks % 52}w · {entrant.animal.form.wins}/{entrant.animal.form.races} wins
+                      {titleCase(entrant.animal.lifeStage)} · {Math.floor(entrant.animal.ageWeeks / 52)}y{' '}
+                      {entrant.animal.ageWeeks % 52}w · {entrant.animal.form.wins}/{entrant.animal.form.races} wins
                     </div>
                   </td>
                   <td className="hide-sm">

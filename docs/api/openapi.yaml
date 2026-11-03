@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: "Animal Racing Social: Racing & Betting API"
+  title: 'Animal Racing Social: Racing & Betting API'
   version: 0.1.0
-  description: "Fictional points only. See betting-design.md for semantics."
+  description: 'Fictional points only. See betting-design.md for semantics.'
 servers:
   - url: /v1
 security:
@@ -31,7 +31,7 @@ paths:
   /races/{raceId}/result:
     get:
       summary: Official result, incidents, market payouts, seed, replay availability
-      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      parameters: [{ $ref: '#/components/parameters/RaceId' }]
       responses:
         '200': { description: OK }
         '409': { $ref: '#/components/responses/Error' }
@@ -47,7 +47,7 @@ paths:
   /races/{raceId}:
     get:
       summary: Race detail with entrants
-      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      parameters: [{ $ref: '#/components/parameters/RaceId' }]
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Race' } } } }
   /races/{raceId}/ticks:
@@ -57,11 +57,16 @@ paths:
         - { $ref: '#/components/parameters/RaceId' }
         - { name: fromTick, in: query, schema: { type: integer, minimum: 0 } }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RaceTick' } } } } }
+        '200':
+          {
+            description: OK,
+            content:
+              { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RaceTick' } } } },
+          }
   /races/{raceId}/script:
     get:
       summary: Full script + seed (only after FINISHED)
-      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      parameters: [{ $ref: '#/components/parameters/RaceId' }]
       responses:
         '200': { description: OK }
         '409': { $ref: '#/components/responses/Error' }
@@ -72,7 +77,11 @@ paths:
         - { $ref: '#/components/parameters/RaceId' }
         - { name: status, in: query, schema: { $ref: '#/components/schemas/MarketStatus' } }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Market' } } } } }
+        '200':
+          {
+            description: OK,
+            content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Market' } } } },
+          }
   /races/{raceId}/stream:
     get:
       summary: SSE stream, one per race, always live (snapshot on connect, no resume)
@@ -80,19 +89,19 @@ paths:
         Event names: snapshot, race.lifecycle, race.tick, race.lap, market.opened, market.price,
         market.suspended, market.resumed, market.closed, market.resulted,
         bet.updated, cashout.updated, notification, ping. See platform.md §6.
-      parameters: [ { $ref: '#/components/parameters/RaceId' } ]
+      parameters: [{ $ref: '#/components/parameters/RaceId' }]
       responses:
         '200': { description: text/event-stream, content: { text/event-stream: {} } }
 
   /markets/{marketId}:
     get:
-      parameters: [ { $ref: '#/components/parameters/MarketId' } ]
+      parameters: [{ $ref: '#/components/parameters/MarketId' }]
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Market' } } } }
   /markets/{marketId}/quotes:
     post:
       summary: Price a combination selection (TRICAST)
-      parameters: [ { $ref: '#/components/parameters/MarketId' } ]
+      parameters: [{ $ref: '#/components/parameters/MarketId' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/Selection' } } }
@@ -115,7 +124,7 @@ paths:
   /bets/combos:
     post:
       summary: Place a combo (multi-race accumulator) bet
-      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/PlaceCombo' } } }
@@ -130,20 +139,25 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, properties: { legs: { type: array, items: { $ref: '#/components/schemas/ComboLegInput' } } } }
+            schema:
+              {
+                type: object,
+                properties: { legs: { type: array, items: { $ref: '#/components/schemas/ComboLegInput' } } },
+              }
       responses:
         '200': { description: OK }
   /bets/{betId}:
     get:
-      parameters: [ { $ref: '#/components/parameters/BetId' } ]
+      parameters: [{ $ref: '#/components/parameters/BetId' }]
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Bet' } } } }
   /bets/{betId}/cashout:
     get:
       summary: Current full cash-out quote
-      parameters: [ { $ref: '#/components/parameters/BetId' } ]
+      parameters: [{ $ref: '#/components/parameters/BetId' }]
       responses:
-        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CashOutQuote' } } } }
+        '200':
+          { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/CashOutQuote' } } } }
         '409': { $ref: '#/components/responses/Error' }
     post:
       summary: Request full cash-out (async acceptance)
@@ -186,7 +200,7 @@ paths:
                   inOpenBets: { type: integer }
   /me/wallet/ledger:
     get:
-      parameters: [ { $ref: '#/components/parameters/Cursor' } ]
+      parameters: [{ $ref: '#/components/parameters/Cursor' }]
       responses:
         '200': { description: OK }
 
@@ -194,7 +208,11 @@ paths:
     get:
       summary: List seasons
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Season' } } } } }
+        '200':
+          {
+            description: OK,
+            content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Season' } } } },
+          }
   /seasons/current:
     get:
       responses:
@@ -203,17 +221,38 @@ paths:
     get:
       parameters:
         - { name: seasonId, in: path, required: true, schema: { type: string } }
-        - { name: board, in: path, required: true, schema: { type: string, enum: [balance, biggest-payout, roi, win-streak] } }
+        - {
+            name: board,
+            in: path,
+            required: true,
+            schema: { type: string, enum: [balance, biggest-payout, roi, win-streak] },
+          }
         - { name: limit, in: query, schema: { type: integer, default: 50 } }
-        - { name: around, in: query, schema: { type: string, enum: [me] }, description: "Return the window around the caller" }
+        - {
+            name: around,
+            in: query,
+            schema: { type: string, enum: [me] },
+            description: 'Return the window around the caller',
+          }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LeaderboardEntry' } } } } }
+        '200':
+          {
+            description: OK,
+            content:
+              {
+                application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LeaderboardEntry' } } },
+              },
+          }
   /venues:
     get:
       parameters:
         - { name: class, in: query, schema: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] } }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Venue' } } } } }
+        '200':
+          {
+            description: OK,
+            content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Venue' } } } },
+          }
   /venues/{venueId}:
     get:
       parameters:
@@ -231,7 +270,7 @@ paths:
         '200': { description: OK }
   /animals/{animalId}:
     get:
-      parameters: [ { name: animalId, in: path, required: true, schema: { type: string } } ]
+      parameters: [{ name: animalId, in: path, required: true, schema: { type: string } }]
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Animal' } } } }
   /animals/{animalId}/history:
@@ -240,7 +279,12 @@ paths:
         - { name: animalId, in: path, required: true, schema: { type: string } }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RaceResult' } } } } }
+        '200':
+          {
+            description: OK,
+            content:
+              { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RaceResult' } } } },
+          }
 
 components:
   securitySchemes:
@@ -261,8 +305,24 @@ components:
             properties:
               code:
                 type: string
-                enum: [BETTING_CLOSED, MARKET_SUSPENDED, PRICE_CHANGED, INSUFFICIENT_FUNDS,
-                       STAKE_OUT_OF_RANGE, INVALID_SELECTION, NOT_CASHABLE, QUOTE_EXPIRED, RACE_NOT_FINISHED, REPLAY_EXPIRED, ALREADY_CLAIMED, RATE_LIMITED, COMBO_SAME_RACE, COMBO_TOO_MANY_LEGS, COMBO_CROSS_SEASON]
+                enum:
+                  [
+                    BETTING_CLOSED,
+                    MARKET_SUSPENDED,
+                    PRICE_CHANGED,
+                    INSUFFICIENT_FUNDS,
+                    STAKE_OUT_OF_RANGE,
+                    INVALID_SELECTION,
+                    NOT_CASHABLE,
+                    QUOTE_EXPIRED,
+                    RACE_NOT_FINISHED,
+                    REPLAY_EXPIRED,
+                    ALREADY_CLAIMED,
+                    RATE_LIMITED,
+                    COMBO_SAME_RACE,
+                    COMBO_TOO_MANY_LEGS,
+                    COMBO_CROSS_SEASON,
+                  ]
               message: { type: string }
   schemas:
     Venue:
@@ -321,7 +381,7 @@ components:
         name: { type: string }
         species: { type: string }
         status: { type: string, enum: [ACTIVE, RETIRED] }
-        ageWeeks: { type: integer, description: "1 real day = 1 animal week" }
+        ageWeeks: { type: integer, description: '1 real day = 1 animal week' }
         lifeStage: { type: string, enum: [ROOKIE, PRIME, VETERAN] }
         temperament: { type: string, enum: [FRONT_RUNNER, STALKER, CLOSER, STEADY] }
         base: { $ref: '#/components/schemas/Stats' }
@@ -339,9 +399,9 @@ components:
         raceId: { type: string }
         finishedAt: { type: string, format: date-time }
         class: { type: string }
-        position: { type: integer, description: "Official position; DQ/DNF/NR are classified last" }
+        position: { type: integer, description: 'Official position; DQ/DNF/NR are classified last' }
         resultStatus: { type: string, enum: [FINISHED, DISQUALIFIED, DNF, NON_RUNNER] }
-        timeSec: { type: number, description: "null unless FINISHED or DISQUALIFIED" }
+        timeSec: { type: number, description: 'null unless FINISHED or DISQUALIFIED' }
         lapsLed: { type: array, items: { type: integer } }
         statsSnapshot: { $ref: '#/components/schemas/Stats' }
     Entrant:
@@ -358,7 +418,7 @@ components:
         status: { $ref: '#/components/schemas/RaceStatus' }
         class: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] }
         species: { type: string, enum: [HORSE, GIRAFFE] }
-        bettingClosesAt: { type: string, format: date-time, description: "startAt − 60 s" }
+        bettingClosesAt: { type: string, format: date-time, description: 'startAt − 60 s' }
         startAt: { type: string, format: date-time }
         venueId: { type: string }
         venueVersion: { type: integer }
@@ -430,7 +490,8 @@ components:
       required: [selection, stake, acceptedPrice, priceVersion]
       properties:
         selection: { $ref: '#/components/schemas/Selection' }
-        stake: { type: integer, minimum: 1, description: "No maximum; capped only by available balance (all-in allowed)" }
+        stake:
+          { type: integer, minimum: 1, description: 'No maximum; capped only by available balance (all-in allowed)' }
         acceptedPrice: { type: number }
         priceVersion: { type: integer }
         acceptPriceChanges: { type: string, enum: [NONE, BETTER, ANY], default: NONE }
@@ -446,7 +507,13 @@ components:
       type: object
       required: [legs, stake]
       properties:
-        legs: { type: array, minItems: 2, items: { $ref: '#/components/schemas/ComboLegInput' }, description: "One leg per race, same season; max COMBO_MAX_LEGS" }
+        legs:
+          {
+            type: array,
+            minItems: 2,
+            items: { $ref: '#/components/schemas/ComboLegInput' },
+            description: 'One leg per race, same season; max COMBO_MAX_LEGS',
+          }
         stake: { type: integer, minimum: 1 }
         acceptPriceChanges: { type: string, enum: [NONE, BETTER, ANY], default: NONE }
     BetLeg:
@@ -465,7 +532,7 @@ components:
         type: { type: string, enum: [SINGLE, COMBO] }
         legs: { type: array, items: { $ref: '#/components/schemas/BetLeg' } }
         stake: { type: integer }
-        lockedPrice: { type: number, description: "Product of leg prices for COMBO" }
+        lockedPrice: { type: number, description: 'Product of leg prices for COMBO' }
         status: { $ref: '#/components/schemas/BetStatus' }
         rejectReason: { type: string }
         payout: { type: integer }

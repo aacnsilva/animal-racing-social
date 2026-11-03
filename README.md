@@ -44,22 +44,22 @@ API ─bet.commands─► Bet worker ─debit─► Wallet ─wallet.events─�
                     Settlement ─► Combo aggregator ─┘           Notification ─► SSE gateway ─► browser
 ```
 
-| Path | What |
-|---|---|
-| [`docs/api`](docs/api) | Design: betting & racing, race engine, platform APIs, Kafka events, OpenAPI |
-| [`docs/db`](docs/db) | Data model and the original DDL |
-| [`docs/implementation.md`](docs/implementation.md) | Contracts between services, engine and web (what the code implements) |
-| [`docs/deployment.md`](docs/deployment.md) | CI/CD and VPS operations |
-| [`docs/observability.md`](docs/observability.md) | Observability design: traces, logs, metrics, SLOs, alerts |
-| `proto/` | Protobuf event schemas (single source of truth for Rust and TypeScript) |
-| `engine/` | Rust: `race-engine-core`, `race-engine`, `race-broadcaster`, `odds-engine` |
-| `server/` | TypeScript services on Node 22 (`api`, `sse`, `scheduler`, `stable`, `market-manager`, `bet-worker`, `settlement`, `combo-aggregator`, `wallet`, `season`, `notification`, `migrate`) |
-| `web/` | React + three.js client (Vite), served by Caddy |
-| `mock-oauth/` | Fake Google/GitHub OAuth provider (PKCE) for local runs and tests |
-| `e2e/` | Playwright UI tests, desktop and mobile |
-| `db/` | SQL migrations and per-service role grants |
-| `shared/` | Venues, species, market templates, programme, engine params |
-| `deploy/` | Production compose, VPS setup, deploy and backup scripts |
+| Path                                               | What                                                                                                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/api`](docs/api)                             | Design: betting & racing, race engine, platform APIs, Kafka events, OpenAPI                                                                                                           |
+| [`docs/db`](docs/db)                               | Data model and the original DDL                                                                                                                                                       |
+| [`docs/implementation.md`](docs/implementation.md) | Contracts between services, engine and web (what the code implements)                                                                                                                 |
+| [`docs/deployment.md`](docs/deployment.md)         | CI/CD and VPS operations                                                                                                                                                              |
+| [`docs/observability.md`](docs/observability.md)   | Observability design: traces, logs, metrics, SLOs, alerts                                                                                                                             |
+| `proto/`                                           | Protobuf event schemas (single source of truth for Rust and TypeScript)                                                                                                               |
+| `engine/`                                          | Rust: `race-engine-core`, `race-engine`, `race-broadcaster`, `odds-engine`                                                                                                            |
+| `server/`                                          | TypeScript services on Node 22 (`api`, `sse`, `scheduler`, `stable`, `market-manager`, `bet-worker`, `settlement`, `combo-aggregator`, `wallet`, `season`, `notification`, `migrate`) |
+| `web/`                                             | React + three.js client (Vite), served by Caddy                                                                                                                                       |
+| `mock-oauth/`                                      | Fake Google/GitHub OAuth provider (PKCE) for local runs and tests                                                                                                                     |
+| `e2e/`                                             | Playwright UI tests, desktop and mobile                                                                                                                                               |
+| `db/`                                              | SQL migrations and per-service role grants                                                                                                                                            |
+| `shared/`                                          | Venues, species, market templates, programme, engine params                                                                                                                           |
+| `deploy/`                                          | Production compose, VPS setup, deploy and backup scripts                                                                                                                              |
 
 Stack: Kafka 3.9 (KRaft), PostgreSQL 16, Redis 7, Rust, Node 22 (TypeScript run directly, no build step), React, three.js, Caddy. Runtime npm dependencies of the services: `pg`, `kafkajs`, `@redis/client`, `@bufbuild/protobuf` and the OpenTelemetry SDK.
 
@@ -85,11 +85,11 @@ That stops everything and wipes the data.
 
 ## Tests
 
-| Suite | Command |
-|---|---|
-| TypeScript unit tests | `cd server && npm ci && npm test` |
-| Mock OAuth tests | `cd mock-oauth && npm test` |
-| Engine tests | `cd engine && cargo test --workspace` |
+| Suite                                                                                       | Command                                                                      |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| TypeScript unit tests                                                                       | `cd server && npm ci && npm test`                                            |
+| Mock OAuth tests                                                                            | `cd mock-oauth && npm test`                                                  |
+| Engine tests                                                                                | `cd engine && cargo test --workspace`                                        |
 | Playwright UI (desktop and Pixel 7 mobile) and observability tests (stack running on :8080) | `cd e2e && npm ci && npx playwright install chromium && npx playwright test` |
 
 After changing `proto/`, regenerate the TypeScript types with `cd server && npm run gen` (needs `protoc`); CI fails if they are stale.

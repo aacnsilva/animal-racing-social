@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use ars_infra::convert::{IdText, WireEntrant, entrants_from_wire};
+use ars_infra::http::{bad_request, classify, internal};
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
 use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use ars_infra::convert::{IdText, WireEntrant, entrants_from_wire};
-use ars_infra::http::{bad_request, classify, internal};
 use race_engine_core::{RaceInputs, parse_seed, plan_race, simulate};
 use serde::Deserialize;
 use tracing::Instrument;
@@ -26,7 +26,8 @@ pub fn router(state: Arc<AppState>) -> Router {
 }
 
 async fn healthz() -> Response {
-    Json(serde_json::json!({ "status": "ok", "engineVersion": race_engine_core::ENGINE_VERSION })).into_response()
+    Json(serde_json::json!({ "status": "ok", "engineVersion": race_engine_core::ENGINE_VERSION }))
+        .into_response()
 }
 
 async fn engine_versions(State(state): State<Arc<AppState>>) -> Response {
@@ -63,7 +64,10 @@ async fn resolve_version(state: &AppState, requested: Option<String>) -> Result<
     }
 }
 
-async fn plan(State(state): State<Arc<AppState>>, body: Result<Json<PlanRequest>, axum::extract::rejection::JsonRejection>) -> Response {
+async fn plan(
+    State(state): State<Arc<AppState>>,
+    body: Result<Json<PlanRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
     let Json(request) = match body {
         Ok(body) => body,
         Err(err) => return bad_request(err.body_text()),
@@ -75,7 +79,10 @@ async fn plan(State(state): State<Arc<AppState>>, body: Result<Json<PlanRequest>
     let loaded = async {
         let version = resolve_version(&state, request.engine_version.clone()).await?;
         let conn = state.db.acquire().await?;
-        let venue = state.catalog.venue(&conn, &request.venue_id, request.venue_version).await?;
+        let venue = state
+            .catalog
+            .venue(&conn, &request.venue_id, request.venue_version)
+            .await?;
         let params = state.catalog.params(&conn, &version).await?;
         Ok::<_, String>((venue, params))
     }
@@ -84,17 +91,27 @@ async fn plan(State(state): State<Arc<AppState>>, body: Result<Json<PlanRequest>
         Ok(loaded) => loaded,
         Err(err) => return classify(err),
     };
-    let race_class = request.race_class.clone().unwrap_or_else(|| venue.class.clone());
+    let race_class = request
+        .race_class
+        .clone()
+        .unwrap_or_else(|| venue.class.clone());
     let server = tracing::Span::current();
     server.record("ars.flow", "race-scheduling");
     server.record("race_class", race_class.as_str());
-    let span = tracing::info_span!("engine.plan", "ars.flow" = "race-scheduling", "race_class" = race_class.as_str(), "otel.status_code" = Empty);
+    let span = tracing::info_span!(
+        "engine.plan",
+        "ars.flow" = "race-scheduling",
+        "race_class" = race_class.as_str(),
+        "otel.status_code" = Empty
+    );
     let species = request.species.clone();
     let plan_class = race_class.clone();
     let started = Instant::now();
-    let planned = tokio::task::spawn_blocking(move || plan_race(&params, &venue, &species, &plan_class, &entrants))
-        .instrument(span.clone())
-        .await;
+    let planned = tokio::task::spawn_blocking(move || {
+        plan_race(&params, &venue, &species, &plan_class, &entrants)
+    })
+    .instrument(span.clone())
+    .await;
     match planned {
         Ok(Ok(plan)) => {
             crate::metrics::plan_duration(&race_class, started.elapsed());
@@ -143,7 +160,10 @@ async fn simulate_handler(
     let loaded = async {
         let version = resolve_version(&state, request.engine_version.clone()).await?;
         let conn = state.db.acquire().await?;
-        let venue = state.catalog.venue(&conn, &request.venue_id, request.venue_version).await?;
+        let venue = state
+            .catalog
+            .venue(&conn, &request.venue_id, request.venue_version)
+            .await?;
         let params = state.catalog.params(&conn, &version).await?;
         Ok::<_, String>((version, venue, params))
     }
@@ -159,9 +179,12 @@ async fn simulate_handler(
         laps: request.laps,
         entrants,
     };
-    let result = tokio::task::spawn_blocking(move || simulate(&params, &venue, &inputs, &seed)).await;
+    let result =
+        tokio::task::spawn_blocking(move || simulate(&params, &venue, &inputs, &seed)).await;
     match result {
-        Ok(Ok(sealed)) => ([(header::CONTENT_TYPE, "application/json")], sealed.json).into_response(),
+        Ok(Ok(sealed)) => {
+            ([(header::CONTENT_TYPE, "application/json")], sealed.json).into_response()
+        }
         Ok(Err(err)) => bad_request(err.to_string()),
         Err(err) => internal(err.to_string()),
     }

@@ -9,18 +9,18 @@ each with its own DB role. A service writes only its own schema; it learns
 about other services' data through Kafka events (never cross-schema joins in
 write paths).
 
-| Schema | Owner | Holds |
-|---|---|---|
-| `identity` | Auth (TS) | users, OAuth identities, refresh tokens |
-| `stable` | Stable (TS) | species, animals, aging history, venue form |
-| `racing` | Scheduler (TS) + race-engine (Rust) | venues, engine versions, races, entrants, results, replays, programme |
-| `sealed` | race-engine (write), race-broadcaster (read) | encrypted scripts + seeds before FINISHED |
-| `market` | Market Manager / Odds Engine | templates, markets, latest prices, price snapshots |
-| `betting` | Bet Service, Settlement, Combo Aggregator | bets, legs, cash-outs |
-| `wallet` | Wallet | per-season wallets, ledger, daily rewards |
-| `season` | Season / Leaderboard | seasons, per-user season stats, frozen results |
-| `notification` | Notification Service | inbox, settings |
-| `admin` | Admin API | audit log |
+| Schema         | Owner                                        | Holds                                                                 |
+| -------------- | -------------------------------------------- | --------------------------------------------------------------------- |
+| `identity`     | Auth (TS)                                    | users, OAuth identities, refresh tokens                               |
+| `stable`       | Stable (TS)                                  | species, animals, aging history, venue form                           |
+| `racing`       | Scheduler (TS) + race-engine (Rust)          | venues, engine versions, races, entrants, results, replays, programme |
+| `sealed`       | race-engine (write), race-broadcaster (read) | encrypted scripts + seeds before FINISHED                             |
+| `market`       | Market Manager / Odds Engine                 | templates, markets, latest prices, price snapshots                    |
+| `betting`      | Bet Service, Settlement, Combo Aggregator    | bets, legs, cash-outs                                                 |
+| `wallet`       | Wallet                                       | per-season wallets, ledger, daily rewards                             |
+| `season`       | Season / Leaderboard                         | seasons, per-user season stats, frozen results                        |
+| `notification` | Notification Service                         | inbox, settings                                                       |
+| `admin`        | Admin API                                    | audit log                                                             |
 
 Read models that combine schemas (e.g. race result page: race + entrants +
 animals + market results) are served by the API from read-only roles or
@@ -97,12 +97,12 @@ seed, hashes and incidents stay forever.
 
 **Prices.** Three tiers:
 
-| Tier | Where | Retention |
-|---|---|---|
-| Live | Redis `price:{marketId}` + `market.selections` (latest only) | until resulted |
-| Replay buffer | Kafka `market.events` | **7 days** (`KAFKA_RETENTION_DAYS`), for rebuilding consumers, not for queries |
-| History | `market.price_history`: one compressed series per market, written at `MarketResulted` | **`PRICE_HISTORY_RETENTION`**, config, default **one season (28 days rolling)** |
-| Forever | `market.price_snapshots` (opening / at-lock / at-start) | permanent |
+| Tier          | Where                                                                                 | Retention                                                                       |
+| ------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Live          | Redis `price:{marketId}` + `market.selections` (latest only)                          | until resulted                                                                  |
+| Replay buffer | Kafka `market.events`                                                                 | **7 days** (`KAFKA_RETENTION_DAYS`), for rebuilding consumers, not for queries  |
+| History       | `market.price_history`: one compressed series per market, written at `MarketResulted` | **`PRICE_HISTORY_RETENTION`**, config, default **one season (28 days rolling)** |
+| Forever       | `market.price_snapshots` (opening / at-lock / at-start)                               | permanent                                                                       |
 
 Odds charts on replay and history pages read `price_history`; a daily job
 deletes rows past `expires_at`. Bet disputes don't depend on it: each leg
@@ -128,29 +128,29 @@ cross-shard queries.
 
 ## 5. Redis
 
-| Key | Type | Owner | TTL | Purpose |
-|---|---|---|---|---|
-| `price:{marketId}` | hash `{version, selections}` | Odds Engine | until market resulted | live prices for bets & combos |
-| `race:{raceId}:state` | string (JSON snapshot) | Broadcaster | race end + 1 h | SSE `snapshot` on connect |
-| `idem:{userId}:{key}` | string (response) | Bet Service | 2 h | fast idempotent retries |
-| `cashout:quote:{quoteId}` | hash | Bet Service | until next reprice | quote validation |
-| `lb:{seasonId}:{board}` | sorted set | Leaderboard | season end + 7 d | rankings |
-| `rl:{userId}:{bucket}` | token bucket | API | seconds | rate limiting |
-| `notif:unread:{userId}` | counter | Notification | none | badge count |
+| Key                       | Type                         | Owner        | TTL                   | Purpose                       |
+| ------------------------- | ---------------------------- | ------------ | --------------------- | ----------------------------- |
+| `price:{marketId}`        | hash `{version, selections}` | Odds Engine  | until market resulted | live prices for bets & combos |
+| `race:{raceId}:state`     | string (JSON snapshot)       | Broadcaster  | race end + 1 h        | SSE `snapshot` on connect     |
+| `idem:{userId}:{key}`     | string (response)            | Bet Service  | 2 h                   | fast idempotent retries       |
+| `cashout:quote:{quoteId}` | hash                         | Bet Service  | until next reprice    | quote validation              |
+| `lb:{seasonId}:{board}`   | sorted set                   | Leaderboard  | season end + 7 d      | rankings                      |
+| `rl:{userId}:{bucket}`    | token bucket                 | API          | seconds               | rate limiting                 |
+| `notif:unread:{userId}`   | counter                      | Notification | none                  | badge count                   |
 
 Redis is always rebuildable: prices from the latest `PriceUpdated`, boards
 from `user_season_stats`, unread counts from `notifications`.
 
 ## 6. Volume estimates (per day)
 
-| Table | Rows/day | Notes |
-|---|---|---|
-| races | 72 | |
-| race_entrants | ~580 | |
-| markets | ~72 × 8 ≈ 600 | |
-| race_replays | 72 × ~100–500 KB compressed | deleted after retention |
-| bets / bet_legs | depends on users; 1k DAU × 20 bets ≈ 20k / ~30k | |
-| ledger_entries | ≈ 2 × bets + grants | |
-| notifications | ≈ bets + race-starting alerts | 30-day retention |
+| Table           | Rows/day                                        | Notes                   |
+| --------------- | ----------------------------------------------- | ----------------------- |
+| races           | 72                                              |                         |
+| race_entrants   | ~580                                            |                         |
+| markets         | ~72 × 8 ≈ 600                                   |                         |
+| race_replays    | 72 × ~100–500 KB compressed                     | deleted after retention |
+| bets / bet_legs | depends on users; 1k DAU × 20 bets ≈ 20k / ~30k |                         |
+| ledger_entries  | ≈ 2 × bets + grants                             |                         |
+| notifications   | ≈ bets + race-starting alerts                   | 30-day retention        |
 
 Comfortably within a single 4 GB VPS for the portfolio scale.

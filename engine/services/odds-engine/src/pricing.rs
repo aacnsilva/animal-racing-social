@@ -44,7 +44,7 @@ impl MarketKind {
 }
 
 pub fn floor_probability(probability: f64, runs: u32) -> f64 {
-    probability.max(0.5 / runs.max(1) as f64).min(1.0)
+    probability.max(0.5 / f64::from(runs.max(1))).min(1.0)
 }
 
 pub fn price(probability: f64, margin: f64) -> f64 {
@@ -74,9 +74,18 @@ mod tests {
     #[test]
     fn market_kinds_parse() {
         let params = serde_json::json!({ "position": 2 });
-        assert_eq!(MarketKind::from_json("FINISH_POSITION", &params), Ok(MarketKind::FinishPosition(2)));
-        assert_eq!(MarketKind::from_json("TOP_N", &serde_json::json!({ "n": "3" })), Ok(MarketKind::TopN(3)));
-        assert_eq!(MarketKind::from_json("TRICAST", &serde_json::json!({})), Ok(MarketKind::Tricast));
+        assert_eq!(
+            MarketKind::from_json("FINISH_POSITION", &params),
+            Ok(MarketKind::FinishPosition(2))
+        );
+        assert_eq!(
+            MarketKind::from_json("TOP_N", &serde_json::json!({ "n": "3" })),
+            Ok(MarketKind::TopN(3))
+        );
+        assert_eq!(
+            MarketKind::from_json("TRICAST", &serde_json::json!({})),
+            Ok(MarketKind::Tricast)
+        );
         assert!(MarketKind::from_json("LEADER_AT_LAP", &serde_json::json!({})).is_err());
     }
 }

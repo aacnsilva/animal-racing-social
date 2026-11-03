@@ -26,7 +26,7 @@ x-env: &env
   RACE_ENGINE_URL: http://race-engine:7001
   ODDS_ENGINE_URL: http://odds-engine:7003
   WALLET_URL: http://wallet:3002
-  REPLAY_RETENTION_HOURS: "24"
+  REPLAY_RETENTION_HOURS: '24'
   OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
   OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=development
 
@@ -40,10 +40,10 @@ services:
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ars
-    ports: ["5432:5432"]
+    ports: ['5432:5432']
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ars"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d ars']
       interval: 2s
       timeout: 3s
       retries: 30
@@ -63,23 +63,24 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_NUM_PARTITIONS: 6
-      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
-    ports: ["29092:29092"]
+      KAFKA_HEAP_OPTS: '-Xms512m -Xmx512m'
+    ports: ['29092:29092']
     volumes: [kafkadata:/var/lib/kafka/data]
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      test:
+        ['CMD-SHELL', '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1']
       interval: 5s
       timeout: 10s
       retries: 30
 
   redis:
     image: redis:7.4-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
-    ports: ["6379:6379"]
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports: ['6379:6379']
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 2s
       timeout: 3s
       retries: 30
@@ -89,7 +90,7 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    command: ["migrate"]
+    command: ['migrate']
     environment:
       MIGRATE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/ars
       DB_SERVICE_PASSWORD: ars
@@ -102,11 +103,11 @@ services:
 
   api:
     <<: *server
-    command: ["api"]
+    command: ['api']
     environment:
       <<: *env
-      NODE_ID: "1"
-      PORT: "3000"
+      NODE_ID: '1'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_api:ars@postgres:5432/ars
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       JWT_SECRET: dev-only-jwt-secret-not-for-production
@@ -122,134 +123,134 @@ services:
       OAUTH_GITHUB_TOKEN_URL: http://mock-oauth:9000/github/login/oauth/access_token
       OAUTH_GITHUB_USERINFO_URL: http://mock-oauth:9000/github/user
     healthcheck: &health
-      test: ["CMD-SHELL", "wget -qO- http://localhost:$$PORT/healthz > /dev/null"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:$$PORT/healthz > /dev/null']
       interval: 5s
       timeout: 3s
       retries: 20
 
   sse:
     <<: *server
-    command: ["sse"]
+    command: ['sse']
     environment:
       <<: *env
-      NODE_ID: "2"
-      PORT: "3001"
+      NODE_ID: '2'
+      PORT: '3001'
       DATABASE_URL: postgres://ars_sse:ars@postgres:5432/ars
     healthcheck: *health
 
   wallet:
     <<: *server
-    command: ["wallet"]
+    command: ['wallet']
     environment:
       <<: *env
-      NODE_ID: "3"
-      PORT: "3002"
+      NODE_ID: '3'
+      PORT: '3002'
       DATABASE_URL: postgres://ars_wallet:ars@postgres:5432/ars
     healthcheck: *health
 
   scheduler:
     <<: *server
-    command: ["scheduler"]
+    command: ['scheduler']
     environment:
       <<: *env
-      NODE_ID: "4"
-      PORT: "3000"
+      NODE_ID: '4'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_scheduler:ars@postgres:5432/ars
       SCHEDULER_MAX_HORIZON_HOURS: ${SCHEDULER_MAX_HORIZON_HOURS:-2}
     healthcheck: *health
 
   stable:
     <<: *server
-    command: ["stable"]
+    command: ['stable']
     environment:
       <<: *env
-      NODE_ID: "5"
-      PORT: "3000"
+      NODE_ID: '5'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_stable:ars@postgres:5432/ars
     healthcheck: *health
 
   market-manager:
     <<: *server
-    command: ["market-manager"]
+    command: ['market-manager']
     environment:
       <<: *env
-      NODE_ID: "6"
-      PORT: "3000"
+      NODE_ID: '6'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_market:ars@postgres:5432/ars
     healthcheck: *health
 
   bet-worker:
     <<: *server
-    command: ["bet-worker"]
+    command: ['bet-worker']
     environment:
       <<: *env
-      NODE_ID: "7"
-      PORT: "3000"
+      NODE_ID: '7'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_betting:ars@postgres:5432/ars
     healthcheck: *health
 
   settlement:
     <<: *server
-    command: ["settlement"]
+    command: ['settlement']
     environment:
       <<: *env
-      NODE_ID: "8"
-      PORT: "3000"
+      NODE_ID: '8'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_betting:ars@postgres:5432/ars
     healthcheck: *health
 
   combo-aggregator:
     <<: *server
-    command: ["combo-aggregator"]
+    command: ['combo-aggregator']
     environment:
       <<: *env
-      NODE_ID: "9"
-      PORT: "3000"
+      NODE_ID: '9'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_betting:ars@postgres:5432/ars
     healthcheck: *health
 
   season:
     <<: *server
-    command: ["season"]
+    command: ['season']
     environment:
       <<: *env
-      NODE_ID: "10"
-      PORT: "3000"
+      NODE_ID: '10'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_season:ars@postgres:5432/ars
     healthcheck: *health
 
   notification:
     <<: *server
-    command: ["notification"]
+    command: ['notification']
     environment:
       <<: *env
-      NODE_ID: "11"
-      PORT: "3000"
+      NODE_ID: '11'
+      PORT: '3000'
       DATABASE_URL: postgres://ars_notification:ars@postgres:5432/ars
     healthcheck: *health
 
   race-engine:
     <<: *engine
-    command: ["race-engine"]
+    command: ['race-engine']
     environment:
       <<: [*env, *script-keys]
-      PORT: "7001"
+      PORT: '7001'
       DATABASE_URL: postgres://ars_race_engine:ars@postgres:5432/ars
 
   race-broadcaster:
     <<: *engine
-    command: ["race-broadcaster"]
+    command: ['race-broadcaster']
     environment:
       <<: [*env, *script-keys]
-      PORT: "7002"
+      PORT: '7002'
       DATABASE_URL: postgres://ars_broadcaster:ars@postgres:5432/ars
 
   odds-engine:
     <<: *engine
-    command: ["odds-engine"]
+    command: ['odds-engine']
     environment:
       <<: *env
-      PORT: "7003"
+      PORT: '7003'
       DATABASE_URL: postgres://ars_odds:ars@postgres:5432/ars
       ODDS_RUNS_PRERACE: ${ODDS_RUNS_PRERACE:-3000}
       ODDS_RUNS_LIVE: ${ODDS_RUNS_LIVE:-1500}
@@ -258,17 +259,17 @@ services:
     image: ${ARS_MOCK_OAUTH_IMAGE:-ars-mock-oauth:dev}
     build: mock-oauth
     restart: unless-stopped
-    ports: ["9000:9000"]
+    ports: ['9000:9000']
     environment:
-      PORT: "9000"
+      PORT: '9000'
 
   web:
     image: ${ARS_WEB_IMAGE:-ars-web:dev}
     build: web
     restart: unless-stopped
-    ports: ["8080:80"]
+    ports: ['8080:80']
     environment:
-      SITE_ADDRESS: ":80"
+      SITE_ADDRESS: ':80'
       API_UPSTREAM: api:3000
       SSE_UPSTREAM: sse:3001
       GRAFANA_UPSTREAM: grafana:3000
@@ -279,11 +280,11 @@ services:
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.154.0
     restart: unless-stopped
-    command: ["-storageDataPath=/storage", "-retentionPeriod=${METRICS_RETENTION:-2d}"]
-    ports: ["127.0.0.1:8428:8428"]
+    command: ['-storageDataPath=/storage', '-retentionPeriod=${METRICS_RETENTION:-2d}']
+    ports: ['127.0.0.1:8428:8428']
     volumes: [vmdata:/storage]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8428/health']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -291,8 +292,8 @@ services:
   victorialogs:
     image: victoriametrics/victoria-logs:v1.53.0
     restart: unless-stopped
-    command: ["-storageDataPath=/storage", "-retentionPeriod=${LOGS_RETENTION:-2d}"]
-    ports: ["127.0.0.1:9428:9428"]
+    command: ['-storageDataPath=/storage', '-retentionPeriod=${LOGS_RETENTION:-2d}']
+    ports: ['127.0.0.1:9428:9428']
     volumes: [vldata:/storage]
 
   jaeger:
@@ -301,10 +302,10 @@ services:
     restart: unless-stopped
     environment:
       TRACE_RETENTION: ${TRACE_RETENTION:-48h}
-    ports: ["127.0.0.1:16686:16686"]
+    ports: ['127.0.0.1:16686:16686']
     volumes: [jaegerdata:/badger]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:13133/status"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:13133/status']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -316,7 +317,7 @@ services:
     cgroup: host
     environment:
       POSTGRES_MONITOR_DSN: postgresql://ars_monitor:ars@postgres:5432/ars?sslmode=disable
-      TRACE_SAMPLE_PERCENT: "100"
+      TRACE_SAMPLE_PERCENT: '100'
       EDGE_PROBE_URL: http://web:80/
     volumes:
       - alloydata:/var/lib/alloy/data
@@ -342,7 +343,7 @@ services:
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-http://mock-oauth:9000/webhooks/discord}
     volumes: [grafanadata:/var/lib/grafana]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
       interval: 5s
       timeout: 3s
       retries: 30

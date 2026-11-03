@@ -13,8 +13,17 @@ async function marketJson(db: Queryable, redis: Redis, row: Record<string, any>)
     selections = price?.selections ?? [];
     priceVersion = price?.version ?? priceVersion;
   } else {
-    const rows = await many(db, 'SELECT selection_id, entrant_id, price, probability FROM market.selections WHERE market_id = $1 ORDER BY entrant_id', [row.market_id]);
-    selections = rows.map((s) => ({ selectionId: s.selection_id, entrantId: entrantKey(s.entrant_id), price: s.price, probability: s.probability }));
+    const rows = await many(
+      db,
+      'SELECT selection_id, entrant_id, price, probability FROM market.selections WHERE market_id = $1 ORDER BY entrant_id',
+      [row.market_id],
+    );
+    selections = rows.map((s) => ({
+      selectionId: s.selection_id,
+      entrantId: entrantKey(s.entrant_id),
+      price: s.price,
+      probability: s.probability,
+    }));
   }
   return {
     id: row.market_id,
@@ -31,7 +40,12 @@ async function marketJson(db: Queryable, redis: Redis, row: Record<string, any>)
 
 export type MarketJson = Awaited<ReturnType<typeof marketJson>>;
 
-export async function marketsForRace(db: Queryable, redis: Redis, raceId: string, status?: string | null): Promise<MarketJson[]> {
+export async function marketsForRace(
+  db: Queryable,
+  redis: Redis,
+  raceId: string,
+  status?: string | null,
+): Promise<MarketJson[]> {
   const rows = await many(
     db,
     `SELECT * FROM market.markets WHERE race_id = $1 AND ($2::text IS NULL OR status = $2)

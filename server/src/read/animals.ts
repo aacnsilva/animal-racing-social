@@ -32,7 +32,18 @@ export function animalDetail(row: Record<string, any>, venueForm: Record<string,
     recruitedAt: iso(row.recruited_at),
     retiredAt: iso(row.retired_at),
     retireReason: row.retire_reason,
-    venueForm: venueForm.map((form) => ({ venueId: form.venue_id, venueName: form.venue_name, races: form.races, wins: form.wins, podiums: form.podiums })),
-    agingHistory: aging.map((day) => ({ day: day.day, careerDay: day.career_day, lifeStage: day.life_stage, stats: day.stats })),
+    venueForm: venueForm.map((form) => ({
+      venueId: form.venue_id,
+      venueName: form.venue_name,
+      races: form.races,
+      wins: form.wins,
+      podiums: form.podiums,
+    })),
+    agingHistory: aging.map((day) => ({
+      day: day.day,
+      careerDay: day.career_day,
+      lifeStage: day.life_stage,
+      stats: day.stats,
+    })),
   };
 }

@@ -27,7 +27,10 @@ export function WalletPage() {
   const [claiming, setClaiming] = useState(false);
   const authed = session.status === 'authed';
   const ledger = usePaged(
-    (cursor) => (authed ? api<Page<LedgerEntry>>(`/v1/me/wallet/ledger${qs({ cursor, limit: 25 })}`) : Promise.resolve({ items: [], nextCursor: null })),
+    (cursor) =>
+      authed
+        ? api<Page<LedgerEntry>>(`/v1/me/wallet/ledger${qs({ cursor, limit: 25 })}`)
+        : Promise.resolve({ items: [], nextCursor: null }),
     [authed],
   );
 
@@ -43,7 +46,9 @@ export function WalletPage() {
   const claim = async () => {
     setClaiming(true);
     try {
-      const result = await api<{ amount: number; balance: number; streak?: number }>('/v1/me/rewards/daily', { method: 'POST' });
+      const result = await api<{ amount: number; balance: number; streak?: number }>('/v1/me/rewards/daily', {
+        method: 'POST',
+      });
       toast(`Daily reward claimed: +${fmtPoints(result.amount)} pts`, 'success');
       walletStore.set((w) => (w ? { ...w, balance: result.balance } : w));
       refreshWallet();
@@ -87,7 +92,11 @@ export function WalletPage() {
           <div className="label">Daily reward</div>
           <div className="row" style={{ marginTop: 6 }}>
             <button className="btn reward" disabled={!daily?.claimable || claiming} onClick={() => void claim()}>
-              {daily?.claimable ? `Claim +${daily.amount}` : daily ? `Next in ${fmtCountdown(Date.parse(daily.nextClaimAt) - now)}` : '…'}
+              {daily?.claimable
+                ? `Claim +${daily.amount}`
+                : daily
+                  ? `Next in ${fmtCountdown(Date.parse(daily.nextClaimAt) - now)}`
+                  : '…'}
             </button>
           </div>
           {daily && (
@@ -123,9 +132,14 @@ export function WalletPage() {
                   <tr key={entry.entryId} data-testid="ledger-row" data-type={entry.type}>
                     <td className="small">{fmtDateTime(entry.createdAt)}</td>
                     <td>
-                      <span className={`chip ${entry.amount > 0 ? 'green' : 'red'}`}>{LEDGER_LABEL[entry.type] ?? entry.type}</span>
+                      <span className={`chip ${entry.amount > 0 ? 'green' : 'red'}`}>
+                        {LEDGER_LABEL[entry.type] ?? entry.type}
+                      </span>
                     </td>
-                    <td className="right num" style={{ color: entry.amount > 0 ? 'var(--turf)' : 'var(--danger)', fontWeight: 800 }}>
+                    <td
+                      className="right num"
+                      style={{ color: entry.amount > 0 ? 'var(--turf)' : 'var(--danger)', fontWeight: 800 }}
+                    >
                       {fmtSigned(entry.amount)}
                     </td>
                     <td className="right num">{fmtPoints(entry.balanceAfter)}</td>

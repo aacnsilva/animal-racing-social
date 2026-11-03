@@ -47,15 +47,19 @@ export function refreshSession(): Promise<boolean> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const res = await fetch('/v1/auth/refresh', { method: 'POST', credentials: 'same-origin', headers: { accept: 'application/json' } });
+      const res = await fetch('/v1/auth/refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { accept: 'application/json' },
+      });
       if (!res.ok) {
-        const body = await res.json().catch(() => null) as { code?: string } | null;
+        const body = (await res.json().catch(() => null)) as { code?: string } | null;
         token = null;
         clearTimeout(refreshTimer);
         emit({ status: 'anon', user: null, error: body?.code === 'BANNED' ? 'BANNED' : state.error });
         return false;
       }
-      const session = await res.json() as Session;
+      const session = (await res.json()) as Session;
       token = session.accessToken;
       scheduleRefresh(session.expiresIn - 60);
       emit({ status: 'authed', user: session.user, error: null });
@@ -129,7 +133,12 @@ async function failure(res: Response): Promise<ApiError> {
   } catch {
     data = null;
   }
-  return new ApiError(res.status, data?.code ?? `HTTP_${res.status}`, data?.message ?? (res.statusText || 'Request failed'), data?.details);
+  return new ApiError(
+    res.status,
+    data?.code ?? `HTTP_${res.status}`,
+    data?.message ?? (res.statusText || 'Request failed'),
+    data?.details,
+  );
 }
 
 async function withRetry(path: string, options: RequestOptions): Promise<Response> {
@@ -157,7 +166,8 @@ export async function apiBytes(path: string): Promise<ArrayBuffer> {
 
 export function qs(params: Record<string, string | number | boolean | null | undefined>): string {
   const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) if (value !== null && value !== undefined && value !== '') search.set(key, String(value));
+  for (const [key, value] of Object.entries(params))
+    if (value !== null && value !== undefined && value !== '') search.set(key, String(value));
   const text = search.toString();
   return text ? `?${text}` : '';
 }

@@ -28,7 +28,10 @@ export function signJwt(claims: Record<string, unknown>, secret: string, ttlSeco
   return `${header}.${body}.${signature}`;
 }
 
-export function verifyJwt<T extends Record<string, unknown>>(token: string, secret: string): (T & { exp: number; iat: number }) | null {
+export function verifyJwt<T extends Record<string, unknown>>(
+  token: string,
+  secret: string,
+): (T & { exp: number; iat: number }) | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   const [header, body, signature] = parts as [string, string, string];

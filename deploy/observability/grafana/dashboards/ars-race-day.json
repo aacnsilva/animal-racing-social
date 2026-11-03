@@ -2,9 +2,7 @@
   "uid": "ars-race-day",
   "title": "ARS \u00b7 Race day",
   "description": "Race clock, starts, engine and pricing, market transitions and the stable",
-  "tags": [
-    "ars"
-  ],
+  "tags": ["ars"],
   "timezone": "browser",
   "editable": false,
   "graphTooltip": 1,
@@ -18,9 +16,7 @@
   "links": [
     {
       "type": "dashboards",
-      "tags": [
-        "ars"
-      ],
+      "tags": ["ars"],
       "asDropdown": true,
       "title": "ARS dashboards",
       "includeVars": false,

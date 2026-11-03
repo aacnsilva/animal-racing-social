@@ -30,14 +30,17 @@ ENV: DATABASE_URL KAFKA_BROKERS REDIS_URL PORT ODDS_MARGIN ODDS_RUNS_PRERACE ODD
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
-        Some("--help") | Some("-h") | Some("help") => println!("{USAGE}"),
-        Some("--version") | Some("-V") => println!("odds-engine {}", race_engine_core::ENGINE_VERSION),
+        Some("--help" | "-h" | "help") => println!("{USAGE}"),
+        Some("--version" | "-V") => println!("odds-engine {}", race_engine_core::ENGINE_VERSION),
         Some(other) => {
             eprintln!("unknown argument {other}\n\n{USAGE}");
             std::process::exit(2);
         }
         None => {
-            let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
             runtime.block_on(async {
                 telemetry::init("odds-engine");
                 if let Err(err) = run().await {
@@ -51,7 +54,7 @@ fn main() {
 
 async fn run() -> Res<()> {
     telemetry::exit_on_signal();
-    let default_threads = std::thread::available_parallelism().map(|count| count.get()).unwrap_or(2);
+    let default_threads = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
     let settings = Settings {
         margin: config::number("ODDS_MARGIN", 0.05),
         runs_prerace: config::number("ODDS_RUNS_PRERACE", 5000u32).max(1),

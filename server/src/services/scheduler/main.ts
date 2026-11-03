@@ -10,13 +10,25 @@ import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, every, type Runtime } from '../../lib/runtime.ts';
 import { activeSpan, gauge, withSpan } from '../../lib/telemetry.ts';
 import { HOUR_MS, MINUTE_MS } from '../../lib/time.ts';
-import { isAvailable, shuffle, slotPlan, slotsBetween, type Booking, type Programme, type RaceClass, type Species } from '../../domain/scheduler.ts';
+import {
+  isAvailable,
+  shuffle,
+  slotPlan,
+  slotsBetween,
+  type Booking,
+  type Programme,
+  type RaceClass,
+  type Species,
+} from '../../domain/scheduler.ts';
 
 const FIELD_MIN = () => envInt('FIELD_MIN', 6);
 const FIELD_MAX = () => envInt('FIELD_MAX', 10);
 
 export async function loadProgramme(db: Queryable): Promise<Programme & { version: number }> {
-  const row = await one(db, 'SELECT * FROM racing.programme WHERE effective_from <= now() ORDER BY version DESC LIMIT 1');
+  const row = await one(
+    db,
+    'SELECT * FROM racing.programme WHERE effective_from <= now() ORDER BY version DESC LIMIT 1',
+  );
   if (!row) throw new Error('No programme configured');
   return {
     version: row.version,
@@ -28,7 +40,14 @@ export async function loadProgramme(db: Queryable): Promise<Programme & { versio
   };
 }
 
-type ScheduleRequest = { raceId?: string; startAt: Date; species: Species; raceClass: RaceClass; venueId?: string; fieldSize?: number };
+type ScheduleRequest = {
+  raceId?: string;
+  startAt: Date;
+  species: Species;
+  raceClass: RaceClass;
+  venueId?: string;
+  fieldSize?: number;
+};
 
 async function seasonFor(client: Client, startAt: Date) {
   return one(
@@ -62,7 +81,11 @@ async function pickEntrants(client: Client, request: ScheduleRequest, programme:
     client,
     `SELECT e.animal_id, r.start_at, r.race_class FROM racing.race_entrants e JOIN racing.races r USING (race_id)
      WHERE r.status <> 'CANCELLED' AND e.animal_id = ANY($1) AND r.start_at BETWEEN $2 AND $3`,
-    [candidates.map((c) => c.animal_id), new Date(request.startAt.getTime() - window), new Date(request.startAt.getTime() + window)],
+    [
+      candidates.map((c) => c.animal_id),
+      new Date(request.startAt.getTime() - window),
+      new Date(request.startAt.getTime() + window),
+    ],
   );
   const byAnimal = new Map<string, Booking[]>();
   for (const booking of bookings) {
@@ -70,12 +93,18 @@ async function pickEntrants(client: Client, request: ScheduleRequest, programme:
     list.push({ startAt: booking.start_at, raceClass: booking.race_class });
     byAnimal.set(booking.animal_id, list);
   }
-  const available = candidates.filter((animal) => isAvailable(byAnimal.get(animal.animal_id) ?? [], request.startAt, request.raceClass, programme.recoveryMinutes));
+  const available = candidates.filter((animal) =>
+    isAvailable(byAnimal.get(animal.animal_id) ?? [], request.startAt, request.raceClass, programme.recoveryMinutes),
+  );
   const size = request.fieldSize ?? FIELD_MIN() + randomInt(FIELD_MAX() - FIELD_MIN() + 1);
   return shuffle(available).slice(0, Math.min(size, 10));
 }
 
-export async function scheduleRace(client: Client, request: ScheduleRequest, programme: Programme): Promise<string | null> {
+export async function scheduleRace(
+  client: Client,
+  request: ScheduleRequest,
+  programme: Programme,
+): Promise<string | null> {
   if (request.raceId) {
     const existing = await one(client, 'SELECT race_id FROM racing.races WHERE race_id = $1', [request.raceId]);
     if (existing) return request.raceId;
@@ -100,7 +129,11 @@ export async function scheduleRace(client: Client, request: ScheduleRequest, pro
   }
   const animals = await pickEntrants(client, request, programme);
   if (animals.length < FIELD_MIN()) {
-    log.warn('not enough available animals', { species: request.species, startAt: request.startAt, available: animals.length });
+    log.warn('not enough available animals', {
+      species: request.species,
+      startAt: request.startAt,
+      available: animals.length,
+    });
     instruments.schedulerSkipped().add(1, { reason: 'not_enough_animals' });
     return null;
   }
@@ -108,8 +141,13 @@ export async function scheduleRace(client: Client, request: ScheduleRequest, pro
   const entrants = animals.map((animal, index) => ({
     number: index + 1,
     animal,
-    lane: lanes[index]!,
-    stats: { velocity: animal.cur_velocity, stamina: animal.cur_stamina, acceleration: animal.cur_acceleration, consistency: animal.cur_consistency },
+    lane: lanes[index],
+    stats: {
+      velocity: animal.cur_velocity,
+      stamina: animal.cur_stamina,
+      acceleration: animal.cur_acceleration,
+      consistency: animal.cur_consistency,
+    },
   }));
   const inputs: EntrantInput[] = entrants.map((entrant) => ({
     entrantId: entrantKey(entrant.number),
@@ -119,32 +157,73 @@ export async function scheduleRace(client: Client, request: ScheduleRequest, pro
     stats: entrant.stats,
   }));
   const plan = await raceEngine.plan({
-    venueId: venue.venue_id, venueVersion: venue.version, species: request.species, raceClass: request.raceClass, engineVersion: engine.engine_version, entrants: inputs,
+    venueId: venue.venue_id,
+    venueVersion: venue.version,
+    species: request.species,
+    raceClass: request.raceClass,
+    engineVersion: engine.engine_version,
+    entrants: inputs,
   });
   const raceId = request.raceId ?? newId(0);
-  activeSpan()?.setAttributes({ 'ars.race_id': raceId, 'ars.flow': 'race-scheduling', race_class: request.raceClass, species: request.species });
+  activeSpan()?.setAttributes({
+    'ars.race_id': raceId,
+    'ars.flow': 'race-scheduling',
+    race_class: request.raceClass,
+    species: request.species,
+  });
   await client.query(
     `INSERT INTO racing.races (race_id, season_id, species, race_class, venue_id, venue_version, engine_version, laps, estimated_duration_s,
        status, start_at, betting_closes_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'SCHEDULED', $10, $10::timestamptz - interval '60 seconds')`,
-    [raceId, season.season_id, request.species, request.raceClass, venue.venue_id, venue.version, engine.engine_version, plan.laps, plan.estimatedDurationSec, request.startAt],
+    [
+      raceId,
+      season.season_id,
+      request.species,
+      request.raceClass,
+      venue.venue_id,
+      venue.version,
+      engine.engine_version,
+      plan.laps,
+      plan.estimatedDurationSec,
+      request.startAt,
+    ],
   );
   for (const entrant of entrants) {
     await client.query(
       `INSERT INTO racing.race_entrants (race_id, entrant_id, animal_id, lane, temperament, stats_snapshot) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [raceId, entrant.number, entrant.animal.animal_id, entrant.lane, entrant.animal.temperament, JSON.stringify(entrant.stats)],
+      [
+        raceId,
+        entrant.number,
+        entrant.animal.animal_id,
+        entrant.lane,
+        entrant.animal.temperament,
+        JSON.stringify(entrant.stats),
+      ],
     );
   }
-  await enqueue(client, 'racing', Topics.raceCommands, raceId, payload('generateScript', {
+  await enqueue(
+    client,
+    'racing',
+    Topics.raceCommands,
     raceId,
-    engineVersion: engine.engine_version,
-    venueId: venue.venue_id,
-    venueVersion: venue.version,
-    laps: plan.laps,
+    payload('generateScript', {
+      raceId,
+      engineVersion: engine.engine_version,
+      venueId: venue.venue_id,
+      venueVersion: venue.version,
+      laps: plan.laps,
+      species: request.species,
+      entrants: inputs.map((input, index) => ({ ...input, name: entrants[index].animal.name })),
+    }),
+  );
+  log.info('race scheduled', {
+    raceId,
+    startAt: request.startAt,
     species: request.species,
-    entrants: inputs.map((input, index) => ({ ...input, name: entrants[index]!.animal.name })),
-  }));
-  log.info('race scheduled', { raceId, startAt: request.startAt, species: request.species, raceClass: request.raceClass, venue: venue.venue_id, field: entrants.length });
+    raceClass: request.raceClass,
+    venue: venue.venue_id,
+    field: entrants.length,
+  });
   return raceId;
 }
 
@@ -161,16 +240,29 @@ async function fillHorizon(runtime: Runtime): Promise<void> {
   const from = new Date(Date.now() + envInt('SCHEDULER_LEAD_MINUTES', 3) * MINUTE_MS);
   const to = new Date(Date.now() + Math.min(programme.horizonHours, maxHorizon) * HOUR_MS);
   const slots = slotsBetween(from, to, programme);
-  const taken = new Set((await many(runtime.pool, `SELECT start_at FROM racing.races WHERE start_at BETWEEN $1 AND $2 AND status <> 'CANCELLED'`, [from, to]))
-    .map((row) => (row.start_at as Date).getTime()));
+  const taken = new Set(
+    (
+      await many(
+        runtime.pool,
+        `SELECT start_at FROM racing.races WHERE start_at BETWEEN $1 AND $2 AND status <> 'CANCELLED'`,
+        [from, to],
+      )
+    ).map((row) => (row.start_at as Date).getTime()),
+  );
   let scheduled = 0;
   for (const slot of slots) {
     if (taken.has(slot.getTime())) continue;
     if (scheduled >= envInt('SCHEDULER_BATCH', 12)) break;
     const plan = slotPlan(slot, programme);
     try {
-      const raceId = await withSpan('scheduler.schedule_race', { root: true, attributes: { 'ars.flow': 'race-scheduling', race_class: plan.raceClass, species: plan.species } },
-        () => withSchedulingLock(runtime, (client) => scheduleRace(client, { startAt: slot, ...plan }, programme)));
+      const raceId = await withSpan(
+        'scheduler.schedule_race',
+        {
+          root: true,
+          attributes: { 'ars.flow': 'race-scheduling', race_class: plan.raceClass, species: plan.species },
+        },
+        () => withSchedulingLock(runtime, (client) => scheduleRace(client, { startAt: slot, ...plan }, programme)),
+      );
       if (!raceId) break;
       scheduled++;
     } catch (error) {
@@ -182,20 +274,41 @@ async function fillHorizon(runtime: Runtime): Promise<void> {
 }
 
 async function lockAndExpire(runtime: Runtime): Promise<void> {
-  const due = await one(runtime.pool, `SELECT 1 FROM racing.races WHERE status IN ('OPEN', 'SCHEDULED') AND betting_closes_at <= now() LIMIT 1`);
+  const due = await one(
+    runtime.pool,
+    `SELECT 1 FROM racing.races WHERE status IN ('OPEN', 'SCHEDULED') AND betting_closes_at <= now() LIMIT 1`,
+  );
   if (!due) return;
-  await withSpan('scheduler.lock_races', { root: true, attributes: { 'ars.flow': 'race-lock' } }, () => tx(runtime.pool, async (client) => {
-    const locked = await many(client, `UPDATE racing.races SET status = 'LOCKED' WHERE status = 'OPEN' AND betting_closes_at <= now() RETURNING race_id`);
-    for (const row of locked) await enqueue(client, 'racing', Topics.raceLifecycle, row.race_id, payload('raceLocked', { raceId: row.race_id }));
-    const unsealed = await many(
-      client,
-      `UPDATE racing.races SET status = 'CANCELLED', cancelled_reason = 'SCRIPT_NOT_SEALED' WHERE status = 'SCHEDULED' AND betting_closes_at <= now() RETURNING race_id`,
-    );
-    for (const row of unsealed) {
-      await enqueue(client, 'racing', Topics.raceLifecycle, row.race_id, payload('raceCancelled', { raceId: row.race_id, reason: 'SCRIPT_NOT_SEALED' }));
-    }
-    activeSpan()?.setAttributes({ 'ars.locked': locked.length, 'ars.unsealed_cancelled': unsealed.length });
-  }));
+  await withSpan('scheduler.lock_races', { root: true, attributes: { 'ars.flow': 'race-lock' } }, () =>
+    tx(runtime.pool, async (client) => {
+      const locked = await many(
+        client,
+        `UPDATE racing.races SET status = 'LOCKED' WHERE status = 'OPEN' AND betting_closes_at <= now() RETURNING race_id`,
+      );
+      for (const row of locked)
+        await enqueue(
+          client,
+          'racing',
+          Topics.raceLifecycle,
+          row.race_id,
+          payload('raceLocked', { raceId: row.race_id }),
+        );
+      const unsealed = await many(
+        client,
+        `UPDATE racing.races SET status = 'CANCELLED', cancelled_reason = 'SCRIPT_NOT_SEALED' WHERE status = 'SCHEDULED' AND betting_closes_at <= now() RETURNING race_id`,
+      );
+      for (const row of unsealed) {
+        await enqueue(
+          client,
+          'racing',
+          Topics.raceLifecycle,
+          row.race_id,
+          payload('raceCancelled', { raceId: row.race_id, reason: 'SCRIPT_NOT_SEALED' }),
+        );
+      }
+      activeSpan()?.setAttributes({ 'ars.locked': locked.length, 'ars.unsealed_cancelled': unsealed.length });
+    }),
+  );
 }
 
 function registerGauges(runtime: Runtime): void {
@@ -205,7 +318,10 @@ function registerGauges(runtime: Runtime): void {
        WHERE status IN ('SCHEDULED', 'OPEN', 'LOCKED', 'LIVE') OR start_at > now() - interval '24 hours'
        GROUP BY status, race_class, species`,
     );
-    return rows.map((row) => ({ value: row.n, attributes: { status: row.status, race_class: row.race_class, species: row.species } }));
+    return rows.map((row) => ({
+      value: row.n,
+      attributes: { status: row.status, race_class: row.race_class, species: row.species },
+    }));
   });
   gauge('ars.races.overdue', 'Races that should have started, finished or sealed by now', '', async () => {
     const { rows } = await runtime.pool.query(
@@ -239,30 +355,42 @@ async function onSealed(runtime: Runtime, sealed: PayloadOf<'scriptSealed'>): Pr
       [sealed.raceId],
     );
     await client.query(`UPDATE racing.races SET status = 'OPEN' WHERE race_id = $1`, [sealed.raceId]);
-    await enqueue(client, 'racing', Topics.raceLifecycle, sealed.raceId, payload('raceScheduled', {
-      raceId: race.race_id,
-      seasonId: race.season_id,
-      species: race.species,
-      raceClass: race.race_class,
-      venueId: race.venue_id,
-      venueVersion: race.venue_version,
-      engineVersion: race.engine_version,
-      startAt: race.start_at.toISOString(),
-      laps: race.laps,
-      estimatedDurationSec: race.estimated_duration_s,
-      tickMs: race.tick_ms,
-      entrants: entrants.map((entrant) => ({
-        entrantId: entrantKey(entrant.entrant_id),
-        animalId: entrant.animal_id,
-        lane: entrant.lane,
-        temperament: entrant.temperament,
-        stats: entrant.stats_snapshot,
-        name: entrant.name,
-      })),
-      seedHash: sealed.seedHash,
-      scriptHash: sealed.scriptHash,
-    }));
-    await enqueue(client, 'racing', Topics.raceLifecycle, sealed.raceId, payload('raceOpened', { raceId: sealed.raceId }));
+    await enqueue(
+      client,
+      'racing',
+      Topics.raceLifecycle,
+      sealed.raceId,
+      payload('raceScheduled', {
+        raceId: race.race_id,
+        seasonId: race.season_id,
+        species: race.species,
+        raceClass: race.race_class,
+        venueId: race.venue_id,
+        venueVersion: race.venue_version,
+        engineVersion: race.engine_version,
+        startAt: race.start_at.toISOString(),
+        laps: race.laps,
+        estimatedDurationSec: race.estimated_duration_s,
+        tickMs: race.tick_ms,
+        entrants: entrants.map((entrant) => ({
+          entrantId: entrantKey(entrant.entrant_id),
+          animalId: entrant.animal_id,
+          lane: entrant.lane,
+          temperament: entrant.temperament,
+          stats: entrant.stats_snapshot,
+          name: entrant.name,
+        })),
+        seedHash: sealed.seedHash,
+        scriptHash: sealed.scriptHash,
+      }),
+    );
+    await enqueue(
+      client,
+      'racing',
+      Topics.raceLifecycle,
+      sealed.raceId,
+      payload('raceOpened', { raceId: sealed.raceId }),
+    );
   });
 }
 
@@ -282,18 +410,28 @@ async function onScriptFailed(runtime: Runtime, failed: PayloadOf<'scriptFailed'
       `SELECT e.*, a.name FROM racing.race_entrants e JOIN stable.animals a USING (animal_id) WHERE e.race_id = $1 ORDER BY e.entrant_id`,
       [failed.raceId],
     );
-    await enqueue(client, 'racing', Topics.raceCommands, failed.raceId, payload('generateScript', {
-      raceId: race.race_id,
-      engineVersion: race.engine_version,
-      venueId: race.venue_id,
-      venueVersion: race.venue_version,
-      laps: race.laps,
-      species: race.species,
-      entrants: entrants.map((entrant) => ({
-        entrantId: entrantKey(entrant.entrant_id), animalId: entrant.animal_id, lane: entrant.lane,
-        temperament: entrant.temperament, stats: entrant.stats_snapshot, name: entrant.name,
-      })),
-    }));
+    await enqueue(
+      client,
+      'racing',
+      Topics.raceCommands,
+      failed.raceId,
+      payload('generateScript', {
+        raceId: race.race_id,
+        engineVersion: race.engine_version,
+        venueId: race.venue_id,
+        venueVersion: race.venue_version,
+        laps: race.laps,
+        species: race.species,
+        entrants: entrants.map((entrant) => ({
+          entrantId: entrantKey(entrant.entrant_id),
+          animalId: entrant.animal_id,
+          lane: entrant.lane,
+          temperament: entrant.temperament,
+          stats: entrant.stats_snapshot,
+          name: entrant.name,
+        })),
+      }),
+    );
   });
 }
 
@@ -313,41 +451,52 @@ export async function start(): Promise<void> {
   registerGauges(runtime);
   every(envInt('SCHEDULER_INTERVAL_MS', 30_000), () => fillHorizon(runtime), runtime, 'fill horizon');
   every(1000, () => lockAndExpire(runtime), runtime, 'lock races');
-  runtime.consumers.push(await runConsumer({
-    kafka: runtime.kafka,
-    groupId: 'scheduler',
-    topics: [Topics.raceLifecycle, Topics.raceCommands],
-    pool: runtime.pool,
-    concurrency: 6,
-    handler: async (envelope) => {
-      const event = envelope.payload;
-      switch (event?.$case) {
-        case 'scriptSealed':
-          await onSealed(runtime, event.value);
-          break;
-        case 'scriptFailed':
-          await onScriptFailed(runtime, event.value);
-          break;
-        case 'raceSettled':
-          await runtime.pool.query(`UPDATE racing.races SET status = 'SETTLED' WHERE race_id = $1 AND status = 'FINISHED'`, [event.value.raceId]);
-          break;
-        case 'scheduleRace': {
-          const command = event.value;
-          const programme = await loadProgramme(runtime.pool);
-          await withSchedulingLock(runtime, (client) => scheduleRace(client, {
-            raceId: command.raceId,
-            startAt: new Date(command.startAt),
-            species: command.species as Species,
-            raceClass: command.raceClass as RaceClass,
-            ...(command.venueId ? { venueId: command.venueId } : {}),
-            ...(command.fieldSize ? { fieldSize: command.fieldSize } : {}),
-          }, programme));
-          break;
+  runtime.consumers.push(
+    await runConsumer({
+      kafka: runtime.kafka,
+      groupId: 'scheduler',
+      topics: [Topics.raceLifecycle, Topics.raceCommands],
+      pool: runtime.pool,
+      concurrency: 6,
+      handler: async (envelope) => {
+        const event = envelope.payload;
+        switch (event?.$case) {
+          case 'scriptSealed':
+            await onSealed(runtime, event.value);
+            break;
+          case 'scriptFailed':
+            await onScriptFailed(runtime, event.value);
+            break;
+          case 'raceSettled':
+            await runtime.pool.query(
+              `UPDATE racing.races SET status = 'SETTLED' WHERE race_id = $1 AND status = 'FINISHED'`,
+              [event.value.raceId],
+            );
+            break;
+          case 'scheduleRace': {
+            const command = event.value;
+            const programme = await loadProgramme(runtime.pool);
+            await withSchedulingLock(runtime, (client) =>
+              scheduleRace(
+                client,
+                {
+                  raceId: command.raceId,
+                  startAt: new Date(command.startAt),
+                  species: command.species as Species,
+                  raceClass: command.raceClass as RaceClass,
+                  ...(command.venueId ? { venueId: command.venueId } : {}),
+                  ...(command.fieldSize ? { fieldSize: command.fieldSize } : {}),
+                },
+                programme,
+              ),
+            );
+            break;
+          }
+          case 'cancelRace':
+            await tx(runtime.pool, (client) => cancelRace(client, event.value.raceId, event.value.reason || 'ADMIN'));
+            break;
         }
-        case 'cancelRace':
-          await tx(runtime.pool, (client) => cancelRace(client, event.value.raceId, event.value.reason || 'ADMIN'));
-          break;
-      }
-    },
-  }));
+      },
+    }),
+  );
 }

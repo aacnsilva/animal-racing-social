@@ -29,11 +29,12 @@ pub async fn run(ctx: Arc<Ctx>) -> Res<()> {
             tracing::warn!("poll failed: {err}");
             continue;
         }
-        if let Err(err) = check_finished_publication(&ctx, &running, &mut confirmed_finished).await {
+        if let Err(err) = check_finished_publication(&ctx, &running, &mut confirmed_finished).await
+        {
             tracing::warn!("finish publication check failed: {err}");
         }
         if Instant::now() >= next_retention {
-            next_retention = Instant::now() + Duration::from_secs(3600);
+            next_retention = Instant::now() + Duration::from_hours(1);
             let retention_ctx = ctx.clone();
             tokio::spawn(async move {
                 if let Err(err) = retention(&retention_ctx).await {
@@ -44,7 +45,11 @@ pub async fn run(ctx: Arc<Ctx>) -> Res<()> {
     }
 }
 
-async fn poll(ctx: &Arc<Ctx>, running: &mut HashMap<i64, Running>, backoff: &mut HashMap<i64, Instant>) -> Res<()> {
+async fn poll(
+    ctx: &Arc<Ctx>,
+    running: &mut HashMap<i64, Running>,
+    backoff: &mut HashMap<i64, Instant>,
+) -> Res<()> {
     let conn = ctx.db.acquire().await?;
     let rows = conn
         .query(
@@ -59,17 +64,21 @@ async fn poll(ctx: &Arc<Ctx>, running: &mut HashMap<i64, Running>, backoff: &mut
     let cancelled_rows = if ids.is_empty() {
         Vec::new()
     } else {
-        conn.query("SELECT race_id FROM racing.races WHERE race_id = ANY($1) AND status = 'CANCELLED'", &[&ids])
-            .await
-            .context("poll cancellations")?
+        conn.query(
+            "SELECT race_id FROM racing.races WHERE race_id = ANY($1) AND status = 'CANCELLED'",
+            &[&ids],
+        )
+        .await
+        .context("poll cancellations")?
     };
     drop(conn);
     for row in cancelled_rows {
         let race_id: i64 = row.get(0);
         if let Some(race) = running.get(&race_id)
-            && !race.cancelled.swap(true, Ordering::Relaxed) {
-                tracing::info!(raceId = %race_id, "race {race_id} CANCELLED; stopping broadcast");
-            }
+            && !race.cancelled.swap(true, Ordering::Relaxed)
+        {
+            tracing::info!(raceId = %race_id, "race {race_id} CANCELLED; stopping broadcast");
+        }
     }
     let now = Instant::now();
     for row in rows {
@@ -96,7 +105,11 @@ async fn poll(ctx: &Arc<Ctx>, running: &mut HashMap<i64, Running>, backoff: &mut
     Ok(())
 }
 
-async fn check_finished_publication(ctx: &Arc<Ctx>, running: &HashMap<i64, Running>, confirmed: &mut HashSet<i64>) -> Res<()> {
+async fn check_finished_publication(
+    ctx: &Arc<Ctx>,
+    running: &HashMap<i64, Running>,
+    confirmed: &mut HashSet<i64>,
+) -> Res<()> {
     let rows = {
         let conn = ctx.db.acquire().await?;
         conn.query(
@@ -122,9 +135,18 @@ async fn check_finished_publication(ctx: &Arc<Ctx>, running: &HashMap<i64, Runni
 
 async fn retention(ctx: &Ctx) -> Res<()> {
     let conn = ctx.db.acquire().await?;
-    let replays = conn.execute("DELETE FROM racing.race_replays WHERE expires_at < now()", &[]).await.context("delete replays")?;
+    let replays = conn
+        .execute(
+            "DELETE FROM racing.race_replays WHERE expires_at < now()",
+            &[],
+        )
+        .await
+        .context("delete replays")?;
     let scripts = conn
-        .execute("DELETE FROM sealed.race_scripts WHERE revealed_at IS NOT NULL AND expires_at < now()", &[])
+        .execute(
+            "DELETE FROM sealed.race_scripts WHERE revealed_at IS NOT NULL AND expires_at < now()",
+            &[],
+        )
         .await
         .context("delete revealed scripts")?;
     let cancelled = conn
@@ -136,6 +158,11 @@ async fn retention(ctx: &Ctx) -> Res<()> {
         )
         .await
         .context("delete cancelled scripts")?;
-    tracing::info!(replays, scripts, cancelled, "retention: deleted {replays} replays, {scripts} revealed scripts, {cancelled} cancelled-race scripts");
+    tracing::info!(
+        replays,
+        scripts,
+        cancelled,
+        "retention: deleted {replays} replays, {scripts} revealed scripts, {cancelled} cancelled-race scripts"
+    );
     Ok(())
 }

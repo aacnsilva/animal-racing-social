@@ -17,9 +17,10 @@ fn probabilities_from_revealed_state_are_valid_and_sharpen() {
     let mut sharpness = Vec::new();
     let mut winner_probability = Vec::new();
     for fraction in [0.0, 0.3, 0.6, 0.85, 0.97] {
-        let tick = (finish as f64 * fraction) as u32;
+        let tick = (f64::from(finish) * fraction) as u32;
         let revealed = RevealedState::from_script(script, tick).expect("tick");
-        let table = estimate_probabilities(&race, Some(&revealed), 1500, 2, [tick as u8; 32]).expect("estimate");
+        let table = estimate_probabilities(&race, Some(&revealed), 1500, 2, [tick as u8; 32])
+            .expect("estimate");
         let count = field.len();
         for row in &table.positions {
             let sum: f64 = row.iter().sum();
@@ -30,19 +31,32 @@ fn probabilities_from_revealed_state_are_valid_and_sharpen() {
             assert!((sum - 1.0).abs() < 1e-9, "column sums to {sum}");
         }
         for lap in 1..=plan.laps {
-            let sum: f64 = (0..count).map(|entrant| table.leader_at_lap(entrant, lap)).sum();
-            assert!((sum - 1.0).abs() < 1e-9, "lap {lap} leader probabilities sum to {sum}");
+            let sum: f64 = (0..count)
+                .map(|entrant| table.leader_at_lap(entrant, lap))
+                .sum();
+            assert!(
+                (sum - 1.0).abs() < 1e-9,
+                "lap {lap} leader probabilities sum to {sum}"
+            );
         }
         for entrant in 0..count {
             let top3 = table.top_n(entrant, 3);
             assert!((0.0..=1.0 + 1e-12).contains(&top3));
         }
-        let best = (0..count).map(|entrant| table.win(entrant)).fold(0.0, f64::max);
+        let best = (0..count)
+            .map(|entrant| table.win(entrant))
+            .fold(0.0, f64::max);
         sharpness.push(best);
         winner_probability.push(table.win(winner));
     }
-    assert!(sharpness.last().expect("last") > sharpness.first().expect("first"), "{sharpness:?}");
-    assert!(winner_probability[4] > winner_probability[0], "{winner_probability:?}");
+    assert!(
+        sharpness.last().expect("last") > sharpness.first().expect("first"),
+        "{sharpness:?}"
+    );
+    assert!(
+        winner_probability[4] > winner_probability[0],
+        "{winner_probability:?}"
+    );
     assert!(winner_probability[4] > 0.5, "{winner_probability:?}");
     let pre_race = estimate_probabilities(&race, None, 1000, 2, [1; 32]).expect("estimate");
     let total: f64 = (0..field.len()).map(|entrant| pre_race.win(entrant)).sum();
@@ -61,12 +75,18 @@ fn finished_entrants_are_certain() {
     let first_finish_tick = script
         .ticks
         .iter()
-        .find(|tick| tick.entrants.iter().any(|entrant| entrant.pos == 1 && entrant.state == race_engine_core::EntrantState::Finished))
+        .find(|tick| {
+            tick.entrants.iter().any(|entrant| {
+                entrant.pos == 1 && entrant.state == race_engine_core::EntrantState::Finished
+            })
+        })
         .expect("someone finished")
         .tick;
     let revealed = RevealedState::from_script(script, first_finish_tick).expect("tick");
     let table = estimate_probabilities(&race, Some(&revealed), 200, 1, [3; 32]).expect("estimate");
-    let winner = race.entrant_index(&script.result.as_run[0]).expect("winner");
+    let winner = race
+        .entrant_index(&script.result.as_run[0])
+        .expect("winner");
     if script.result.order[0] == script.result.as_run[0] {
         assert!(table.win(winner) > 0.99);
     }

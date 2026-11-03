@@ -59,41 +59,58 @@ pub fn request(app: &Shared, race_id: i64) {
 
 pub async fn prepare(app: &Shared, race_id: i64) -> Res<(Arc<PreparedRace>, String)> {
     let (info, prepared) = {
-        let registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
-        let entry = registry.races.get(&race_id).context("race not registered")?;
+        let registry = app
+            .registry
+            .lock()
+            .map_err(|_| "registry poisoned".to_string())?;
+        let entry = registry
+            .races
+            .get(&race_id)
+            .context("race not registered")?;
         (entry.info.clone(), entry.prepared.clone())
     };
     if let (Some(prepared), Some(info)) = (&prepared, &info) {
         return Ok((prepared.clone(), info.race_class.clone()));
     }
-    let info = match info {
-        Some(info) => info,
-        None => {
-            let loaded = crate::rebuild::load_race(app, race_id).await?.context("RACE_NOT_FOUND")?;
-            if let Ok(mut registry) = app.registry.lock()
-                && let Some(entry) = registry.races.get_mut(&race_id) {
-                    entry.info = Some(loaded.clone());
-                }
-            loaded
+    let info = if let Some(info) = info {
+        info
+    } else {
+        let loaded = crate::rebuild::load_race(app, race_id)
+            .await?
+            .context("RACE_NOT_FOUND")?;
+        if let Ok(mut registry) = app.registry.lock()
+            && let Some(entry) = registry.races.get_mut(&race_id)
+        {
+            entry.info = Some(loaded.clone());
         }
+        loaded
     };
     let (venue, params) = {
         let conn = app.db.acquire().await?;
-        let venue = app.catalog.venue(&conn, &info.venue_id, info.venue_version).await?;
+        let venue = app
+            .catalog
+            .venue(&conn, &info.venue_id, info.venue_version)
+            .await?;
         let params = app.catalog.params(&conn, &info.engine_version).await?;
         (venue, params)
     };
     let prepared = Arc::new(
-        PreparedRace::new(&params, &venue, &info.species, info.laps, &info.entrants).map_err(|err| err.to_string())?,
+        PreparedRace::new(&params, &venue, &info.species, info.laps, &info.entrants)
+            .map_err(|err| err.to_string())?,
     );
     if let Ok(mut registry) = app.registry.lock()
-        && let Some(entry) = registry.races.get_mut(&race_id) {
-            entry.prepared = Some(prepared.clone());
-        }
+        && let Some(entry) = registry.races.get_mut(&race_id)
+    {
+        entry.prepared = Some(prepared.clone());
+    }
     Ok((prepared, info.race_class))
 }
 
-pub fn selections_for(market: &Market, table: &ProbabilityTable, margin: f64) -> Vec<SelectionPrice> {
+pub fn selections_for(
+    market: &Market,
+    table: &ProbabilityTable,
+    margin: f64,
+) -> Vec<SelectionPrice> {
     market
         .selections
         .iter()
@@ -110,7 +127,13 @@ pub fn selections_for(market: &Market, table: &ProbabilityTable, margin: f64) ->
         .collect()
 }
 
-async fn write_price(app: &Shared, market_id: i64, version: u32, tick: u32, selections: &[SelectionPrice]) -> Res<()> {
+async fn write_price(
+    app: &Shared,
+    market_id: i64,
+    version: u32,
+    tick: u32,
+    selections: &[SelectionPrice],
+) -> Res<()> {
     let json = serde_json::Value::Array(
         selections
             .iter()
@@ -129,7 +152,14 @@ async fn write_price(app: &Shared, market_id: i64, version: u32, tick: u32, sele
     let mut redis = app.redis.clone();
     redis::pipe()
         .atomic()
-        .hset_multiple(&key, &[("version", version.to_string()), ("tick", tick.to_string()), ("selections", json)])
+        .hset_multiple(
+            &key,
+            &[
+                ("version", version.to_string()),
+                ("tick", tick.to_string()),
+                ("selections", json),
+            ],
+        )
         .ignore()
         .expire(&key, PRICE_TTL_SECONDS)
         .ignore()
@@ -152,11 +182,16 @@ fn race_seed(race_id: i64) -> [u8; 32] {
 async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
     let (prepared, race_class) = prepare(app, race_id).await?;
     let (revealed, markets) = {
-        let registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
+        let registry = app
+            .registry
+            .lock()
+            .map_err(|_| "registry poisoned".to_string())?;
         let entry = registry.races.get(&race_id).context("race dropped")?;
         (entry.live.revealed(), registry.priceable_markets(race_id))
     };
-    let Some(revealed) = revealed else { return Ok(()) };
+    let Some(revealed) = revealed else {
+        return Ok(());
+    };
     if markets.is_empty() {
         return Ok(());
     }
@@ -166,10 +201,12 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
     let permit = app.compute.acquire().await.map_err(|err| err.to_string())?;
     let started = Instant::now();
     let seed = race_seed(race_id);
-    let table = tokio::task::spawn_blocking(move || estimate_probabilities(&prepared, Some(&revealed), runs, threads, seed))
-        .await
-        .context("pricing task")?
-        .map_err(|err| err.to_string())?;
+    let table = tokio::task::spawn_blocking(move || {
+        estimate_probabilities(&prepared, Some(&revealed), runs, threads, seed)
+    })
+    .await
+    .context("pricing task")?
+    .map_err(|err| err.to_string())?;
     drop(permit);
     let elapsed = started.elapsed();
     crate::metrics::monte_carlo("live", &race_class, elapsed);
@@ -180,7 +217,10 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
             continue;
         }
         let version = {
-            let mut registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
+            let mut registry = app
+                .registry
+                .lock()
+                .map_err(|_| "registry poisoned".to_string())?;
             match registry.markets.get_mut(&market.market_id) {
                 Some(entry) => {
                     entry.price_version += 1;
@@ -192,17 +232,32 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
         if let Err(err) = write_price(app, market.market_id, version, tick, &selections).await {
             tracing::warn!(marketId = %market.market_id, "{err}");
         }
-        let payload = Payload::PriceUpdated(PriceUpdated { market_id: market.market_id, race_id, tick, price_version: version, selections });
-        app.producer.publish_payload(MARKET_EVENTS, &race_id.to_string(), payload).await?;
+        let payload = Payload::PriceUpdated(PriceUpdated {
+            market_id: market.market_id,
+            race_id,
+            tick,
+            price_version: version,
+            selections,
+        });
+        app.producer
+            .publish_payload(MARKET_EVENTS, &race_id.to_string(), payload)
+            .await?;
         published += 1;
     }
     let published_at = Instant::now();
     let (count, previous) = {
-        let mut registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
+        let mut registry = app
+            .registry
+            .lock()
+            .map_err(|_| "registry poisoned".to_string())?;
         match registry.races.get_mut(&race_id) {
             Some(entry) => {
                 entry.priced += 1;
-                let previous = if published > 0 { entry.last_reprice.replace(published_at) } else { None };
+                let previous = if published > 0 {
+                    entry.last_reprice.replace(published_at)
+                } else {
+                    None
+                };
                 (Some(entry.priced), previous)
             }
             None => (None, None),

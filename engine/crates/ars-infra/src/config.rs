@@ -15,11 +15,17 @@ pub fn required(name: &str) -> Res<String> {
 }
 
 pub fn number<T: std::str::FromStr>(name: &str, default: T) -> T {
-    std::env::var(name).ok().and_then(|value| value.trim().parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(default)
 }
 
 pub fn database_url() -> String {
-    string("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ars")
+    string(
+        "DATABASE_URL",
+        "postgres://postgres:postgres@localhost:5432/ars",
+    )
 }
 
 pub fn kafka_brokers() -> String {

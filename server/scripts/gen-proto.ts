@@ -7,13 +7,17 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const protoRoot = process.env.PROTO_ROOT ?? join(root, '..', 'proto');
 const out = join(root, 'src', 'gen');
 mkdirSync(out, { recursive: true });
-execFileSync('protoc', [
-  `--plugin=protoc-gen-ts_proto=${join(root, 'node_modules', '.bin', 'protoc-gen-ts_proto')}`,
-  `--ts_proto_out=${out}`,
-  '--ts_proto_opt=forceLong=string,oneof=unions-value,esModuleInterop=true,importSuffix=.ts,outputServices=false,env=node,outputJsonMethods=false,useOptionals=none,comments=false',
-  `-I${protoRoot}`,
-  join(protoRoot, 'ars', 'v1', 'events.proto'),
-], { stdio: 'inherit' });
+execFileSync(
+  'protoc',
+  [
+    `--plugin=protoc-gen-ts_proto=${join(root, 'node_modules', '.bin', 'protoc-gen-ts_proto')}`,
+    `--ts_proto_out=${out}`,
+    '--ts_proto_opt=forceLong=string,oneof=unions-value,esModuleInterop=true,importSuffix=.ts,outputServices=false,env=node,outputJsonMethods=false,useOptionals=none,comments=false',
+    `-I${protoRoot}`,
+    join(protoRoot, 'ars', 'v1', 'events.proto'),
+  ],
+  { stdio: 'inherit' },
+);
 const file = join(out, 'ars', 'v1', 'events.ts');
 const lines = readFileSync(file, 'utf8').split('\n');
 const firstCode = lines.findIndex((line) => line.trim() !== '' && !line.startsWith('//') && !line.startsWith('/*'));

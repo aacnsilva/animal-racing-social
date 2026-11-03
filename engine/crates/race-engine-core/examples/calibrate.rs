@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use race_engine_core::{
-    EntrantInput, EventKind, LoadedParams, PreparedRace, RaceInputs, ResultStatus, Temperament, Venue,
-    estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
+    EntrantInput, EventKind, LoadedParams, PreparedRace, RaceInputs, ResultStatus, Temperament,
+    Venue, estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
 };
 
 const SPECIES: [&str; 2] = ["HORSE", "GIRAFFE"];
@@ -28,8 +28,10 @@ fn plan_report(params: &LoadedParams) {
         for species in SPECIES {
             let field = support::typical_field(species, 8);
             let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
-            let slow = plan_race(params, &venue, species, &venue.class, &scaled(&field, 0.94)).expect("plan");
-            let fast = plan_race(params, &venue, species, &venue.class, &scaled(&field, 1.06)).expect("plan");
+            let slow = plan_race(params, &venue, species, &venue.class, &scaled(&field, 0.94))
+                .expect("plan");
+            let fast = plan_race(params, &venue, species, &venue.class, &scaled(&field, 1.06))
+                .expect("plan");
             let candidates: Vec<String> = plan
                 .candidates
                 .iter()
@@ -57,7 +59,16 @@ fn plan_report(params: &LoadedParams) {
 
 fn field_report(params: &LoadedParams, runs: u32) {
     println!("== varied fields of 8: winners over {runs} runs");
-    let venue_ids = ["v_meadow_dash", "v_frost_strip", "v_riverside_oval", "v_mudflat_ring", "v_hairpin_hollow", "v_glacier_grand", "v_jungle_marathon", "v_coastal_classic"];
+    let venue_ids = [
+        "v_meadow_dash",
+        "v_frost_strip",
+        "v_riverside_oval",
+        "v_mudflat_ring",
+        "v_hairpin_hollow",
+        "v_glacier_grand",
+        "v_jungle_marathon",
+        "v_coastal_classic",
+    ];
     let mut favourite_total = 0.0;
     let mut favourite_count = 0.0;
     for venue_id in venue_ids {
@@ -66,7 +77,8 @@ fn field_report(params: &LoadedParams, runs: u32) {
             for seed in 1..=3u8 {
                 let field = support::varied_field(species, 8, seed);
                 let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
-                let race = PreparedRace::new(params, &venue, species, plan.laps, &field).expect("race");
+                let race =
+                    PreparedRace::new(params, &venue, species, plan.laps, &field).expect("race");
                 let mut rng = fast_rng([seed.wrapping_add(77); 32]);
                 let mut wins = vec![0u32; field.len()];
                 for _ in 0..runs {
@@ -74,7 +86,7 @@ fn field_report(params: &LoadedParams, runs: u32) {
                     wins[outcome.official[0]] += 1;
                 }
                 let favourite = support::favourite(species, &field);
-                let favourite_share = wins[favourite] as f64 / runs as f64;
+                let favourite_share = f64::from(wins[favourite]) / f64::from(runs);
                 favourite_total += favourite_share;
                 favourite_count += 1.0;
                 let distinct = wins.iter().filter(|count| **count > 0).count();
@@ -87,18 +99,27 @@ fn field_report(params: &LoadedParams, runs: u32) {
                             "{}{}{:.0}",
                             &entrant.temperament.key()[..2],
                             if index == favourite { "*" } else { "" },
-                            100.0 * *count as f64 / runs as f64
+                            100.0 * f64::from(*count) / f64::from(runs)
                         )
                     })
                     .collect();
                 println!(
                     "{:<18} {:<8} seed {} laps {} fav {:.2} distinct {} | {}",
-                    venue_id, species, seed, plan.laps, favourite_share, distinct, shares.join(" ")
+                    venue_id,
+                    species,
+                    seed,
+                    plan.laps,
+                    favourite_share,
+                    distinct,
+                    shares.join(" ")
                 );
             }
         }
     }
-    println!("mean favourite win share {:.3}", favourite_total / favourite_count);
+    println!(
+        "mean favourite win share {:.3}",
+        favourite_total / favourite_count
+    );
 }
 
 fn temperament_report(params: &LoadedParams, runs: u32) {
@@ -122,15 +143,28 @@ fn temperament_report(params: &LoadedParams, runs: u32) {
             let mut lane_wins = [0u32; 8];
             for _ in 0..runs {
                 let outcome = simulate_from(&race, None, &mut rng).expect("outcome");
-                *wins.entry(field[outcome.official[0]].temperament.key()).or_default() += 1;
+                *wins
+                    .entry(field[outcome.official[0]].temperament.key())
+                    .or_default() += 1;
                 lane_wins[outcome.official[0]] += 1;
             }
             let shares: Vec<String> = wins
                 .iter()
-                .map(|(name, count)| format!("{} {:.2}", &name[..5], *count as f64 / runs as f64))
+                .map(|(name, count)| {
+                    format!("{} {:.2}", &name[..5], f64::from(*count) / f64::from(runs))
+                })
                 .collect();
-            let lanes: Vec<String> = lane_wins.iter().map(|count| format!("{:.0}", 100.0 * *count as f64 / runs as f64)).collect();
-            println!("{:<18} {:<8} {} | lanes {}", venue.id, species, shares.join(" "), lanes.join(" "));
+            let lanes: Vec<String> = lane_wins
+                .iter()
+                .map(|count| format!("{:.0}", 100.0 * f64::from(*count) / f64::from(runs)))
+                .collect();
+            println!(
+                "{:<18} {:<8} {} | lanes {}",
+                venue.id,
+                species,
+                shares.join(" "),
+                lanes.join(" ")
+            );
         }
     }
 }
@@ -172,7 +206,11 @@ fn incident_report(params: &LoadedParams, races: u32) {
                     *incident_kinds.entry(incident.kind.key()).or_default() += 1;
                 }
                 for tick in &script.ticks {
-                    overtakes += tick.events.iter().filter(|event| event.kind == EventKind::Overtake).count();
+                    overtakes += tick
+                        .events
+                        .iter()
+                        .filter(|event| event.kind == EventKind::Overtake)
+                        .count();
                     tired += tick
                         .entrants
                         .iter()
@@ -181,7 +219,11 @@ fn incident_report(params: &LoadedParams, races: u32) {
                 }
                 let winner_id = &script.result.as_run[0];
                 let last_tick = script.ticks.last().expect("ticks");
-                let winner_state = last_tick.entrants.iter().find(|entrant| &entrant.id == winner_id).expect("winner");
+                let winner_state = last_tick
+                    .entrants
+                    .iter()
+                    .find(|entrant| &entrant.id == winner_id)
+                    .expect("winner");
                 winner_stamina += winner_state.stamina_pct.0;
                 let finishers: Vec<i64> = script
                     .result
@@ -189,7 +231,8 @@ fn incident_report(params: &LoadedParams, races: u32) {
                     .iter()
                     .filter_map(|entrant| entrant.finish_time_ms)
                     .collect();
-                if let (Some(first), Some(last)) = (finishers.iter().min(), finishers.iter().max()) {
+                if let (Some(first), Some(last)) = (finishers.iter().min(), finishers.iter().max())
+                {
                     spread += (last - first) as f64 / 1000.0;
                 }
                 dnf += script
@@ -201,30 +244,39 @@ fn incident_report(params: &LoadedParams, races: u32) {
             }
             total_races += races;
             clean_races += races - with_incident;
-            let elapsed = started.elapsed().as_secs_f64() * 1000.0 / races as f64;
+            let elapsed = started.elapsed().as_secs_f64() * 1000.0 / f64::from(races);
             println!(
                 "{:<18} {:<8} laps {:>2} clean {:.2} incidents {:?} overtakes/race {:.0} tired-ticks/race {:.0} winner-stamina {:.0} spread {:.1}s dnf {} json {:.0}KB {:.1}ms",
                 venue.id,
                 species,
                 plan.laps,
-                1.0 - with_incident as f64 / races as f64,
+                1.0 - f64::from(with_incident) / f64::from(races),
                 incident_kinds,
-                overtakes as f64 / races as f64,
-                tired as f64 / races as f64,
-                winner_stamina / races as f64,
-                spread / races as f64,
+                overtakes as f64 / f64::from(races),
+                tired as f64 / f64::from(races),
+                winner_stamina / f64::from(races),
+                spread / f64::from(races),
                 dnf,
-                bytes as f64 / races as f64 / 1024.0,
+                bytes as f64 / f64::from(races) / 1024.0,
                 elapsed
             );
         }
     }
-    println!("overall clean share {:.3}", clean_races as f64 / total_races as f64);
+    println!(
+        "overall clean share {:.3}",
+        f64::from(clean_races) / f64::from(total_races)
+    );
 }
 
 fn stat_effects(params: &LoadedParams, runs: u32) {
     println!("== single stat advantage: win share of e1 boosted (others typical, 8 runners)");
-    for venue_id in ["v_meadow_dash", "v_hairpin_hollow", "v_mudflat_ring", "v_glacier_grand", "v_jungle_marathon"] {
+    for venue_id in [
+        "v_meadow_dash",
+        "v_hairpin_hollow",
+        "v_mudflat_ring",
+        "v_glacier_grand",
+        "v_jungle_marathon",
+    ] {
         let venue = support::venue(venue_id);
         for species in SPECIES {
             let mut cells = Vec::new();
@@ -247,7 +299,8 @@ fn stat_effects(params: &LoadedParams, runs: u32) {
                     _ => stats.consistency = (stats.consistency + 0.15).min(1.0),
                 }
                 let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
-                let race = PreparedRace::new(params, &venue, species, plan.laps, &field).expect("race");
+                let race =
+                    PreparedRace::new(params, &venue, species, plan.laps, &field).expect("race");
                 let mut rng = fast_rng([3; 32]);
                 let mut wins = 0;
                 for _ in 0..runs {
@@ -256,7 +309,11 @@ fn stat_effects(params: &LoadedParams, runs: u32) {
                         wins += 1;
                     }
                 }
-                cells.push(format!("{} {:.2}", &stat[..4], wins as f64 / runs as f64));
+                cells.push(format!(
+                    "{} {:.2}",
+                    &stat[..4],
+                    f64::from(wins) / f64::from(runs)
+                ));
             }
             println!("{:<18} {:<8} {}", venue_id, species, cells.join(" "));
         }
@@ -285,8 +342,11 @@ fn timing(params: &LoadedParams) {
 fn main() {
     let params = support::params();
     let args: Vec<String> = std::env::args().collect();
-    let mode = args.get(1).map(String::as_str).unwrap_or("all");
-    let runs: u32 = args.get(2).and_then(|value| value.parse().ok()).unwrap_or(400);
+    let mode = args.get(1).map_or("all", String::as_str);
+    let runs: u32 = args
+        .get(2)
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(400);
     let _unused: Option<Venue> = None;
     if mode == "all" || mode == "plan" {
         plan_report(&params);

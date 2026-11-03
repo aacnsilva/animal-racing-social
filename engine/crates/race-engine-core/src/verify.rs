@@ -12,8 +12,11 @@ pub enum Verification {
 }
 
 pub fn parse_seed(hex_seed: &str) -> Result<[u8; 32], EngineError> {
-    let bytes = hex::decode(hex_seed).map_err(|_| EngineError::InvalidInputs("seed is not hex".into()))?;
-    bytes.try_into().map_err(|_| EngineError::InvalidInputs("seed must be 32 bytes".into()))
+    let bytes =
+        hex::decode(hex_seed).map_err(|_| EngineError::InvalidInputs("seed is not hex".into()))?;
+    bytes
+        .try_into()
+        .map_err(|_| EngineError::InvalidInputs("seed must be 32 bytes".into()))
 }
 
 pub fn inputs_from_script(script: &RaceScript) -> RaceInputs {
@@ -49,24 +52,46 @@ pub fn verify(
     expected_script_hash: &str,
 ) -> Verification {
     match simulate(params, venue, inputs, seed) {
-        Ok(sealed) if sealed.script_hash.eq_ignore_ascii_case(expected_script_hash) => {
-            Verification::Ok { script_hash: sealed.script_hash }
+        Ok(sealed)
+            if sealed
+                .script_hash
+                .eq_ignore_ascii_case(expected_script_hash) =>
+        {
+            Verification::Ok {
+                script_hash: sealed.script_hash,
+            }
         }
         Ok(sealed) => Verification::Mismatch {
-            reason: format!("scriptHash {} != expected {}", sealed.script_hash, expected_script_hash),
+            reason: format!(
+                "scriptHash {} != expected {}",
+                sealed.script_hash, expected_script_hash
+            ),
         },
-        Err(err) => Verification::Mismatch { reason: err.to_string() },
+        Err(err) => Verification::Mismatch {
+            reason: err.to_string(),
+        },
     }
 }
 
-pub fn verify_script_bytes(params: &LoadedParams, venue: &Venue, script_bytes: &[u8]) -> Verification {
+pub fn verify_script_bytes(
+    params: &LoadedParams,
+    venue: &Venue,
+    script_bytes: &[u8],
+) -> Verification {
     let script = match RaceScript::from_json_bytes(script_bytes) {
         Ok(script) => script,
-        Err(err) => return Verification::Mismatch { reason: err.to_string() },
+        Err(err) => {
+            return Verification::Mismatch {
+                reason: err.to_string(),
+            };
+        }
     };
     if script.params_hash != params.hash {
         return Verification::Mismatch {
-            reason: format!("paramsHash {} does not match the params used ({})", script.params_hash, params.hash),
+            reason: format!(
+                "paramsHash {} does not match the params used ({})",
+                script.params_hash, params.hash
+            ),
         };
     }
     if script.track.venue_id != venue.id || script.track.venue_version != venue.version {
@@ -79,7 +104,11 @@ pub fn verify_script_bytes(params: &LoadedParams, venue: &Venue, script_bytes: &
     }
     let seed = match parse_seed(&script.seed) {
         Ok(seed) => seed,
-        Err(err) => return Verification::Mismatch { reason: err.to_string() },
+        Err(err) => {
+            return Verification::Mismatch {
+                reason: err.to_string(),
+            };
+        }
     };
     let inputs = inputs_from_script(&script);
     verify(params, venue, &inputs, &seed, &sha256_hex(script_bytes))

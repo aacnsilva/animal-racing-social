@@ -5,15 +5,35 @@ import { payload, Topics } from '../../lib/kafka.ts';
 import { instruments } from '../../lib/instruments.ts';
 import { enqueue } from '../../lib/outbox.ts';
 
-export type LedgerType = 'SEASON_GRANT' | 'DAILY_GRANT' | 'BET_STAKE' | 'BET_PAYOUT' | 'BET_REFUND' | 'BET_LOST' | 'CASHOUT' | 'ADMIN_ADJUST';
+export type LedgerType =
+  | 'SEASON_GRANT'
+  | 'DAILY_GRANT'
+  | 'BET_STAKE'
+  | 'BET_PAYOUT'
+  | 'BET_REFUND'
+  | 'BET_LOST'
+  | 'CASHOUT'
+  | 'ADMIN_ADJUST';
 export type WalletState = { balance: number; openStake: number };
 
 async function lockWallet(client: Client, userId: string, seasonId: string): Promise<WalletState | null> {
-  const row = await one(client, 'SELECT balance, open_stake FROM wallet.wallets WHERE user_id = $1 AND season_id = $2 FOR UPDATE', [userId, seasonId]);
+  const row = await one(
+    client,
+    'SELECT balance, open_stake FROM wallet.wallets WHERE user_id = $1 AND season_id = $2 FOR UPDATE',
+    [userId, seasonId],
+  );
   return row ? { balance: Number(row.balance), openStake: Number(row.open_stake) } : null;
 }
 
-async function appendEntry(client: Client, userId: string, seasonId: string, type: LedgerType, amount: number, refId: string, after: WalletState): Promise<boolean> {
+async function appendEntry(
+  client: Client,
+  userId: string,
+  seasonId: string,
+  type: LedgerType,
+  amount: number,
+  refId: string,
+  after: WalletState,
+): Promise<boolean> {
   const entryId = newId(shardOf(userId));
   const inserted = await client.query(
     `INSERT INTO wallet.ledger_entries (user_id, entry_id, season_id, type, amount, ref_id, balance_after)
@@ -22,9 +42,22 @@ async function appendEntry(client: Client, userId: string, seasonId: string, typ
   );
   if (inserted.rowCount === 0) return false;
   instruments.ledgerEntries().add(1, { type });
-  await enqueue(client, 'wallet', Topics.walletEvents, userId, payload('ledgerEntryAppended', {
-    entryId, userId, seasonId, type, amount: String(amount), refId, balanceAfter: String(after.balance), openStakeAfter: String(after.openStake),
-  }));
+  await enqueue(
+    client,
+    'wallet',
+    Topics.walletEvents,
+    userId,
+    payload('ledgerEntryAppended', {
+      entryId,
+      userId,
+      seasonId,
+      type,
+      amount: String(amount),
+      refId,
+      balanceAfter: String(after.balance),
+      openStakeAfter: String(after.openStake),
+    }),
+  );
   return true;
 }
 
@@ -46,10 +79,21 @@ export async function ensureWallet(client: Client, userId: string, seasonId: str
 
 export async function applyChange(
   client: Client,
-  change: { userId: string; seasonId: string; type: LedgerType; refId: string; balanceDelta: number; openStakeDelta: number },
+  change: {
+    userId: string;
+    seasonId: string;
+    type: LedgerType;
+    refId: string;
+    balanceDelta: number;
+    openStakeDelta: number;
+  },
 ): Promise<{ applied: boolean; state: WalletState }> {
   const current = await ensureWallet(client, change.userId, change.seasonId);
-  const duplicate = await one(client, 'SELECT 1 FROM wallet.ledger_entries WHERE user_id = $1 AND type = $2 AND ref_id = $3', [change.userId, change.type, change.refId]);
+  const duplicate = await one(
+    client,
+    'SELECT 1 FROM wallet.ledger_entries WHERE user_id = $1 AND type = $2 AND ref_id = $3',
+    [change.userId, change.type, change.refId],
+  );
   if (duplicate) return { applied: false, state: current };
   const next = { balance: current.balance + change.balanceDelta, openStake: current.openStake + change.openStakeDelta };
   if (next.balance < 0) throw new ApiError(409, 'INSUFFICIENT_FUNDS', 'Not enough points');

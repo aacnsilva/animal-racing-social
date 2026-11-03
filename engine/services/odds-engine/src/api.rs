@@ -17,11 +17,16 @@ use crate::pricing::{MarketKind, floor_probability, price, round_probability};
 use crate::state::Shared;
 
 pub fn router(app: Shared) -> Router {
-    Router::new().route("/healthz", get(healthz)).route("/internal/price", post(price_handler)).with_state(app)
+    Router::new()
+        .route("/healthz", get(healthz))
+        .route("/internal/price", post(price_handler))
+        .with_state(app)
 }
 
 async fn healthz(State(app): State<Shared>) -> Json<serde_json::Value> {
-    let (races, markets) = app.registry.lock().map(|registry| (registry.races.len(), registry.markets.len())).unwrap_or((0, 0));
+    let (races, markets) = app.registry.lock().map_or((0, 0), |registry| {
+        (registry.races.len(), registry.markets.len())
+    });
     Json(serde_json::json!({ "status": "ok", "races": races, "markets": markets }))
 }
 
@@ -46,7 +51,10 @@ struct PriceRequest {
     markets: Vec<MarketRequest>,
 }
 
-async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest>, axum::extract::rejection::JsonRejection>) -> Response {
+async fn price_handler(
+    State(app): State<Shared>,
+    body: Result<Json<PriceRequest>, axum::extract::rejection::JsonRejection>,
+) -> Response {
     let Json(request) = match body {
         Ok(body) => body,
         Err(err) => return bad_request(err.body_text()),
@@ -68,7 +76,10 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
             Some(version) if !version.is_empty() => version.clone(),
             _ => app.catalog.active_engine_version(&conn).await?,
         };
-        let venue = app.catalog.venue(&conn, &request.venue_id, request.venue_version).await?;
+        let venue = app
+            .catalog
+            .venue(&conn, &request.venue_id, request.venue_version)
+            .await?;
         let params = app.catalog.params(&conn, &version).await?;
         Ok::<_, String>((venue, params))
     }
@@ -85,9 +96,14 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
         Ok(race) => Arc::new(race),
         Err(err) => return bad_request(err.to_string()),
     };
-    let runs = request.runs.unwrap_or(app.settings.runs_prerace).clamp(1, 100_000);
+    let runs = request
+        .runs
+        .unwrap_or(app.settings.runs_prerace)
+        .clamp(1, 100_000);
     let threads = app.settings.threads;
-    let Ok(permit) = app.compute.acquire().await else { return internal("compute pool closed") };
+    let Ok(permit) = app.compute.acquire().await else {
+        return internal("compute pool closed");
+    };
     let span = tracing::info_span!(
         "odds.monte_carlo",
         "phase" = "pre",
@@ -97,9 +113,11 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
     );
     let started = Instant::now();
     let seed: [u8; 32] = ars_infra::ids::random_bytes();
-    let computed = tokio::task::spawn_blocking(move || estimate_probabilities(&race, None, runs, threads, seed))
-        .instrument(span.clone())
-        .await;
+    let computed = tokio::task::spawn_blocking(move || {
+        estimate_probabilities(&race, None, runs, threads, seed)
+    })
+    .instrument(span.clone())
+    .await;
     drop(permit);
     let elapsed = started.elapsed();
     let table = match computed {
@@ -141,7 +159,8 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
                 .iter()
                 .filter_map(|entrant| {
                     let index = table.index_of(&entrant.entrant_id)?;
-                    let probability = floor_probability(kind.probability(&table, index), table.runs);
+                    let probability =
+                        floor_probability(kind.probability(&table, index), table.runs);
                     Some(serde_json::json!({
                         "entrantId": entrant.entrant_id,
                         "probability": round_probability(probability),
@@ -149,7 +168,11 @@ async fn price_handler(State(app): State<Shared>, body: Result<Json<PriceRequest
                     }))
                 })
                 .collect();
-            let params = if market.params.is_null() { serde_json::json!({}) } else { market.params.clone() };
+            let params = if market.params.is_null() {
+                serde_json::json!({})
+            } else {
+                market.params.clone()
+            };
             serde_json::json!({ "type": market.kind, "params": params, "selections": selections })
         })
         .collect();

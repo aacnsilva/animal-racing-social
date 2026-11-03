@@ -36,7 +36,13 @@ const MESSAGES: Record<string, string> = {
 
 export function friendlyCode(code: string | null | undefined): string {
   if (!code) return 'Something went wrong.';
-  return MESSAGES[code] ?? code.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+  return (
+    MESSAGES[code] ??
+    code
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/^\w/, (c) => c.toUpperCase())
+  );
 }
 
 export function errorCode(error: unknown): string {

@@ -40,7 +40,12 @@ fn flow(event_type: &str) -> Option<&'static str> {
 }
 
 pub async fn run(app: Shared, brokers: &str) -> Res<()> {
-    let consumer = ars_infra::kafka::consumer(brokers, GROUP, &[RACE_LIFECYCLE, MARKET_EVENTS, RACE_TICKS], "latest")?;
+    let consumer = ars_infra::kafka::consumer(
+        brokers,
+        GROUP,
+        &[RACE_LIFECYCLE, MARKET_EVENTS, RACE_TICKS],
+        "latest",
+    )?;
     tracing::info!("consuming race.lifecycle, market.events, race.ticks as group odds-engine");
     loop {
         let message = match consumer.recv().await {
@@ -53,7 +58,13 @@ pub async fn run(app: Shared, brokers: &str) -> Res<()> {
         };
         let started = Instant::now();
         let (event_type, ok) = process(&app, &message);
-        ars_infra::kafka::record_processed(GROUP, message.topic(), event_type, ok, started.elapsed());
+        ars_infra::kafka::record_processed(
+            GROUP,
+            message.topic(),
+            event_type,
+            ok,
+            started.elapsed(),
+        );
         if let Err(err) = consumer.store_offset_from_message(&message) {
             tracing::warn!("store offset failed: {err}");
         }
@@ -61,7 +72,9 @@ pub async fn run(app: Shared, brokers: &str) -> Res<()> {
 }
 
 fn process(app: &Shared, message: &BorrowedMessage<'_>) -> (&'static str, bool) {
-    let Some(bytes) = message.payload() else { return ("unknown", false) };
+    let Some(bytes) = message.payload() else {
+        return ("unknown", false);
+    };
     let envelope = match ars_infra::envelope::decode(bytes) {
         Ok(envelope) => envelope,
         Err(err) => {
@@ -112,8 +125,12 @@ fn age_ms(envelope: &Envelope) -> i64 {
 
 fn handle(app: &Shared, envelope: Envelope) -> bool {
     let age = age_ms(&envelope);
-    let Some(payload) = envelope.payload else { return false };
-    let Ok(mut registry) = app.registry.lock() else { return false };
+    let Some(payload) = envelope.payload else {
+        return false;
+    };
+    let Ok(mut registry) = app.registry.lock() else {
+        return false;
+    };
     match payload {
         Payload::RaceScheduled(scheduled) => {
             if let Some(info) = race_info(&scheduled.entrants, &scheduled) {
@@ -131,7 +148,10 @@ fn handle(app: &Shared, envelope: Envelope) -> bool {
             let params = serde_json::to_value(&opened.params).unwrap_or_default();
             match MarketKind::from_json(&opened.r#type, &params) {
                 Ok(kind) => {
-                    let previous = registry.markets.get(&opened.market_id).map(|market| market.price_version).unwrap_or(0);
+                    let previous = registry
+                        .markets
+                        .get(&opened.market_id)
+                        .map_or(0, |market| market.price_version);
                     registry.markets.insert(
                         opened.market_id,
                         Market {
@@ -142,7 +162,9 @@ fn handle(app: &Shared, envelope: Envelope) -> bool {
                             selections: opened
                                 .selections
                                 .iter()
-                                .map(|selection| (selection.selection_id, selection.entrant_id.clone()))
+                                .map(|selection| {
+                                    (selection.selection_id, selection.entrant_id.clone())
+                                })
                                 .collect(),
                             price_version: opened.price_version.max(previous),
                         },
@@ -192,7 +214,10 @@ fn handle(app: &Shared, envelope: Envelope) -> bool {
                 crate::metrics::stale_tick();
             }
             let should_price = apply_tick(&mut registry, &tick) && !stale;
-            let has_markets = registry.markets.values().any(|market| market.race_id == race_id && market.kind != MarketKind::Tricast);
+            let has_markets = registry
+                .markets
+                .values()
+                .any(|market| market.race_id == race_id && market.kind != MarketKind::Tricast);
             drop(registry);
             if should_price && has_markets {
                 crate::live::request(app, race_id);

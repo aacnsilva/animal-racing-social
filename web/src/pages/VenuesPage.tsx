@@ -11,7 +11,13 @@ function segmentText(venue: Venue): string {
   const curves = venue.segments.filter((s) => s.type === 'CURVE');
   const tight = curves.filter((s) => (s.radius ?? 99) < 30).length;
   const hills = venue.segments.filter((s) => s.type === 'UPHILL' || s.type === 'DOWNHILL').length;
-  return [`${curves.length} curve${curves.length === 1 ? '' : 's'}`, tight ? `${tight} tight` : null, hills ? `${hills} hill section${hills === 1 ? '' : 's'}` : 'flat'].filter(Boolean).join(' · ');
+  return [
+    `${curves.length} curve${curves.length === 1 ? '' : 's'}`,
+    tight ? `${tight} tight` : null,
+    hills ? `${hills} hill section${hills === 1 ? '' : 's'}` : 'flat',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export function VenuesPage() {
@@ -25,7 +31,10 @@ export function VenuesPage() {
         <div>
           <div className="eyebrow">Tracks</div>
           <h1>Venues</h1>
-          <p>Twelve fixed, versioned venues, four per race class. The 3D viewer builds each track from the same segments the engine simulates.</p>
+          <p>
+            Twelve fixed, versioned venues, four per race class. The 3D viewer builds each track from the same segments
+            the engine simulates.
+          </p>
         </div>
       </div>
       {classes.map((raceClass) => {
@@ -36,12 +45,18 @@ export function VenuesPage() {
             <div className="section-title">
               <h2>{CLASS_LABEL[raceClass]}</h2>
               <span className="small muted">
-                {list[0]!.lapsRange[0]}–{list[0]!.lapsRange[1]} laps
+                {list[0].lapsRange[0]}–{list[0].lapsRange[1]} laps
               </span>
             </div>
             <div className="cards">
               {list.map((venue) => (
-                <Link key={venue.id} to={`/venues/${venue.id}`} className="card venue-card" data-testid="venue-card" data-venue-id={venue.id}>
+                <Link
+                  key={venue.id}
+                  to={`/venues/${venue.id}`}
+                  className="card venue-card"
+                  data-testid="venue-card"
+                  data-venue-id={venue.id}
+                >
                   <TrackMap venue={venue} mini />
                   <div className="row">
                     <h3 style={{ flex: 1 }}>{venue.name}</h3>
@@ -115,7 +130,10 @@ export function VenuePage({ id }: { id: string }) {
               </thead>
               <tbody>
                 {v.segments.map((segment, index) => {
-                  const length = segment.type === 'CURVE' ? (segment.radius ?? 0) * Math.abs(((segment.angle ?? 0) * Math.PI) / 180) : segment.length ?? 0;
+                  const length =
+                    segment.type === 'CURVE'
+                      ? (segment.radius ?? 0) * Math.abs(((segment.angle ?? 0) * Math.PI) / 180)
+                      : (segment.length ?? 0);
                   return (
                     <tr key={index}>
                       <td className="muted">{index + 1}</td>
@@ -153,7 +171,8 @@ export function VenuePage({ id }: { id: string }) {
         )}
         <Pager hasMore={history.hasMore} loading={history.loading} onMore={history.loadMore} />
         <div className="tiny muted" style={{ marginTop: 8 }}>
-          {SPECIES_ICON.HORSE} and {SPECIES_ICON.GIRAFFE} share venues; each species has its own surface and segment affinities. Last updated {fmtDateTime(new Date(now).toISOString())}.
+          {SPECIES_ICON.HORSE} and {SPECIES_ICON.GIRAFFE} share venues; each species has its own surface and segment
+          affinities. Last updated {fmtDateTime(new Date(now).toISOString())}.
         </div>
       </section>
     </div>

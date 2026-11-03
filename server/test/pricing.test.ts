@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { cashOutAmount, combinedPrice, harvilleProbability, payoutFor, priceFromProbability, tricastPrice } from '../src/domain/pricing.ts';
+import {
+  cashOutAmount,
+  combinedPrice,
+  harvilleProbability,
+  payoutFor,
+  priceFromProbability,
+  tricastPrice,
+} from '../src/domain/pricing.ts';
 
 describe('priceFromProbability', () => {
   it('applies the margin and rounds to two decimals', () => {
@@ -19,10 +26,21 @@ describe('priceFromProbability', () => {
 });
 
 describe('harville tricast', () => {
-  const win = new Map([['e1', 0.5], ['e2', 0.3], ['e3', 0.2]]);
+  const win = new Map([
+    ['e1', 0.5],
+    ['e2', 0.3],
+    ['e3', 0.2],
+  ]);
 
   it('computes exact-order probabilities that sum to one over all orders', () => {
-    const orders = [['e1', 'e2', 'e3'], ['e1', 'e3', 'e2'], ['e2', 'e1', 'e3'], ['e2', 'e3', 'e1'], ['e3', 'e1', 'e2'], ['e3', 'e2', 'e1']];
+    const orders = [
+      ['e1', 'e2', 'e3'],
+      ['e1', 'e3', 'e2'],
+      ['e2', 'e1', 'e3'],
+      ['e2', 'e3', 'e1'],
+      ['e3', 'e1', 'e2'],
+      ['e3', 'e2', 'e1'],
+    ];
     const total = orders.reduce((sum, order) => sum + harvilleProbability(win, order), 0);
     assert.ok(Math.abs(total - 1) < 1e-9);
     assert.ok(Math.abs(harvilleProbability(win, ['e1', 'e2', 'e3']) - 0.5 * (0.3 / 0.5) * (0.2 / 0.2)) < 1e-12);

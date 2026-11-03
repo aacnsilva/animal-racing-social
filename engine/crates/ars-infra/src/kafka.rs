@@ -54,14 +54,15 @@ pub fn inject_headers(context: &opentelemetry::Context) -> Option<OwnedHeaders> 
     if writer.0.is_empty() {
         return None;
     }
-    Some(
-        writer
-            .0
-            .iter()
-            .fold(OwnedHeaders::new_with_capacity(writer.0.len()), |headers, (key, value)| {
-                headers.insert(Header { key, value: Some(value.as_str()) })
-            }),
-    )
+    Some(writer.0.iter().fold(
+        OwnedHeaders::new_with_capacity(writer.0.len()),
+        |headers, (key, value)| {
+            headers.insert(Header {
+                key,
+                value: Some(value.as_str()),
+            })
+        },
+    ))
 }
 
 pub fn extract_context<H: Headers>(headers: Option<&H>) -> opentelemetry::Context {
@@ -144,7 +145,14 @@ impl Producer {
         crate::telemetry::traced(&span, self.send(topic, key, &bytes, headers, event_type)).await
     }
 
-    async fn send(&self, topic: &str, key: &str, bytes: &[u8], headers: Option<OwnedHeaders>, event_type: &str) -> Res<()> {
+    async fn send(
+        &self,
+        topic: &str,
+        key: &str,
+        bytes: &[u8],
+        headers: Option<OwnedHeaders>,
+        event_type: &str,
+    ) -> Res<()> {
         let mut attempt = 0;
         loop {
             let mut record = FutureRecord::to(topic).key(key).payload(bytes);
@@ -164,13 +172,23 @@ impl Producer {
         }
     }
 
-    pub async fn publish_payload(&self, topic: &str, key: &str, payload: ars_proto::envelope::Payload) -> Res<()> {
+    pub async fn publish_payload(
+        &self,
+        topic: &str,
+        key: &str,
+        payload: ars_proto::envelope::Payload,
+    ) -> Res<()> {
         let envelope = crate::envelope::build(payload);
         self.publish(topic, key, &envelope).await
     }
 }
 
-pub fn consumer(brokers: &str, group: &str, topics: &[&str], offset_reset: &str) -> Res<StreamConsumer> {
+pub fn consumer(
+    brokers: &str,
+    group: &str,
+    topics: &[&str],
+    offset_reset: &str,
+) -> Res<StreamConsumer> {
     let consumer: StreamConsumer = ClientConfig::new()
         .set("bootstrap.servers", brokers)
         .set("group.id", group)
@@ -187,7 +205,9 @@ pub fn consumer(brokers: &str, group: &str, topics: &[&str], offset_reset: &str)
 
 #[cfg(test)]
 mod tests {
-    use opentelemetry::trace::{SpanContext, TraceContextExt, TraceFlags, TraceId, TraceState, Tracer, TracerProvider};
+    use opentelemetry::trace::{
+        SpanContext, TraceContextExt, TraceFlags, TraceId, TraceState, Tracer, TracerProvider,
+    };
     use opentelemetry_sdk::trace::SdkTracerProvider;
 
     use super::*;
@@ -204,7 +224,10 @@ mod tests {
         let traceparent = headers.get(0);
         assert_eq!(traceparent.key, "traceparent");
         let value = std::str::from_utf8(traceparent.value.expect("value")).expect("utf8");
-        assert_eq!(value, format!("00-{}-{}-01", sent.trace_id(), sent.span_id()));
+        assert_eq!(
+            value,
+            format!("00-{}-{}-01", sent.trace_id(), sent.span_id())
+        );
         let received = extract_context(Some(&headers));
         let received = received.span().span_context().clone();
         assert!(received.is_remote());
@@ -228,8 +251,14 @@ mod tests {
         let keys: Vec<&str> = headers.iter().map(|header| header.key).collect();
         assert_eq!(keys, ["traceparent", "tracestate"]);
         let received = extract_context(Some(&headers));
-        assert_eq!(received.span().span_context().trace_state().header(), "ars=1");
-        assert_eq!(format!("{}", received.span().span_context().trace_id()), "4bf92f3577b34da6a3ce929d0e0e4736");
+        assert_eq!(
+            received.span().span_context().trace_state().header(),
+            "ars=1"
+        );
+        assert_eq!(
+            format!("{}", received.span().span_context().trace_id()),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
     }
 
     #[test]

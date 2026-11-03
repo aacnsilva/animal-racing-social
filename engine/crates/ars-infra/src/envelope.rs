@@ -51,7 +51,7 @@ pub fn payload_type(payload: &Payload) -> &'static str {
 }
 
 pub fn event_type(envelope: &Envelope) -> &'static str {
-    envelope.payload.as_ref().map(payload_type).unwrap_or("unknown")
+    envelope.payload.as_ref().map_or("unknown", payload_type)
 }
 
 pub fn race_id(payload: &Payload) -> Option<i64> {

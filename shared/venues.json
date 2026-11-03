@@ -8,10 +8,7 @@
     "description": "Flat and fast with sweeping curves: pure speed.",
     "lanes": 10,
     "lapLength": 602.74,
-    "lapsRange": [
-      3,
-      4
-    ],
+    "lapsRange": [3, 4],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -45,10 +42,7 @@
     "description": "Long sand straights that tax stamina.",
     "lanes": 10,
     "lapLength": 641.06,
-    "lapsRange": [
-      3,
-      4
-    ],
+    "lapsRange": [3, 4],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -82,10 +76,7 @@
     "description": "Short and slippery, four tight corners.",
     "lanes": 10,
     "lapLength": 523.36,
-    "lapsRange": [
-      3,
-      4
-    ],
+    "lapsRange": [3, 4],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -137,10 +128,7 @@
     "description": "Downhill start, uphill finish.",
     "lanes": 10,
     "lapLength": 611.33,
-    "lapsRange": [
-      3,
-      4
-    ],
+    "lapsRange": [3, 4],
     "segments": [
       {
         "type": "DOWNHILL",
@@ -184,10 +172,7 @@
     "description": "Classic oval with a hill on the back straight.",
     "lanes": 10,
     "lapLength": 562.74,
-    "lapsRange": [
-      6,
-      8
-    ],
+    "lapsRange": [6, 8],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -227,10 +212,7 @@
     "description": "Wide and balanced: the neutral venue.",
     "lanes": 10,
     "lapLength": 614.16,
-    "lapsRange": [
-      6,
-      8
-    ],
+    "lapsRange": [6, 8],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -264,10 +246,7 @@
     "description": "Heavy going that favours stamina.",
     "lanes": 10,
     "lapLength": 561.59,
-    "lapsRange": [
-      6,
-      8
-    ],
+    "lapsRange": [6, 8],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -301,10 +280,7 @@
     "description": "Long straights joined by tight hairpins.",
     "lanes": 10,
     "lapLength": 575.66,
-    "lapsRange": [
-      6,
-      8
-    ],
+    "lapsRange": [6, 8],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -338,10 +314,7 @@
     "description": "Long climbs and descents every lap.",
     "lanes": 10,
     "lapLength": 531.33,
-    "lapsRange": [
-      12,
-      15
-    ],
+    "lapsRange": [12, 15],
     "segments": [
       {
         "type": "UPHILL",
@@ -385,10 +358,7 @@
     "description": "Long icy laps where consistency matters.",
     "lanes": 10,
     "lapLength": 539.91,
-    "lapsRange": [
-      12,
-      15
-    ],
+    "lapsRange": [12, 15],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -422,10 +392,7 @@
     "description": "Mixed terrain attrition race.",
     "lanes": 10,
     "lapLength": 568.5,
-    "lapsRange": [
-      12,
-      15
-    ],
+    "lapsRange": [12, 15],
     "segments": [
       {
         "type": "STRAIGHT",
@@ -487,10 +454,7 @@
     "description": "Long wind-swept sand straights.",
     "lanes": 10,
     "lapLength": 525.93,
-    "lapsRange": [
-      12,
-      15
-    ],
+    "lapsRange": [12, 15],
     "segments": [
       {
         "type": "STRAIGHT",

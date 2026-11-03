@@ -19,7 +19,16 @@ async function authorize(provider: 'google' | 'github', redirectUri: string): Pr
     method: 'POST',
     redirect: 'manual',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: `ars-${provider}`, redirect_uri: redirectUri, state: 'xyz', code_challenge: challenge, subject: 'alice', name: 'Alice', email: 'a@example.test', decision: 'allow' }),
+    body: new URLSearchParams({
+      client_id: `ars-${provider}`,
+      redirect_uri: redirectUri,
+      state: 'xyz',
+      code_challenge: challenge,
+      subject: 'alice',
+      name: 'Alice',
+      email: 'a@example.test',
+      decision: 'allow',
+    }),
   });
   const location = new URL(response.headers.get('location')!);
   assert.equal(location.searchParams.get('state'), 'xyz');
@@ -31,22 +40,37 @@ async function token(provider: 'google' | 'github', code: string, redirectUri: s
   return fetch(`${base}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: `ars-${provider}`, client_secret: `ars-${provider}-secret`, code_verifier: codeVerifier }),
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: `ars-${provider}`,
+      client_secret: `ars-${provider}-secret`,
+      code_verifier: codeVerifier,
+    }),
   });
 }
 
 describe('mock oauth', () => {
   it('runs the Google code + PKCE flow', async () => {
     const redirectUri = 'http://localhost:8080/v1/auth/google/callback';
-    const exchanged = await (await token('google', await authorize('google', redirectUri), redirectUri)).json() as { access_token: string };
-    const profile = await (await fetch(`${base}/google/userinfo`, { headers: { authorization: `Bearer ${exchanged.access_token}` } })).json() as Record<string, unknown>;
+    const exchanged = (await (await token('google', await authorize('google', redirectUri), redirectUri)).json()) as {
+      access_token: string;
+    };
+    const profile = (await (
+      await fetch(`${base}/google/userinfo`, { headers: { authorization: `Bearer ${exchanged.access_token}` } })
+    ).json()) as Record<string, unknown>;
     assert.deepEqual([profile.sub, profile.name], ['alice', 'Alice']);
   });
 
   it('returns numeric GitHub ids', async () => {
     const redirectUri = 'http://localhost:8080/v1/auth/github/callback';
-    const exchanged = await (await token('github', await authorize('github', redirectUri), redirectUri)).json() as { access_token: string };
-    const profile = await (await fetch(`${base}/github/user`, { headers: { authorization: `Bearer ${exchanged.access_token}` } })).json() as Record<string, unknown>;
+    const exchanged = (await (await token('github', await authorize('github', redirectUri), redirectUri)).json()) as {
+      access_token: string;
+    };
+    const profile = (await (
+      await fetch(`${base}/github/user`, { headers: { authorization: `Bearer ${exchanged.access_token}` } })
+    ).json()) as Record<string, unknown>;
     assert.equal(typeof profile.id, 'number');
     assert.equal(profile.login, 'alice');
   });
@@ -59,9 +83,13 @@ describe('mock oauth', () => {
   });
 
   it('records Discord webhook deliveries', async () => {
-    const posted = await fetch(`${base}/webhooks/discord`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: 'RaceOverdue' }) });
+    const posted = await fetch(`${base}/webhooks/discord`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'RaceOverdue' }),
+    });
     assert.equal(posted.status, 204);
-    const received = await (await fetch(`${base}/webhooks/discord`)).json() as { body: { content: string } }[];
+    const received = (await (await fetch(`${base}/webhooks/discord`)).json()) as { body: { content: string } }[];
     assert.equal(received.at(-1)?.body.content, 'RaceOverdue');
   });
 });

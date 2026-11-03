@@ -19,7 +19,10 @@ pub struct JsonLayer {
 
 impl JsonLayer {
     pub fn new(service: &str, sink: impl Fn(&[u8]) + Send + Sync + 'static) -> JsonLayer {
-        JsonLayer { service: service.to_string(), sink: Arc::new(sink) }
+        JsonLayer {
+            service: service.to_string(),
+            sink: Arc::new(sink),
+        }
     }
 
     pub fn stdout(service: &str) -> JsonLayer {
@@ -79,7 +82,12 @@ fn current_ids() -> Option<(String, String)> {
     let context = opentelemetry::Context::current();
     let span = context.span();
     let span_context = span.span_context();
-    span_context.is_valid().then(|| (span_context.trace_id().to_string(), span_context.span_id().to_string()))
+    span_context.is_valid().then(|| {
+        (
+            span_context.trace_id().to_string(),
+            span_context.span_id().to_string(),
+        )
+    })
 }
 
 #[derive(Default)]
@@ -155,7 +163,9 @@ mod tests {
         let writer = buffer.clone();
         let provider = SdkTracerProvider::builder().build();
         let subscriber = tracing_subscriber::registry()
-            .with(JsonLayer::new("race-broadcaster", move |line| writer.lock().expect("buffer").extend_from_slice(line)))
+            .with(JsonLayer::new("race-broadcaster", move |line| {
+                writer.lock().expect("buffer").extend_from_slice(line)
+            }))
             .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
         tracing::subscriber::with_default(subscriber, run);
         let text = String::from_utf8(buffer.lock().expect("buffer").clone()).expect("utf8");
@@ -165,8 +175,15 @@ mod tests {
     fn keys(line: &str) -> Vec<String> {
         let value: Value = serde_json::from_str(line).expect("json line");
         let object = value.as_object().expect("object");
-        let mut keys: Vec<(usize, String)> =
-            object.keys().map(|key| (line.find(&format!("\"{key}\":")).expect("key in line"), key.clone())).collect();
+        let mut keys: Vec<(usize, String)> = object
+            .keys()
+            .map(|key| {
+                (
+                    line.find(&format!("\"{key}\":")).expect("key in line"),
+                    key.clone(),
+                )
+            })
+            .collect();
         keys.sort();
         keys.into_iter().map(|(_, key)| key).collect()
     }
@@ -176,11 +193,23 @@ mod tests {
         let lines = capture(|| {
             let span = tracing::info_span!("broadcaster.start_race");
             let _entered = span.enter();
-            tracing::info!(raceId = "123", laps = 3u64, ratio = 0.5, live = true, "race 123 LIVE (3 laps)");
+            tracing::info!(
+                raceId = "123",
+                laps = 3u64,
+                ratio = 0.5,
+                live = true,
+                "race 123 LIVE (3 laps)"
+            );
         });
         assert_eq!(lines.len(), 1);
         let line = &lines[0];
-        assert_eq!(keys(line), ["t", "level", "service", "msg", "trace_id", "span_id", "raceId", "laps", "ratio", "live"]);
+        assert_eq!(
+            keys(line),
+            [
+                "t", "level", "service", "msg", "trace_id", "span_id", "raceId", "laps", "ratio",
+                "live"
+            ]
+        );
         let value: Value = serde_json::from_str(line).expect("json");
         let t = value["t"].as_str().expect("t");
         assert_eq!(t.len(), 24);
@@ -197,7 +226,12 @@ mod tests {
         let span_id = value["span_id"].as_str().expect("span_id");
         assert_eq!(trace_id.len(), 32);
         assert_eq!(span_id.len(), 16);
-        assert!(trace_id.chars().chain(span_id.chars()).all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(
+            trace_id
+                .chars()
+                .chain(span_id.chars())
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        );
         assert_ne!(trace_id, "0".repeat(32));
     }
 

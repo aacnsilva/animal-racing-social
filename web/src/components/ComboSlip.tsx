@@ -9,18 +9,39 @@ import { useStore } from '../lib/hooks';
 import { Link } from '../lib/router';
 import type { Bet, PricePolicy } from '../lib/types';
 
-type Placement = { kind: 'placing' | 'pending' | 'accepted' | 'rejected' | 'error'; bet?: Bet; code?: string; message: string };
+type Placement = {
+  kind: 'placing' | 'pending' | 'accepted' | 'rejected' | 'error';
+  bet?: Bet;
+  code?: string;
+  message: string;
+};
 type Quote = { combinedPrice: number; legs: { marketId: string; price: number; priceVersion: number }[] };
 
 function placementFromBet(bet: Bet): Placement {
   if (bet.status === 'PENDING') return { kind: 'pending', bet, message: 'Combo PENDING · waiting for confirmation…' };
-  if (bet.status === 'REJECTED') return { kind: 'rejected', bet, code: bet.rejectReason ?? undefined, message: `Combo REJECTED · ${friendlyCode(bet.rejectReason)}` };
+  if (bet.status === 'REJECTED')
+    return {
+      kind: 'rejected',
+      bet,
+      code: bet.rejectReason ?? undefined,
+      message: `Combo REJECTED · ${friendlyCode(bet.rejectReason)}`,
+    };
   const price = bet.lockedPrice ?? bet.legs.reduce((p, leg) => p * (leg.lockedPrice ?? leg.acceptedPrice), 1);
   if (bet.status === 'WON') return { kind: 'accepted', bet, message: `Combo WON · paid ${fmtPoints(bet.payout)} pts` };
-  if (bet.status === 'LOST') return { kind: 'rejected', bet, message: `Combo LOST · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)}` };
+  if (bet.status === 'LOST')
+    return { kind: 'rejected', bet, message: `Combo LOST · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)}` };
   if (bet.status === 'VOID') return { kind: 'accepted', bet, message: 'Combo VOID · stake refunded' };
-  if (bet.status === 'CASHED_OUT') return { kind: 'accepted', bet, message: `Combo CASHED_OUT · ${fmtPoints(bet.cashOutAmount ?? bet.payout)} pts returned` };
-  return { kind: 'accepted', bet, message: `Combo ${bet.status} · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)} · returns ${fmtPoints(Math.floor(bet.stake * price))} pts` };
+  if (bet.status === 'CASHED_OUT')
+    return {
+      kind: 'accepted',
+      bet,
+      message: `Combo CASHED_OUT · ${fmtPoints(bet.cashOutAmount ?? bet.payout)} pts returned`,
+    };
+  return {
+    kind: 'accepted',
+    bet,
+    message: `Combo ${bet.status} · ${fmtPoints(bet.stake)} pts at ${fmtPrice(price)} · returns ${fmtPoints(Math.floor(bet.stake * price))} pts`,
+  };
 }
 
 export function ComboSlip({ docked = false }: { docked?: boolean }) {
@@ -47,7 +68,10 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
       const legs = comboStore.get().legs;
       if (!legs.length) return;
       try {
-        const result = await api<Quote>('/v1/bets/combos/quote', { method: 'POST', body: { legs: legs.map((leg) => ({ marketId: leg.marketId, selection: leg.selection })) } });
+        const result = await api<Quote>('/v1/bets/combos/quote', {
+          method: 'POST',
+          body: { legs: legs.map((leg) => ({ marketId: leg.marketId, selection: leg.selection })) },
+        });
         if (cancelled) return;
         setQuote(result);
         setQuoteError(null);
@@ -94,7 +118,12 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
   useEffect(() => () => stopWatch.current?.(), []);
 
   useEffect(() => {
-    if (comboStore.get().legs.length > 0) setPlacement((current) => (current && (current.kind === 'accepted' || current.kind === 'rejected' || current.kind === 'error') ? null : current));
+    if (comboStore.get().legs.length > 0)
+      setPlacement((current) =>
+        current && (current.kind === 'accepted' || current.kind === 'rejected' || current.kind === 'error')
+          ? null
+          : current,
+      );
   }, [signature]);
 
   if (!combo.legs.length && !placement) return null;
@@ -122,7 +151,12 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
         method: 'POST',
         headers: { 'Idempotency-Key': key },
         body: {
-          legs: combo.legs.map((leg) => ({ marketId: leg.marketId, selection: leg.selection, acceptedPrice: leg.price, priceVersion: leg.priceVersion })),
+          legs: combo.legs.map((leg) => ({
+            marketId: leg.marketId,
+            selection: leg.selection,
+            acceptedPrice: leg.price,
+            priceVersion: leg.priceVersion,
+          })),
           stake,
           acceptPriceChanges: combo.policy,
         },
@@ -149,7 +183,14 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
   const message =
     placement ??
     (quoteError
-      ? { kind: 'error' as const, code: quoteCode ?? undefined, message: quoteCode === 'BETTING_CLOSED' || quoteCode === 'MARKET_SUSPENDED' ? `One of the legs: ${friendlyError(quoteError)}` : friendlyError(quoteError) }
+      ? {
+          kind: 'error' as const,
+          code: quoteCode ?? undefined,
+          message:
+            quoteCode === 'BETTING_CLOSED' || quoteCode === 'MARKET_SUSPENDED'
+              ? `One of the legs: ${friendlyError(quoteError)}`
+              : friendlyError(quoteError),
+        }
       : combo.legs.length < 2
         ? { kind: 'pending' as const, message: 'Add a selection from another race to build a combo.' }
         : null);
@@ -191,8 +232,13 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
             <div style={{ minWidth: 0 }}>
               <b>{leg.selectionLabel}</b>
               <span className="muted tiny">
-                {marketLabel(leg.marketType, leg.marketParams)} · <Link to={`/races/${leg.raceId}`}>{leg.raceLabel}</Link>
-                {clash && <span className="chip red" style={{ marginLeft: 6 }}>same race</span>}
+                {marketLabel(leg.marketType, leg.marketParams)} ·{' '}
+                <Link to={`/races/${leg.raceId}`}>{leg.raceLabel}</Link>
+                {clash && (
+                  <span className="chip red" style={{ marginLeft: 6 }}>
+                    same race
+                  </span>
+                )}
               </span>
             </div>
             <span className="num" style={{ fontWeight: 900 }}>
@@ -224,7 +270,11 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
             </label>
             <label className="field">
               <span>Price changes</span>
-              <select className="select" value={combo.policy} onChange={(e) => patchCombo({ policy: e.target.value as PricePolicy })}>
+              <select
+                className="select"
+                value={combo.policy}
+                onChange={(e) => patchCombo({ policy: e.target.value as PricePolicy })}
+              >
                 <option value="NONE">Small changes only</option>
                 <option value="BETTER">Better or small drops</option>
                 <option value="ANY">Any price</option>
@@ -233,11 +283,17 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
           </div>
           <div className="returns">
             <span>
-              Potential return {wallet ? <span className="muted tiny">· balance {fmtPoints(wallet.balance)}</span> : null}
+              Potential return{' '}
+              {wallet ? <span className="muted tiny">· balance {fmtPoints(wallet.balance)}</span> : null}
             </span>
             <b>{stakeValid ? `${fmtPoints(Math.floor(stake * combined))} pts` : '—'}</b>
           </div>
-          <button className="btn primary block" data-testid="place-combo" onClick={place} disabled={placement?.kind === 'placing'}>
+          <button
+            className="btn primary block"
+            data-testid="place-combo"
+            onClick={place}
+            disabled={placement?.kind === 'placing'}
+          >
             Place combo
           </button>
         </>

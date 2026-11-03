@@ -90,14 +90,20 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
             pipe.hget(format!("price:{market_id}"), "version");
         }
         let mut redis = app.redis.clone();
-        let versions: Vec<Option<u32>> = pipe.query_async(&mut redis).await.context("load cached price versions")?;
+        let versions: Vec<Option<u32>> = pipe
+            .query_async(&mut redis)
+            .await
+            .context("load cached price versions")?;
         for (market_id, version) in market_ids.iter().zip(versions) {
             if let Some(version) = version {
                 cached_versions.insert(*market_id, version);
             }
         }
     }
-    let mut registry = app.registry.lock().map_err(|_| "registry poisoned".to_string())?;
+    let mut registry = app
+        .registry
+        .lock()
+        .map_err(|_| "registry poisoned".to_string())?;
     for row in &races {
         let race_id: i64 = row.get(0);
         let entry = registry.races.entry(race_id).or_default();
@@ -130,13 +136,23 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
                 market_id,
                 race_id: row.get(1),
                 kind,
-                status: if status == "SUSPENDED" { MarketStatus::Suspended } else { MarketStatus::Open },
+                status: if status == "SUSPENDED" {
+                    MarketStatus::Suspended
+                } else {
+                    MarketStatus::Open
+                },
                 selections: selections.remove(&market_id).unwrap_or_default(),
-                price_version: (row.get::<_, i32>(5).max(0) as u32).max(cached_versions.get(&market_id).copied().unwrap_or(0)),
+                price_version: (row.get::<_, i32>(5).max(0) as u32)
+                    .max(cached_versions.get(&market_id).copied().unwrap_or(0)),
             },
         );
         market_count += 1;
     }
-    tracing::info!(races = races.len(), markets = market_count, "registry rebuilt: {} races, {market_count} markets", races.len());
+    tracing::info!(
+        races = races.len(),
+        markets = market_count,
+        "registry rebuilt: {} races, {market_count} markets",
+        races.len()
+    );
     Ok(())
 }

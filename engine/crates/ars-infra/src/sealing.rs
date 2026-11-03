@@ -12,19 +12,32 @@ pub struct Keyring {
 impl Keyring {
     pub fn parse(keys: &str, current: &str) -> Res<Keyring> {
         let mut parsed = Vec::new();
-        for entry in keys.split(',').map(str::trim).filter(|entry| !entry.is_empty()) {
-            let (id, hex_key) = entry.split_once(':').context("SCRIPT_KEYS entries must be id:hex")?;
+        for entry in keys
+            .split(',')
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+        {
+            let (id, hex_key) = entry
+                .split_once(':')
+                .context("SCRIPT_KEYS entries must be id:hex")?;
             let bytes = hex::decode(hex_key.trim()).context("SCRIPT_KEYS key is not hex")?;
-            let key: [u8; 32] = bytes.try_into().map_err(|_| format!("key {id} must be 32 bytes (64 hex chars)"))?;
+            let key: [u8; 32] = bytes
+                .try_into()
+                .map_err(|_| format!("key {id} must be 32 bytes (64 hex chars)"))?;
             parsed.push((id.trim().to_string(), key));
         }
         if parsed.is_empty() {
             return Err("SCRIPT_KEYS has no keys".into());
         }
         if !parsed.iter().any(|(id, _)| id == current) {
-            return Err(format!("SCRIPT_KEY_ID {current} not present in SCRIPT_KEYS"));
+            return Err(format!(
+                "SCRIPT_KEY_ID {current} not present in SCRIPT_KEYS"
+            ));
         }
-        Ok(Keyring { keys: parsed, current: current.to_string() })
+        Ok(Keyring {
+            keys: parsed,
+            current: current.to_string(),
+        })
     }
 
     pub fn from_env() -> Res<Keyring> {
@@ -38,16 +51,27 @@ impl Keyring {
     }
 
     fn key(&self, id: &str) -> Res<&[u8; 32]> {
-        self.keys.iter().find(|(key_id, _)| key_id == id).map(|(_, key)| key).context(&format!("unknown key id {id}"))
+        self.keys
+            .iter()
+            .find(|(key_id, _)| key_id == id)
+            .map(|(_, key)| key)
+            .context(&format!("unknown key id {id}"))
     }
 
     pub fn seal(&self, aad: &str, plaintext: &[u8]) -> Res<Vec<u8>> {
         let key = self.key(&self.current)?;
-        let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| "invalid key length".to_string())?;
+        let cipher =
+            Aes256Gcm::new_from_slice(key).map_err(|_| "invalid key length".to_string())?;
         let nonce_bytes: [u8; 12] = crate::ids::random_bytes();
         let nonce = Nonce::try_from(&nonce_bytes[..]).map_err(|_| "invalid nonce".to_string())?;
         let ciphertext = cipher
-            .encrypt(&nonce, Payload { msg: plaintext, aad: aad.as_bytes() })
+            .encrypt(
+                &nonce,
+                Payload {
+                    msg: plaintext,
+                    aad: aad.as_bytes(),
+                },
+            )
             .map_err(|_| "encryption failed".to_string())?;
         let mut sealed = Vec::with_capacity(12 + ciphertext.len());
         sealed.extend_from_slice(&nonce_bytes);
@@ -60,10 +84,17 @@ impl Keyring {
             return Err("sealed blob too short".into());
         }
         let key = self.key(key_id)?;
-        let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| "invalid key length".to_string())?;
+        let cipher =
+            Aes256Gcm::new_from_slice(key).map_err(|_| "invalid key length".to_string())?;
         let nonce = Nonce::try_from(&sealed[..12]).map_err(|_| "invalid nonce".to_string())?;
         cipher
-            .decrypt(&nonce, Payload { msg: &sealed[12..], aad: aad.as_bytes() })
+            .decrypt(
+                &nonce,
+                Payload {
+                    msg: &sealed[12..],
+                    aad: aad.as_bytes(),
+                },
+            )
             .map_err(|_| format!("decryption failed (key {key_id})"))
     }
 }
@@ -89,7 +120,10 @@ mod tests {
         let sealed = keyring.seal("42", &script).expect("seal");
         assert_eq!(sealed.len(), 12 + script.len() + 16);
         let opened = keyring.open("k1", "42", &sealed).expect("open");
-        assert_eq!(decompress(&opened).expect("decompress"), b"{\"raceId\":\"42\"}");
+        assert_eq!(
+            decompress(&opened).expect("decompress"),
+            b"{\"raceId\":\"42\"}"
+        );
         assert!(keyring.open("k1", "43", &sealed).is_err());
         assert!(keyring.open("k0", "42", &sealed).is_err());
         let mut tampered = sealed.clone();

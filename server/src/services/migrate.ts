@@ -11,8 +11,19 @@ const dbDir = env('DB_DIR', join(root, '..', 'db'));
 const sharedDir = env('SHARED_DIR', join(root, '..', 'shared'));
 
 export const SERVICE_ROLES = [
-  'ars_api', 'ars_sse', 'ars_scheduler', 'ars_stable', 'ars_market', 'ars_betting', 'ars_wallet',
-  'ars_season', 'ars_notification', 'ars_race_engine', 'ars_broadcaster', 'ars_odds', 'ars_monitor',
+  'ars_api',
+  'ars_sse',
+  'ars_scheduler',
+  'ars_stable',
+  'ars_market',
+  'ars_betting',
+  'ars_wallet',
+  'ars_season',
+  'ars_notification',
+  'ars_race_engine',
+  'ars_broadcaster',
+  'ars_odds',
+  'ars_monitor',
 ];
 
 function readJson<T>(file: string): T {
@@ -20,11 +31,17 @@ function readJson<T>(file: string): T {
 }
 
 async function migrateSchema(client: pg.Client): Promise<void> {
-  await client.query('CREATE TABLE IF NOT EXISTS public.schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())');
+  await client.query(
+    'CREATE TABLE IF NOT EXISTS public.schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+  );
   await client.query('SELECT pg_advisory_lock(hashtext($1))', ['schema_migrations']);
   try {
-    const applied = new Set((await client.query('SELECT version FROM public.schema_migrations')).rows.map((row) => row.version));
-    const files = readdirSync(join(dbDir, 'migrations')).filter((file) => file.endsWith('.sql')).sort();
+    const applied = new Set(
+      (await client.query('SELECT version FROM public.schema_migrations')).rows.map((row) => row.version),
+    );
+    const files = readdirSync(join(dbDir, 'migrations'))
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
     for (const file of files) {
       if (applied.has(file)) continue;
       log.info('applying migration', { file });
@@ -42,7 +59,11 @@ async function migrateSchema(client: pg.Client): Promise<void> {
     for (const role of SERVICE_ROLES) {
       const specific = process.env[`DB_PASSWORD_${role.replace(/^ars_/, '').toUpperCase()}`];
       const password = specific || env('DB_SERVICE_PASSWORD', 'ars');
-      const { rows } = await client.query('SELECT format($1::text, $2::text, $3::text) AS sql', ['ALTER ROLE %I PASSWORD %L', role, password]);
+      const { rows } = await client.query('SELECT format($1::text, $2::text, $3::text) AS sql', [
+        'ALTER ROLE %I PASSWORD %L',
+        role,
+        password,
+      ]);
       await client.query(rows[0].sql);
     }
   } finally {
@@ -56,8 +77,20 @@ async function seed(client: pg.Client): Promise<void> {
     await client.query(
       `INSERT INTO racing.venues (venue_id, version, name, race_class, surface, lanes, lap_length, laps_min, laps_max, segments, assets, description)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT DO NOTHING`,
-      [venue.id, venue.version, venue.name, venue.class, venue.surface, venue.lanes, venue.lapLength, venue.lapsRange[0], venue.lapsRange[1],
-        JSON.stringify(venue.segments), JSON.stringify(venue.assets), venue.description],
+      [
+        venue.id,
+        venue.version,
+        venue.name,
+        venue.class,
+        venue.surface,
+        venue.lanes,
+        venue.lapLength,
+        venue.lapsRange[0],
+        venue.lapsRange[1],
+        JSON.stringify(venue.segments),
+        JSON.stringify(venue.assets),
+        venue.description,
+      ],
     );
   }
   const paramsPath = join(sharedDir, 'engine-params.json');
@@ -70,9 +103,17 @@ async function seed(client: pg.Client): Promise<void> {
        ON CONFLICT (species) DO UPDATE SET max_career_days = EXCLUDED.max_career_days, life_stages = EXCLUDED.life_stages,
          age_curve = EXCLUDED.age_curve, surface_affinity = EXCLUDED.surface_affinity, segment_affinity = EXCLUDED.segment_affinity,
          retire_threshold = EXCLUDED.retire_threshold, base_ranges = EXCLUDED.base_ranges`,
-      [species.species, species.maxCareerDays, JSON.stringify(species.lifeStages), JSON.stringify(species.ageCurve),
-        JSON.stringify(affinity.surfaceAffinity ?? {}), JSON.stringify(affinity.segmentAffinity ?? {}), species.retireThreshold,
-        species.targetPoolSize, JSON.stringify(species.baseRanges)],
+      [
+        species.species,
+        species.maxCareerDays,
+        JSON.stringify(species.lifeStages),
+        JSON.stringify(species.ageCurve),
+        JSON.stringify(affinity.surfaceAffinity ?? {}),
+        JSON.stringify(affinity.segmentAffinity ?? {}),
+        species.retireThreshold,
+        species.targetPoolSize,
+        JSON.stringify(species.baseRanges),
+      ],
     );
   }
   const templates = readJson<Record<string, { markets: unknown[] }>>('market-templates.json');
@@ -87,7 +128,13 @@ async function seed(client: pg.Client): Promise<void> {
   await client.query(
     `INSERT INTO racing.programme (version, races_per_hour, class_mix, species_rotation, horizon_hours, recovery_minutes, effective_from, created_by)
      SELECT 1, $1, $2, $3, $4, $5, now(), 0 WHERE NOT EXISTS (SELECT 1 FROM racing.programme)`,
-    [programme.racesPerHour, JSON.stringify(programme.classMix), programme.speciesRotation, programme.horizonHours, JSON.stringify(programme.recoveryMinutes)],
+    [
+      programme.racesPerHour,
+      JSON.stringify(programme.classMix),
+      programme.speciesRotation,
+      programme.horizonHours,
+      JSON.stringify(programme.recoveryMinutes),
+    ],
   );
 }
 
@@ -116,7 +163,12 @@ async function createTopics(): Promise<void> {
 }
 
 export async function start(): Promise<void> {
-  const client = new pg.Client({ connectionString: env('MIGRATE_DATABASE_URL', env('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/ars')) });
+  const client = new pg.Client({
+    connectionString: env(
+      'MIGRATE_DATABASE_URL',
+      env('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/ars'),
+    ),
+  });
   await client.connect();
   try {
     await migrateSchema(client);

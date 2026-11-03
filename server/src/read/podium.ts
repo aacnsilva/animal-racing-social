@@ -18,10 +18,12 @@ export async function framesFor(db: Queryable, userIds: string[]): Promise<Map<s
      WHERE r.board = $1 AND r.rank <= $2 AND r.user_id = ANY($3)`,
     [PODIUM_BOARD, PODIUM_TIERS.length, userIds],
   );
-  return new Map(rows.map((row) => [
-    String(row.user_id),
-    { tier: podiumTier(row.rank)!, rank: row.rank, seasonId: String(row.season_id), seasonName: row.name },
-  ]));
+  return new Map(
+    rows.map((row) => [
+      String(row.user_id),
+      { tier: podiumTier(row.rank)!, rank: row.rank, seasonId: String(row.season_id), seasonName: row.name },
+    ]),
+  );
 }
 
 export async function frameFor(db: Queryable, userId: string): Promise<Frame | null> {

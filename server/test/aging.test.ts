@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { ageFactor, currentStats, formToken, lifeStage, pushForm, randomBase, retirementReason, type SpeciesConfig } from '../src/domain/aging.ts';
+import {
+  ageFactor,
+  currentStats,
+  formToken,
+  lifeStage,
+  pushForm,
+  randomBase,
+  retirementReason,
+  type SpeciesConfig,
+} from '../src/domain/aging.ts';
 
-const species = JSON.parse(readFileSync(new URL('../../shared/species.json', import.meta.url), 'utf8')) as SpeciesConfig[];
+const species = JSON.parse(
+  readFileSync(new URL('../../shared/species.json', import.meta.url), 'utf8'),
+) as SpeciesConfig[];
 const horse = species.find((s) => s.species === 'HORSE')!;
 const giraffe = species.find((s) => s.species === 'GIRAFFE')!;
 
@@ -40,7 +51,12 @@ describe('aging', () => {
   });
 
   it('scales stats and draws bases inside species ranges', () => {
-    assert.deepEqual(currentStats({ velocity: 15, stamina: 80, acceleration: 3, consistency: 0.8 }, 0.9), { velocity: 13.5, stamina: 72, acceleration: 2.7, consistency: 0.72 });
+    assert.deepEqual(currentStats({ velocity: 15, stamina: 80, acceleration: 3, consistency: 0.8 }, 0.9), {
+      velocity: 13.5,
+      stamina: 72,
+      acceleration: 2.7,
+      consistency: 0.72,
+    });
     for (let i = 0; i < 50; i++) {
       const base = randomBase(giraffe);
       assert.ok(base.velocity >= 13.6 && base.velocity <= 14.4);

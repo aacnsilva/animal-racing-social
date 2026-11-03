@@ -24,12 +24,15 @@ export function LeaderboardsPage() {
   const board = BOARDS.find((b) => b.id === query.get('board'))?.id ?? 'balance';
   const around = query.get('around') === 'me';
   const seasons = useAsync(() => api<Season[]>('/v1/seasons'), []);
-  const seasonId = query.get('season') ?? seasons.data?.find((s) => s.status === 'ACTIVE')?.id ?? seasons.data?.[0]?.id ?? null;
+  const seasonId =
+    query.get('season') ?? seasons.data?.find((s) => s.status === 'ACTIVE')?.id ?? seasons.data?.[0]?.id ?? null;
   const authed = session.status === 'authed';
   const list = useAsync(
     () =>
       seasonId
-        ? api<{ items: LeaderboardEntry[]; me: LeaderboardEntry | null }>(`/v1/seasons/${seasonId}/leaderboards/${board}${qs({ limit: 50, around: around && authed ? 'me' : null })}`)
+        ? api<{ items: LeaderboardEntry[]; me: LeaderboardEntry | null }>(
+            `/v1/seasons/${seasonId}/leaderboards/${board}${qs({ limit: 50, around: around && authed ? 'me' : null })}`,
+          )
         : Promise.resolve(null),
     [seasonId, board, around, authed],
   );
@@ -58,7 +61,12 @@ export function LeaderboardsPage() {
       <div className="row wrap">
         <div className="tabs">
           {BOARDS.map((b) => (
-            <button key={b.id} className={board === b.id ? 'active' : ''} onClick={() => setQuery({ board: b.id === 'balance' ? null : b.id })} data-board={b.id}>
+            <button
+              key={b.id}
+              className={board === b.id ? 'active' : ''}
+              onClick={() => setQuery({ board: b.id === 'balance' ? null : b.id })}
+              data-board={b.id}
+            >
               {b.label}
             </button>
           ))}
@@ -69,7 +77,11 @@ export function LeaderboardsPage() {
             <button className={!around ? 'active' : ''} onClick={() => setQuery({ around: null })}>
               Top 50
             </button>
-            <button className={around ? 'active' : ''} onClick={() => setQuery({ around: 'me' })} data-testid="leaderboard-around-me">
+            <button
+              className={around ? 'active' : ''}
+              onClick={() => setQuery({ around: 'me' })}
+              data-testid="leaderboard-around-me"
+            >
               Around me
             </button>
           </div>
@@ -85,7 +97,9 @@ export function LeaderboardsPage() {
           <b className="num">{score(board, me.score)}</b>
         </div>
       )}
-      {authed && list.data && !me && <div className="notice info small">You are not ranked on this board yet. Settle some bets to get on it.</div>}
+      {authed && list.data && !me && (
+        <div className="notice info small">You are not ranked on this board yet. Settle some bets to get on it.</div>
+      )}
       <section className="card flush">
         {list.error ? <ErrorNotice error={list.error} onRetry={list.reload} /> : null}
         {list.loading && !list.data ? (
@@ -104,7 +118,13 @@ export function LeaderboardsPage() {
               </thead>
               <tbody>
                 {list.data.items.map((entry) => (
-                  <tr key={entry.userId} className={entry.userId === session.user?.userId ? 'me' : ''} data-testid="leaderboard-row" data-rank={entry.rank} data-user-id={entry.userId}>
+                  <tr
+                    key={entry.userId}
+                    className={entry.userId === session.user?.userId ? 'me' : ''}
+                    data-testid="leaderboard-row"
+                    data-rank={entry.rank}
+                    data-user-id={entry.userId}
+                  >
                     <td>
                       <span className={`pos-badge${entry.rank <= 3 ? ` p${entry.rank}` : ''}`}>{entry.rank}</span>
                     </td>

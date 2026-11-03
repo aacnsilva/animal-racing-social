@@ -18,7 +18,11 @@ export function harvilleProbability(win: Map<string, number>, order: readonly st
   return a * (b / (1 - a)) * (c / (1 - a - b));
 }
 
-export function tricastPrice(win: Map<string, number>, order: readonly string[], margin: number): { price: number; probability: number } {
+export function tricastPrice(
+  win: Map<string, number>,
+  order: readonly string[],
+  margin: number,
+): { price: number; probability: number } {
   const probability = harvilleProbability(win, order);
   return { price: priceFromProbability(probability, margin, 5000), probability };
 }
@@ -35,7 +39,12 @@ export function payoutFor(stake: number, lockedPrice: number): number {
   return Math.floor(stake * lockedPrice + 1e-9);
 }
 
-export function cashOutAmount(stake: number, lockedPrices: readonly number[], probabilitiesNow: readonly number[], margin: number): number {
+export function cashOutAmount(
+  stake: number,
+  lockedPrices: readonly number[],
+  probabilitiesNow: readonly number[],
+  margin: number,
+): number {
   const fair = stake * product(lockedPrices) * product(probabilitiesNow);
   return Math.max(0, Math.floor(fair * (1 - margin) + 1e-9));
 }

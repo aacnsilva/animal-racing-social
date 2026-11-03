@@ -38,10 +38,16 @@ export function slotPlan(start: Date, programme: Programme): { raceClass: RaceCl
 
 export type Booking = { startAt: Date; raceClass: RaceClass };
 
-export function isAvailable(bookings: readonly Booking[], startAt: Date, raceClass: RaceClass, recovery: Record<RaceClass, number>): boolean {
+export function isAvailable(
+  bookings: readonly Booking[],
+  startAt: Date,
+  raceClass: RaceClass,
+  recovery: Record<RaceClass, number>,
+): boolean {
   const busyMs = (cls: RaceClass) => (MAX_RACE_MINUTES + (recovery[cls] ?? 90)) * MINUTE_MS;
   return bookings.every((booking) => {
-    if (booking.startAt.getTime() <= startAt.getTime()) return booking.startAt.getTime() + busyMs(booking.raceClass) <= startAt.getTime();
+    if (booking.startAt.getTime() <= startAt.getTime())
+      return booking.startAt.getTime() + busyMs(booking.raceClass) <= startAt.getTime();
     return startAt.getTime() + busyMs(raceClass) <= booking.startAt.getTime();
   });
 }
@@ -50,7 +56,7 @@ export function shuffle<T>(items: readonly T[], random: () => number = Math.rand
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
 }
@@ -59,17 +65,26 @@ export function validateProgramme(raw: unknown): Programme {
   const value = raw as Programme;
   const classes: RaceClass[] = ['SPRINT', 'STANDARD', 'ENDURANCE'];
   if (!value || typeof value !== 'object') throw new Error('programme must be an object');
-  if (!Number.isInteger(value.racesPerHour) || value.racesPerHour < 1 || value.racesPerHour > 12) throw new Error('racesPerHour must be 1..12');
-  if (!Array.isArray(value.classMix?.slots) || value.classMix.slots.length === 0) throw new Error('classMix.slots must be a non-empty array');
+  if (!Number.isInteger(value.racesPerHour) || value.racesPerHour < 1 || value.racesPerHour > 12)
+    throw new Error('racesPerHour must be 1..12');
+  if (!Array.isArray(value.classMix?.slots) || value.classMix.slots.length === 0)
+    throw new Error('classMix.slots must be a non-empty array');
   for (const slot of value.classMix.slots) {
-    if (!Array.isArray(slot) || slot.length === 0 || slot.some((cls) => !classes.includes(cls))) throw new Error('classMix.slots entries must list race classes');
+    if (!Array.isArray(slot) || slot.length === 0 || slot.some((cls) => !classes.includes(cls)))
+      throw new Error('classMix.slots entries must list race classes');
   }
-  if (!Array.isArray(value.speciesRotation) || value.speciesRotation.length === 0 || value.speciesRotation.some((s) => s !== 'HORSE' && s !== 'GIRAFFE')) {
+  if (
+    !Array.isArray(value.speciesRotation) ||
+    value.speciesRotation.length === 0 ||
+    value.speciesRotation.some((s) => s !== 'HORSE' && s !== 'GIRAFFE')
+  ) {
     throw new Error('speciesRotation must list HORSE/GIRAFFE');
   }
-  if (!Number.isInteger(value.horizonHours) || value.horizonHours < 1 || value.horizonHours > 48) throw new Error('horizonHours must be 1..48');
+  if (!Number.isInteger(value.horizonHours) || value.horizonHours < 1 || value.horizonHours > 48)
+    throw new Error('horizonHours must be 1..48');
   for (const cls of classes) {
-    if (!Number.isInteger(value.recoveryMinutes?.[cls]) || value.recoveryMinutes[cls] < 0) throw new Error(`recoveryMinutes.${cls} must be a non-negative integer`);
+    if (!Number.isInteger(value.recoveryMinutes?.[cls]) || value.recoveryMinutes[cls] < 0)
+      throw new Error(`recoveryMinutes.${cls} must be a non-negative integer`);
   }
   return value;
 }

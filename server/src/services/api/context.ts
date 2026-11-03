@@ -63,7 +63,12 @@ return wait`;
 export async function rateLimit(ctx: Ctx, deps: Deps, bucket: 'bet' | 'read'): Promise<void> {
   const rate = bucket === 'bet' ? 10 : 50;
   const who = optionalUser(ctx)?.userId ?? ctx.ip;
-  const wait = Number(await deps.redis.eval(RATE_SCRIPT, { keys: [`rl:${who}:${bucket}`], arguments: [String(rate), String(rate), String(Date.now())] }));
+  const wait = Number(
+    await deps.redis.eval(RATE_SCRIPT, {
+      keys: [`rl:${who}:${bucket}`],
+      arguments: [String(rate), String(rate), String(Date.now())],
+    }),
+  );
   if (wait > 0) throw new ApiError(429, 'RATE_LIMITED', 'Too many requests', { retryAfter: Math.ceil(wait / 1000) });
 }
 

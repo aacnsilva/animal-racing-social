@@ -2,9 +2,7 @@
   "uid": "ars-platform",
   "title": "ARS \u00b7 Platform",
   "description": "Host, containers, Postgres, Redis, Kafka, Caddy and the telemetry stack",
-  "tags": [
-    "ars"
-  ],
+  "tags": ["ars"],
   "timezone": "browser",
   "editable": false,
   "graphTooltip": 1,
@@ -18,9 +16,7 @@
   "links": [
     {
       "type": "dashboards",
-      "tags": [
-        "ars"
-      ],
+      "tags": ["ars"],
       "asDropdown": true,
       "title": "ARS dashboards",
       "includeVars": false,

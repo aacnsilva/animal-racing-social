@@ -26,10 +26,17 @@ pub struct RevealedState {
 
 impl RevealedState {
     pub fn from_script(script: &RaceScript, tick: u32) -> Option<RevealedState> {
-        let record = script.ticks.iter().find(|candidate| candidate.tick == tick)?;
+        let record = script
+            .ticks
+            .iter()
+            .find(|candidate| candidate.tick == tick)?;
         let mut false_starters = Vec::new();
         let mut lap_leaders = Vec::new();
-        for earlier in script.ticks.iter().take_while(|candidate| candidate.tick <= tick) {
+        for earlier in script
+            .ticks
+            .iter()
+            .take_while(|candidate| candidate.tick <= tick)
+        {
             for event in &earlier.events {
                 match event.kind {
                     EventKind::FalseStart => false_starters.extend(event.id.clone()),
@@ -71,7 +78,10 @@ pub struct Outcome {
     pub finish_tick: u32,
 }
 
-pub fn check_revealed(race: &PreparedRace, revealed: &RevealedState) -> Result<Vec<usize>, EngineError> {
+pub fn check_revealed(
+    race: &PreparedRace,
+    revealed: &RevealedState,
+) -> Result<Vec<usize>, EngineError> {
     if revealed.entrants.len() != race.entrants.len() {
         return Err(EngineError::InvalidInputs(format!(
             "revealed state has {} entrants, race has {}",
@@ -85,22 +95,32 @@ pub fn check_revealed(race: &PreparedRace, revealed: &RevealedState) -> Result<V
             .entrant_index(&entrant.id)
             .ok_or_else(|| EngineError::InvalidInputs(format!("unknown entrant {}", entrant.id)))?;
         if mapping.contains(&index) {
-            return Err(EngineError::InvalidInputs(format!("duplicate entrant {}", entrant.id)));
+            return Err(EngineError::InvalidInputs(format!(
+                "duplicate entrant {}",
+                entrant.id
+            )));
         }
         mapping.push(index);
     }
     for (lap, id) in &revealed.lap_leaders {
         if *lap == 0 || *lap > race.track.laps || race.entrant_index(id).is_none() {
-            return Err(EngineError::InvalidInputs(format!("invalid lap leader {id} at lap {lap}")));
+            return Err(EngineError::InvalidInputs(format!(
+                "invalid lap leader {id} at lap {lap}"
+            )));
         }
     }
     Ok(mapping)
 }
 
-fn restore<S: Streams>(sim: &mut Sim<'_>, revealed: &RevealedState, mapping: &[usize], streams: &mut S) {
+fn restore<S: Streams>(
+    sim: &mut Sim<'_>,
+    revealed: &RevealedState,
+    mapping: &[usize],
+    streams: &mut S,
+) {
     let race = sim.race;
     let length = race.track.length;
-    let lanes = race.venue.lanes as f64;
+    let lanes = f64::from(race.venue.lanes);
     sim.tick = revealed.tick;
     let mut finished: Vec<(u32, usize)> = Vec::new();
     let mut kick_lock: Vec<(usize, f64)> = Vec::new();
@@ -125,7 +145,11 @@ fn restore<S: Streams>(sim: &mut Sim<'_>, revealed: &RevealedState, mapping: &[u
                 finished.push((entrant.pos, index));
             }
             EntrantState::Dnf => {
-                runner.phase = if entrant.dist < 0.01 { Phase::NonRunner } else { Phase::PulledUp };
+                runner.phase = if entrant.dist < 0.01 {
+                    Phase::NonRunner
+                } else {
+                    Phase::PulledUp
+                };
             }
             EntrantState::Sprinting => kick_lock.push((index, remaining)),
             EntrantState::Stumbled => runner.stumble_ticks = 1 + stumble_extra,
@@ -137,7 +161,11 @@ fn restore<S: Streams>(sim: &mut Sim<'_>, revealed: &RevealedState, mapping: &[u
             }
         }
         let delay = race.incidents.false_start_delay_ticks;
-        if entrant.false_start && revealed.tick < delay && runner.phase == Phase::Running && entrant.dist < 0.01 {
+        if entrant.false_start
+            && revealed.tick < delay
+            && runner.phase == Phase::Running
+            && entrant.dist < 0.01
+        {
             runner.wait_ticks = delay - revealed.tick;
         }
     }
@@ -148,7 +176,7 @@ fn restore<S: Streams>(sim: &mut Sim<'_>, revealed: &RevealedState, mapping: &[u
         sim.runners[index].kicking = true;
         sim.lock_kick(index, remaining);
     }
-    finished.sort();
+    finished.sort_unstable();
     sim.finished = finished.len() as u32;
     for (rank, (_, index)) in finished.iter().enumerate() {
         sim.runners[*index].finish_rank = rank as u32 + 1;
@@ -159,7 +187,11 @@ fn restore<S: Streams>(sim: &mut Sim<'_>, revealed: &RevealedState, mapping: &[u
             sim.lap_leaders[(*lap - 1) as usize] = Some((index, revealed.tick));
         }
     }
-    let leader_dist = sim.runners.iter().map(|runner| runner.dist).fold(0.0, f64::max);
+    let leader_dist = sim
+        .runners
+        .iter()
+        .map(|runner| runner.dist)
+        .fold(0.0, f64::max);
     let completed = (libm::floor(leader_dist / race.track.lap_length) as u32).min(race.track.laps);
     if completed > 0 {
         let positions = sim.positions();
@@ -205,7 +237,11 @@ fn run_outcome<R: Rng>(
     Outcome {
         official: sim.official_order(),
         as_run: sim.as_run_order(),
-        lap_leaders: sim.lap_leaders.iter().map(|leader| leader.map(|(index, _)| index)).collect(),
+        lap_leaders: sim
+            .lap_leaders
+            .iter()
+            .map(|leader| leader.map(|(index, _)| index))
+            .collect(),
         finish_tick: sim.tick,
     }
 }
@@ -242,7 +278,7 @@ impl ProbabilityCounter {
                 self.lap_counts[lap * self.entrants + *index] += 1;
             }
         }
-        self.finish_tick_sum += outcome.finish_tick as f64;
+        self.finish_tick_sum += f64::from(outcome.finish_tick);
     }
 
     pub fn merge(&mut self, other: &ProbabilityCounter) {
@@ -257,17 +293,21 @@ impl ProbabilityCounter {
     }
 
     pub fn table(&self, entrant_ids: Vec<String>) -> ProbabilityTable {
-        let runs = self.runs.max(1) as f64;
+        let runs = f64::from(self.runs.max(1));
         let positions = (0..self.entrants)
             .map(|entrant| {
                 (0..self.entrants)
-                    .map(|rank| self.position_counts[entrant * self.entrants + rank] as f64 / runs)
+                    .map(|rank| {
+                        f64::from(self.position_counts[entrant * self.entrants + rank]) / runs
+                    })
                     .collect()
             })
             .collect();
         let lap_leaders = (0..self.laps)
             .map(|lap| {
-                (0..self.entrants).map(|entrant| self.lap_counts[lap * self.entrants + entrant] as f64 / runs).collect()
+                (0..self.entrants)
+                    .map(|entrant| f64::from(self.lap_counts[lap * self.entrants + entrant]) / runs)
+                    .collect()
             })
             .collect();
         ProbabilityTable {
@@ -310,7 +350,9 @@ impl ProbabilityTable {
     }
 
     pub fn top_n(&self, entrant: usize, n: u32) -> f64 {
-        (1..=n).map(|position| self.finish_position(entrant, position)).sum()
+        (1..=n)
+            .map(|position| self.finish_position(entrant, position))
+            .sum()
     }
 
     pub fn leader_at_lap(&self, entrant: usize, lap: u32) -> f64 {
@@ -342,7 +384,8 @@ pub fn estimate_probabilities(
     let counters: Vec<ProbabilityCounter> = std::thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
             .map(|worker| {
-                let share = runs / threads as u32 + u32::from((worker as u32) < runs % threads as u32);
+                let share =
+                    runs / threads as u32 + u32::from((worker as u32) < runs % threads as u32);
                 let mapping = mapping.as_deref();
                 scope.spawn(move || {
                     let mut rng = fast_rng(seed);
@@ -356,7 +399,14 @@ pub fn estimate_probabilities(
                 })
             })
             .collect();
-        handles.into_iter().map(|handle| handle.join().unwrap_or_else(|_| ProbabilityCounter::new(entrants, laps))).collect()
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| ProbabilityCounter::new(entrants, laps))
+            })
+            .collect()
     });
     let mut total = ProbabilityCounter::new(entrants, laps);
     for counter in &counters {

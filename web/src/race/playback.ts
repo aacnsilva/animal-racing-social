@@ -58,7 +58,10 @@ function recordFinishes(finishes: Map<string, FinishInfo>, previous: RaceTick | 
   for (const entrant of tick.entrants) {
     if (entrant.state !== 'FINISHED' || finishes.has(entrant.id)) continue;
     const before = prev?.get(entrant.id);
-    finishes.set(entrant.id, { tick: before && before.state !== 'FINISHED' ? tick.tick : Math.max(0, tick.tick - 12), speed: Math.max(before?.speed ?? 0, entrant.speed, 8) });
+    finishes.set(entrant.id, {
+      tick: before && before.state !== 'FINISHED' ? tick.tick : Math.max(0, tick.tick - 12),
+      speed: Math.max(before?.speed ?? 0, entrant.speed, 8),
+    });
   }
 }
 
@@ -102,7 +105,7 @@ export class LivePlayback implements FrameSource {
     if (!this.to) return null;
     if (this.queue.length > 3) {
       const keep = this.queue.slice(-2);
-      this.from = byId(keep[0]!);
+      this.from = byId(keep[0]);
       this.to = keep[1]!;
       this.queue = [];
       this.segmentStart = now;
@@ -111,7 +114,8 @@ export class LivePlayback implements FrameSource {
     while (alpha >= 1 && this.queue.length) {
       this.from = byId(this.to);
       this.to = this.queue.shift()!;
-      this.segmentStart = now - this.segmentStart - this.tickMs > this.tickMs * 0.5 ? now : this.segmentStart + this.tickMs;
+      this.segmentStart =
+        now - this.segmentStart - this.tickMs > this.tickMs * 0.5 ? now : this.segmentStart + this.tickMs;
       alpha = (now - this.segmentStart) / this.tickMs;
     }
     return blend(this.from, this.to, Math.max(0, Math.min(1, alpha)), this.tickMs, this.finishes);
@@ -213,7 +217,7 @@ export class ReplayPlayback implements FrameSource {
   tickAt(ms: number): RaceTick | null {
     if (!this.ticks.length) return null;
     const index = Math.min(this.ticks.length - 1, Math.max(0, Math.floor(ms / this.tickMs)));
-    return this.ticks[index]!;
+    return this.ticks[index];
   }
 
   frame(now: number): Frame | null {
@@ -229,8 +233,8 @@ export class ReplayPlayback implements FrameSource {
     this.lastNow = now;
     const exact = this.clockMs / this.tickMs;
     const index = Math.min(this.ticks.length - 1, Math.floor(exact));
-    const next = this.ticks[Math.min(this.ticks.length - 1, index + 1)]!;
-    const current = this.ticks[index]!;
+    const next = this.ticks[Math.min(this.ticks.length - 1, index + 1)];
+    const current = this.ticks[index];
     const alpha = index + 1 >= this.ticks.length ? 1 : exact - index;
     if (index !== this.lastNotifiedTick) {
       this.lastNotifiedTick = index;

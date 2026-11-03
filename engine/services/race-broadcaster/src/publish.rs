@@ -1,4 +1,6 @@
-use ars_proto::{EntrantResult, Incident, LapLeader, RaceFinished, RaceTick, TickEntrant, TickEvent};
+use ars_proto::{
+    EntrantResult, Incident, LapLeader, RaceFinished, RaceTick, TickEntrant, TickEvent,
+};
 use race_engine_core::{RaceScript, ScriptTick};
 
 pub fn entrant_number(id: &str) -> i32 {
@@ -41,10 +43,18 @@ pub fn tick_message(race_id: i64, tick: &ScriptTick) -> RaceTick {
 pub fn standings(tick: &ScriptTick) -> Vec<String> {
     let mut entrants: Vec<_> = tick.entrants.iter().collect();
     entrants.sort_by_key(|entrant| entrant.pos);
-    entrants.into_iter().map(|entrant| entrant.id.clone()).collect()
+    entrants
+        .into_iter()
+        .map(|entrant| entrant.id.clone())
+        .collect()
 }
 
-pub fn finished_message(race_id: i64, script: &RaceScript, seed_hex: &str, finished_at: &str) -> RaceFinished {
+pub fn finished_message(
+    race_id: i64,
+    script: &RaceScript,
+    seed_hex: &str,
+    finished_at: &str,
+) -> RaceFinished {
     let result = &script.result;
     RaceFinished {
         race_id,
@@ -79,13 +89,23 @@ pub fn finished_message(race_id: i64, script: &RaceScript, seed_hex: &str, finis
         lap_leaders: result
             .lap_leaders
             .iter()
-            .map(|leader| LapLeader { lap: leader.lap, entrant_id: leader.entrant_id.clone(), tick: leader.tick })
+            .map(|leader| LapLeader {
+                lap: leader.lap,
+                entrant_id: leader.entrant_id.clone(),
+                tick: leader.tick,
+            })
             .collect(),
         finished_at: finished_at.to_string(),
     }
 }
 
-pub fn state_json(race_id: i64, status: &str, tick: &ScriptTick, tick_ms: u32, start_at: &str) -> String {
+pub fn state_json(
+    race_id: i64,
+    status: &str,
+    tick: &ScriptTick,
+    tick_ms: u32,
+    start_at: &str,
+) -> String {
     serde_json::json!({
         "raceId": race_id.to_string(),
         "status": status,

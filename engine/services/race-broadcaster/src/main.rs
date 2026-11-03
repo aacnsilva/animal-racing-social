@@ -40,14 +40,19 @@ ENV: DATABASE_URL KAFKA_BROKERS REDIS_URL PORT SCRIPT_KEYS SCRIPT_KEY_ID REPLAY_
 
 fn main() {
     match std::env::args().nth(1).as_deref() {
-        Some("--help") | Some("-h") | Some("help") => println!("{USAGE}"),
-        Some("--version") | Some("-V") => println!("race-broadcaster {}", race_engine_core::ENGINE_VERSION),
+        Some("--help" | "-h" | "help") => println!("{USAGE}"),
+        Some("--version" | "-V") => {
+            println!("race-broadcaster {}", race_engine_core::ENGINE_VERSION)
+        }
         Some(other) => {
             eprintln!("unknown argument {other}\n\n{USAGE}");
             std::process::exit(2);
         }
         None => {
-            let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("tokio runtime");
             runtime.block_on(async {
                 telemetry::init("race-broadcaster");
                 if let Err(err) = run().await {
@@ -92,7 +97,9 @@ async fn run() -> Res<()> {
         leader: AtomicBool::new(false),
         live: AtomicUsize::new(0),
     });
-    let router = Router::new().route("/healthz", get(healthz)).with_state(ctx.clone());
+    let router = Router::new()
+        .route("/healthz", get(healthz))
+        .with_state(ctx.clone());
     tokio::spawn(async move {
         if let Err(err) = ars_infra::http::serve(port, router).await {
             tracing::error!("{err}");
@@ -120,7 +127,10 @@ async fn acquire_leadership(url: &str) -> tokio_postgres::Client {
     loop {
         match ars_infra::db::connect(url).await {
             Ok(client) => loop {
-                match client.query_one("SELECT pg_try_advisory_lock($1)", &[&LEADER_LOCK_KEY]).await {
+                match client
+                    .query_one("SELECT pg_try_advisory_lock($1)", &[&LEADER_LOCK_KEY])
+                    .await
+                {
                     Ok(row) if row.get::<_, bool>(0) => return client,
                     Ok(_) => {
                         if !waiting_logged {

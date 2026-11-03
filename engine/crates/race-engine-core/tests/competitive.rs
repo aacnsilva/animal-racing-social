@@ -27,8 +27,11 @@ fn varied_fields_produce_several_winners_and_beatable_favourites() {
         }
         let distinct = wins.iter().filter(|count| **count >= 3).count();
         let favourite = support::favourite(species, &field);
-        let share = wins[favourite] as f64 / runs as f64;
-        assert!(distinct >= 3, "{venue_id}: only {distinct} regular winners {wins:?}");
+        let share = f64::from(wins[favourite]) / f64::from(runs);
+        assert!(
+            distinct >= 3,
+            "{venue_id}: only {distinct} regular winners {wins:?}"
+        );
         assert!(share < 0.6, "{venue_id}: favourite wins {share:.2}");
         favourite_share_sum += share;
         fields += 1.0;
@@ -48,7 +51,8 @@ fn incidents_are_rare() {
             let plan = plan_race(&params, &venue, species, &venue.class, &field).expect("plan");
             let inputs = support::race_inputs(species, plan.laps, field);
             for value in 0..25 {
-                let sealed = simulate(&params, &venue, &inputs, &support::seed(1000 + value)).expect("simulate");
+                let sealed = simulate(&params, &venue, &inputs, &support::seed(1000 + value))
+                    .expect("simulate");
                 total += 1;
                 if sealed.script.result.incidents.is_empty() {
                     clean += 1;
@@ -56,5 +60,8 @@ fn incidents_are_rare() {
             }
         }
     }
-    assert!(clean * 2 > total, "only {clean}/{total} races without incidents");
+    assert!(
+        clean * 2 > total,
+        "only {clean}/{total} races without incidents"
+    );
 }

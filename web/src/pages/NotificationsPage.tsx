@@ -5,7 +5,13 @@ import { toast, unreadStore } from '../lib/app';
 import { friendlyError } from '../lib/errors';
 import { fmtRelative } from '../lib/format';
 import { useAsync, usePaged, useStore } from '../lib/hooks';
-import { NOTIFICATION_ICON, NOTIFICATION_LABEL, NOTIFICATION_TYPES, notificationLink, notificationText } from '../lib/notifications';
+import {
+  NOTIFICATION_ICON,
+  NOTIFICATION_LABEL,
+  NOTIFICATION_TYPES,
+  notificationLink,
+  notificationText,
+} from '../lib/notifications';
 import { navigate } from '../lib/router';
 import type { Notification, Page } from '../lib/types';
 
@@ -47,7 +53,12 @@ function SettingsCard() {
           <div>
             <span>{NOTIFICATION_LABEL[type]}</span>
           </div>
-          <Switch checked={s.enabled && s.types[type] !== false} disabled={!s.enabled} onChange={(value) => void save({ ...s, types: { ...s.types, [type]: value } })} label={NOTIFICATION_LABEL[type]} />
+          <Switch
+            checked={s.enabled && s.types[type]}
+            disabled={!s.enabled}
+            onChange={(value) => void save({ ...s, types: { ...s.types, [type]: value } })}
+            label={NOTIFICATION_LABEL[type]}
+          />
         </div>
       ))}
     </section>
@@ -62,7 +73,9 @@ export function NotificationsPage() {
   const paged = usePaged(
     (cursor) =>
       authed
-        ? api<Page<Notification> & { unreadCount: number }>(`/v1/me/notifications${qs({ unread: onlyUnread ? 'true' : null, cursor, limit: 30 })}`).then((page) => {
+        ? api<Page<Notification> & { unreadCount: number }>(
+            `/v1/me/notifications${qs({ unread: onlyUnread ? 'true' : null, cursor, limit: 30 })}`,
+          ).then((page) => {
             unreadStore.set(page.unreadCount);
             return page;
           })
@@ -86,7 +99,10 @@ export function NotificationsPage() {
 
   const markRead = async (ids: string[] | 'all') => {
     try {
-      const result = await api<{ unreadCount: number }>('/v1/me/notifications/read', { method: 'POST', body: ids === 'all' ? { all: true } : { ids } });
+      const result = await api<{ unreadCount: number }>('/v1/me/notifications/read', {
+        method: 'POST',
+        body: ids === 'all' ? { all: true } : { ids },
+      });
       unreadStore.set(result.unreadCount);
       if (ids === 'all') setReadIds(new Set(paged.items.map((n) => n.id)));
       else setReadIds((prev) => new Set([...prev, ...ids]));

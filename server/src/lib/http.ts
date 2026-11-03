@@ -1,6 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { errorFields, log } from './log.ts';
-import { BUCKETS, extractContext, failSpan, histogram, SpanKind, SpanStatusCode, withSpan, type Span } from './telemetry.ts';
+import {
+  BUCKETS,
+  extractContext,
+  failSpan,
+  histogram,
+  SpanKind,
+  SpanStatusCode,
+  withSpan,
+  type Span,
+} from './telemetry.ts';
 
 export class ApiError extends Error {
   status: number;
@@ -29,7 +38,8 @@ export class Reply {
 
 export const accepted = (body: unknown) => new Reply(202, body);
 export const noContent = (headers: Record<string, string | string[]> = {}) => new Reply(204, undefined, headers);
-export const redirect = (location: string, cookies: string[] = []) => new Reply(302, undefined, { location, 'set-cookie': cookies });
+export const redirect = (location: string, cookies: string[] = []) =>
+  new Reply(302, undefined, { location, 'set-cookie': cookies });
 
 export type Ctx = {
   req: IncomingMessage;
@@ -64,11 +74,21 @@ export class Router {
     return this;
   }
 
-  get(path: string, handler: Handler) { return this.add('GET', path, handler); }
-  post(path: string, handler: Handler) { return this.add('POST', path, handler); }
-  put(path: string, handler: Handler) { return this.add('PUT', path, handler); }
-  patch(path: string, handler: Handler) { return this.add('PATCH', path, handler); }
-  delete(path: string, handler: Handler) { return this.add('DELETE', path, handler); }
+  get(path: string, handler: Handler) {
+    return this.add('GET', path, handler);
+  }
+  post(path: string, handler: Handler) {
+    return this.add('POST', path, handler);
+  }
+  put(path: string, handler: Handler) {
+    return this.add('PUT', path, handler);
+  }
+  patch(path: string, handler: Handler) {
+    return this.add('PATCH', path, handler);
+  }
+  delete(path: string, handler: Handler) {
+    return this.add('DELETE', path, handler);
+  }
 
   match(method: string, pathname: string): { handler: Handler; params: Record<string, string>; path: string } | null {
     const parts = pathname.split('/').filter(Boolean);
@@ -77,8 +97,8 @@ export class Router {
       const params: Record<string, string> = {};
       let matched = true;
       for (let i = 0; i < parts.length; i++) {
-        const pattern = route.parts[i]!;
-        if (pattern.startsWith(':')) params[pattern.slice(1)] = decodeURIComponent(parts[i]!);
+        const pattern = route.parts[i];
+        if (pattern.startsWith(':')) params[pattern.slice(1)] = decodeURIComponent(parts[i]);
         else if (pattern !== parts[i]) {
           matched = false;
           break;
@@ -101,10 +121,20 @@ export function parseCookies(header: string | undefined): Record<string, string>
   return cookies;
 }
 
-export type CookieOptions = { maxAge?: number; path?: string; httpOnly?: boolean; secure?: boolean; sameSite?: 'Lax' | 'Strict' | 'None' };
+export type CookieOptions = {
+  maxAge?: number;
+  path?: string;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: 'Lax' | 'Strict' | 'None';
+};
 
 export function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
-  const parts = [`${name}=${encodeURIComponent(value)}`, `Path=${options.path ?? '/'}`, `SameSite=${options.sameSite ?? 'Lax'}`];
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    `Path=${options.path ?? '/'}`,
+    `SameSite=${options.sameSite ?? 'Lax'}`,
+  ];
   if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
   if (options.httpOnly ?? true) parts.push('HttpOnly');
   if (options.secure) parts.push('Secure');
@@ -130,9 +160,18 @@ async function readBody(req: IncomingMessage, limit = 1_000_000): Promise<any> {
   }
 }
 
-export function sendJson(res: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}): void {
+export function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string | string[]> = {},
+): void {
   if (Buffer.isBuffer(body)) {
-    res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers });
+    res.writeHead(status, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      ...headers,
+    });
     res.end(body);
     return;
   }
@@ -161,7 +200,8 @@ function flowOf(method: string, path: string): string | undefined {
   return FLOWS.find(([pattern]) => pattern.test(path))?.[1];
 }
 
-const requestDuration = () => histogram('http.server.request.duration', 's', 'Duration of HTTP server requests', BUCKETS.http);
+const requestDuration = () =>
+  histogram('http.server.request.duration', 's', 'Duration of HTTP server requests', BUCKETS.http);
 
 async function handle(router: Router, ctx: Ctx, route: ReturnType<Router['match']>, span: Span | null): Promise<void> {
   const { res } = ctx;
@@ -187,7 +227,16 @@ async function handle(router: Router, ctx: Ctx, route: ReturnType<Router['match'
       }
       if (span && error.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR, message: error.code });
       if (span) span.setAttribute('ars.error_code', error.code);
-      sendJson(res, error.status, { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) }, headers);
+      sendJson(
+        res,
+        error.status,
+        {
+          code: error.code,
+          message: error.message,
+          ...(error.details === undefined ? {} : { details: error.details }),
+        },
+        headers,
+      );
     } else {
       if (span) failSpan(span, error);
       log.error('unhandled error', { method: ctx.method, path: ctx.url.pathname, ...errorFields(error) });
@@ -210,7 +259,9 @@ export function serve(router: Router, port: number): Server {
       params: {},
       query: url.searchParams,
       cookies: parseCookies(req.headers.cookie),
-      ip: String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0]!.trim(),
+      ip: String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '')
+        .split(',')[0]
+        .trim(),
       state: {},
       body: () => (parsedBody ??= readBody(req)),
       setCookies: [],
@@ -222,21 +273,40 @@ export function serve(router: Router, port: number): Server {
     }
     const template = route?.path ?? 'unmatched';
     const flow = flowOf(method, template);
-    await withSpan(`${method} ${template}`, {
-      kind: SpanKind.SERVER,
-      parent: extractContext(req.headers),
-      attributes: { 'http.request.method': method, 'http.route': template, 'url.path': url.pathname, ...(flow ? { 'ars.flow': flow } : {}) },
-    }, async (span) => {
-      res.setHeader('x-trace-id', span.spanContext().traceId);
-      for (const [name, value] of Object.entries(route?.params ?? {})) {
-        if (/^\d{1,19}$/.test(value)) span.setAttribute(`ars.${name.replace(/Id$/, '_id').toLowerCase()}`, value);
-      }
-      await handle(router, ctx, route, span);
-      span.setAttribute('http.response.status_code', res.statusCode);
-      const seconds = (performance.now() - started) / 1000;
-      requestDuration().record(seconds, { 'http.route': template, 'http.request.method': method, 'http.response.status_code': res.statusCode });
-      log.info('http', { method, path: url.pathname, route: template, status: res.statusCode, ms: Math.round(seconds * 1000) });
-    });
+    await withSpan(
+      `${method} ${template}`,
+      {
+        kind: SpanKind.SERVER,
+        parent: extractContext(req.headers),
+        attributes: {
+          'http.request.method': method,
+          'http.route': template,
+          'url.path': url.pathname,
+          ...(flow ? { 'ars.flow': flow } : {}),
+        },
+      },
+      async (span) => {
+        res.setHeader('x-trace-id', span.spanContext().traceId);
+        for (const [name, value] of Object.entries(route?.params ?? {})) {
+          if (/^\d{1,19}$/.test(value)) span.setAttribute(`ars.${name.replace(/Id$/, '_id').toLowerCase()}`, value);
+        }
+        await handle(router, ctx, route, span);
+        span.setAttribute('http.response.status_code', res.statusCode);
+        const seconds = (performance.now() - started) / 1000;
+        requestDuration().record(seconds, {
+          'http.route': template,
+          'http.request.method': method,
+          'http.response.status_code': res.statusCode,
+        });
+        log.info('http', {
+          method,
+          path: url.pathname,
+          route: template,
+          status: res.statusCode,
+          ms: Math.round(seconds * 1000),
+        });
+      },
+    );
   });
   server.listen(port);
   return server;
@@ -259,7 +329,8 @@ export const v = {
     if (typeof value !== 'string') invalid(field, 'must be a string');
     const trimmed = value.trim();
     if (trimmed.length < (options.min ?? 1)) invalid(field, `must have at least ${options.min ?? 1} characters`);
-    if (options.max !== undefined && trimmed.length > options.max) invalid(field, `must have at most ${options.max} characters`);
+    if (options.max !== undefined && trimmed.length > options.max)
+      invalid(field, `must have at most ${options.max} characters`);
     return trimmed;
   },
   int(value: unknown, field: string, options: { min?: number; max?: number } = {}): number {
@@ -277,7 +348,8 @@ export const v = {
     return parsed;
   },
   oneOf<T extends string>(value: unknown, field: string, allowed: readonly T[]): T {
-    if (typeof value !== 'string' || !allowed.includes(value as T)) invalid(field, `must be one of ${allowed.join(', ')}`);
+    if (typeof value !== 'string' || !allowed.includes(value as T))
+      invalid(field, `must be one of ${allowed.join(', ')}`);
     return value as T;
   },
   id(value: unknown, field: string): string {
@@ -298,8 +370,10 @@ export const v = {
   },
   arr(value: unknown, field: string, options: { min?: number; max?: number } = {}): unknown[] {
     if (!Array.isArray(value)) invalid(field, 'must be an array');
-    if (options.min !== undefined && value.length < options.min) invalid(field, `must have at least ${options.min} items`);
-    if (options.max !== undefined && value.length > options.max) invalid(field, `must have at most ${options.max} items`);
+    if (options.min !== undefined && value.length < options.min)
+      invalid(field, `must have at least ${options.min} items`);
+    if (options.max !== undefined && value.length > options.max)
+      invalid(field, `must have at most ${options.max} items`);
     return value;
   },
 };

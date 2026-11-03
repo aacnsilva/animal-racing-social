@@ -12,7 +12,15 @@ import { frameFor, podiumsFor } from '../../read/podium.ts';
 import { jwtSecret, publicUrl, requireUser, secureCookies, userJson, type Deps } from './context.ts';
 
 type ProviderId = 'google' | 'github';
-type Provider = { id: ProviderId; clientId: string; clientSecret: string; authorizeUrl: string; tokenUrl: string; userinfoUrl: string; scope: string };
+type Provider = {
+  id: ProviderId;
+  clientId: string;
+  clientSecret: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  userinfoUrl: string;
+  scope: string;
+};
 
 const DEFAULTS: Record<ProviderId, Omit<Provider, 'id' | 'clientId' | 'clientSecret'>> = {
   google: {
@@ -34,15 +42,17 @@ export function providers(): Provider[] {
     const prefix = `OAUTH_${id.toUpperCase()}_`;
     const clientId = process.env[`${prefix}CLIENT_ID`];
     if (!clientId) return [];
-    return [{
-      id,
-      clientId,
-      clientSecret: env(`${prefix}CLIENT_SECRET`, ''),
-      authorizeUrl: env(`${prefix}AUTHORIZE_URL`, DEFAULTS[id].authorizeUrl),
-      tokenUrl: env(`${prefix}TOKEN_URL`, DEFAULTS[id].tokenUrl),
-      userinfoUrl: env(`${prefix}USERINFO_URL`, DEFAULTS[id].userinfoUrl),
-      scope: DEFAULTS[id].scope,
-    }];
+    return [
+      {
+        id,
+        clientId,
+        clientSecret: env(`${prefix}CLIENT_SECRET`, ''),
+        authorizeUrl: env(`${prefix}AUTHORIZE_URL`, DEFAULTS[id].authorizeUrl),
+        tokenUrl: env(`${prefix}TOKEN_URL`, DEFAULTS[id].tokenUrl),
+        userinfoUrl: env(`${prefix}USERINFO_URL`, DEFAULTS[id].userinfoUrl),
+        scope: DEFAULTS[id].scope,
+      },
+    ];
   });
 }
 
@@ -66,14 +76,22 @@ function withParam(path: string, key: string, value: string): string {
   return `${path}${path.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(value)}`;
 }
 
-const refreshCookie = (token: string) => serializeCookie(REFRESH_COOKIE, token, { path: '/v1', maxAge: REFRESH_TTL_DAYS * 86400, secure: secureCookies() });
-const clearRefreshCookie = () => serializeCookie(REFRESH_COOKIE, '', { path: '/v1', maxAge: 0, secure: secureCookies() });
+const refreshCookie = (token: string) =>
+  serializeCookie(REFRESH_COOKIE, token, { path: '/v1', maxAge: REFRESH_TTL_DAYS * 86400, secure: secureCookies() });
+const clearRefreshCookie = () =>
+  serializeCookie(REFRESH_COOKIE, '', { path: '/v1', maxAge: 0, secure: secureCookies() });
 
 async function issueRefresh(db: Queryable, userId: string, familyId?: string): Promise<string> {
   const token = randomToken(32);
   await db.query(
     `INSERT INTO identity.refresh_tokens (user_id, token_id, token_hash, family_id, expires_at) VALUES ($1, $2, $3, $4, $5)`,
-    [userId, newId(shardOf(userId)), sha256(token), familyId ?? newId(shardOf(userId)), new Date(Date.now() + REFRESH_TTL_DAYS * DAY_MS)],
+    [
+      userId,
+      newId(shardOf(userId)),
+      sha256(token),
+      familyId ?? newId(shardOf(userId)),
+      new Date(Date.now() + REFRESH_TTL_DAYS * DAY_MS),
+    ],
   );
   return token;
 }
@@ -81,9 +99,20 @@ async function issueRefresh(db: Queryable, userId: string, familyId?: string): P
 export async function userWithProviders(db: Queryable, userId: string) {
   const user = await one(db, 'SELECT * FROM identity.users WHERE user_id = $1', [userId]);
   if (!user) return null;
-  const identities = await many(db, 'SELECT provider FROM identity.user_identities WHERE user_id = $1 ORDER BY provider', [userId]);
+  const identities = await many(
+    db,
+    'SELECT provider FROM identity.user_identities WHERE user_id = $1 ORDER BY provider',
+    [userId],
+  );
   const podiums = await podiumsFor(db, userId);
-  return { ...userJson(user, identities.map((row) => row.provider)), frame: await frameFor(db, userId), podiums };
+  return {
+    ...userJson(
+      user,
+      identities.map((row) => row.provider),
+    ),
+    frame: await frameFor(db, userId),
+    podiums,
+  };
 }
 
 type Profile = { subject: string; name: string; email: string | null; avatarUrl: string | null };
@@ -102,22 +131,41 @@ async function fetchProfile(p: Provider, code: string, verifier: string): Promis
     }),
     signal: AbortSignal.timeout(10_000),
   });
-  const token = await tokenResponse.json() as { access_token?: string; error?: string };
-  if (!tokenResponse.ok || !token.access_token) throw new Error(`token exchange failed: ${token.error ?? tokenResponse.status}`);
+  const token = (await tokenResponse.json()) as { access_token?: string; error?: string };
+  if (!tokenResponse.ok || !token.access_token)
+    throw new Error(`token exchange failed: ${token.error ?? tokenResponse.status}`);
   const profileResponse = await fetch(p.userinfoUrl, {
-    headers: { authorization: `Bearer ${token.access_token}`, accept: 'application/json', 'user-agent': 'animal-racing-social' },
+    headers: {
+      authorization: `Bearer ${token.access_token}`,
+      accept: 'application/json',
+      'user-agent': 'animal-racing-social',
+    },
     signal: AbortSignal.timeout(10_000),
   });
   if (!profileResponse.ok) throw new Error(`userinfo failed: ${profileResponse.status}`);
-  const profile = await profileResponse.json() as Record<string, any>;
+  const profile = (await profileResponse.json()) as Record<string, any>;
   if (p.id === 'google') {
-    return { subject: String(profile.sub), name: profile.name || profile.email || 'Racer', email: profile.email ?? null, avatarUrl: profile.picture ?? null };
+    return {
+      subject: String(profile.sub),
+      name: profile.name || profile.email || 'Racer',
+      email: profile.email ?? null,
+      avatarUrl: profile.picture ?? null,
+    };
   }
-  return { subject: String(profile.id), name: profile.name || profile.login || 'Racer', email: profile.email ?? null, avatarUrl: profile.avatar_url ?? null };
+  return {
+    subject: String(profile.id),
+    name: profile.name || profile.login || 'Racer',
+    email: profile.email ?? null,
+    avatarUrl: profile.avatar_url ?? null,
+  };
 }
 
 function isBootstrapAdmin(providerId: string, subject: string): boolean {
-  return env('BOOTSTRAP_ADMINS', '').split(',').map((entry) => entry.trim()).filter(Boolean).includes(`${providerId}:${subject}`);
+  return env('BOOTSTRAP_ADMINS', '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .includes(`${providerId}:${subject}`);
 }
 
 export function authRoutes(router: Router, deps: Deps): void {
@@ -139,12 +187,24 @@ export function authRoutes(router: Router, deps: Deps): void {
       code_challenge: pkceChallenge(verifier),
       code_challenge_method: 'S256',
     }).toString();
-    return redirect(url.toString(), [serializeCookie(OAUTH_COOKIE, seal(stored, jwtSecret(), 600), { path: '/v1/auth', maxAge: 600, secure: secureCookies() })]);
+    return redirect(url.toString(), [
+      serializeCookie(OAUTH_COOKIE, seal(stored, jwtSecret(), 600), {
+        path: '/v1/auth',
+        maxAge: 600,
+        secure: secureCookies(),
+      }),
+    ]);
   });
 
   router.get('/v1/auth/:provider/callback', async (ctx) => {
     const p = provider(ctx.params.provider);
-    const stored = unseal<{ state: string; verifier: string; provider: string; redirect: string; linkUserId: string | null }>(ctx.cookies[OAUTH_COOKIE], jwtSecret());
+    const stored = unseal<{
+      state: string;
+      verifier: string;
+      provider: string;
+      redirect: string;
+      linkUserId: string | null;
+    }>(ctx.cookies[OAUTH_COOKIE], jwtSecret());
     const clearOauth = serializeCookie(OAUTH_COOKIE, '', { path: '/v1/auth', maxAge: 0, secure: secureCookies() });
     const fail = (code: string, target = '/') => {
       instruments.authLogins().add(1, { provider: p.id, outcome: code.toLowerCase() });
@@ -160,29 +220,47 @@ export function authRoutes(router: Router, deps: Deps): void {
       return fail('PROVIDER_ERROR', stored.redirect);
     }
     const outcome = await tx(deps.pool, async (client) => {
-      const existing = await one(client, 'SELECT user_id FROM identity.user_identities WHERE provider = $1 AND provider_subject = $2', [p.id, profile.subject]);
+      const existing = await one(
+        client,
+        'SELECT user_id FROM identity.user_identities WHERE provider = $1 AND provider_subject = $2',
+        [p.id, profile.subject],
+      );
       let userId: string;
       if (stored.linkUserId) {
         if (existing && existing.user_id !== stored.linkUserId) return { error: 'PROVIDER_ALREADY_LINKED' };
         userId = stored.linkUserId;
         if (!existing) {
-          await client.query('INSERT INTO identity.user_identities (provider, provider_subject, user_id, email) VALUES ($1, $2, $3, $4)', [p.id, profile.subject, userId, profile.email]);
+          await client.query(
+            'INSERT INTO identity.user_identities (provider, provider_subject, user_id, email) VALUES ($1, $2, $3, $4)',
+            [p.id, profile.subject, userId, profile.email],
+          );
         }
       } else if (existing) {
         userId = existing.user_id;
       } else {
         userId = newUserId();
-        await client.query('INSERT INTO identity.users (user_id, display_name, avatar_url) VALUES ($1, $2, $3)', [userId, profile.name.slice(0, 40), profile.avatarUrl]);
-        await client.query('INSERT INTO identity.user_identities (provider, provider_subject, user_id, email) VALUES ($1, $2, $3, $4)', [p.id, profile.subject, userId, profile.email]);
+        await client.query('INSERT INTO identity.users (user_id, display_name, avatar_url) VALUES ($1, $2, $3)', [
+          userId,
+          profile.name.slice(0, 40),
+          profile.avatarUrl,
+        ]);
+        await client.query(
+          'INSERT INTO identity.user_identities (provider, provider_subject, user_id, email) VALUES ($1, $2, $3, $4)',
+          [p.id, profile.subject, userId, profile.email],
+        );
       }
-      if (isBootstrapAdmin(p.id, profile.subject)) await client.query(`UPDATE identity.users SET role = 'ADMIN' WHERE user_id = $1`, [userId]);
+      if (isBootstrapAdmin(p.id, profile.subject))
+        await client.query(`UPDATE identity.users SET role = 'ADMIN' WHERE user_id = $1`, [userId]);
       const user = await one(client, 'SELECT banned_at FROM identity.users WHERE user_id = $1', [userId]);
       if (user?.banned_at) return { error: 'BANNED' };
       return { userId, token: await issueRefresh(client, userId) };
     });
     if ('error' in outcome) return fail(outcome.error!, stored.redirect);
     const season = await activeSeason(deps.pool);
-    if (season) walletApi.ensure(outcome.userId, season.season_id).catch((error) => log.warn('wallet ensure failed', errorFields(error)));
+    if (season)
+      walletApi
+        .ensure(outcome.userId, season.season_id)
+        .catch((error) => log.warn('wallet ensure failed', errorFields(error)));
     instruments.authLogins().add(1, { provider: p.id, outcome: stored.linkUserId ? 'linked' : 'ok' });
     return redirect(stored.redirect, [refreshCookie(outcome.token), clearOauth]);
   });
@@ -191,7 +269,9 @@ export function authRoutes(router: Router, deps: Deps): void {
     const token = ctx.cookies[REFRESH_COOKIE];
     if (!token) throw new ApiError(401, 'UNAUTHORIZED', 'No session');
     const result = await tx(deps.pool, async (client) => {
-      const row = await one(client, 'SELECT * FROM identity.refresh_tokens WHERE token_hash = $1 FOR UPDATE', [sha256(token)]);
+      const row = await one(client, 'SELECT * FROM identity.refresh_tokens WHERE token_hash = $1 FOR UPDATE', [
+        sha256(token),
+      ]);
       if (!row || row.expires_at < new Date()) {
         instruments.authRefresh().add(1, { outcome: 'expired' });
         return { error: 'UNAUTHORIZED' as const };
@@ -201,14 +281,23 @@ export function authRoutes(router: Router, deps: Deps): void {
           instruments.authRefresh().add(1, { outcome: 'grace' });
           return { userId: row.user_id as string, cookie: null };
         }
-        await client.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [row.family_id]);
+        await client.query(
+          'UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL',
+          [row.family_id],
+        );
         log.warn('refresh token reuse detected', { userId: row.user_id });
         instruments.authRefresh().add(1, { outcome: 'reuse_detected' });
         return { error: 'UNAUTHORIZED' as const };
       }
       instruments.authRefresh().add(1, { outcome: 'rotated' });
-      await client.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND token_id = $2', [row.user_id, row.token_id]);
-      return { userId: row.user_id as string, cookie: refreshCookie(await issueRefresh(client, row.user_id, row.family_id)) };
+      await client.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND token_id = $2', [
+        row.user_id,
+        row.token_id,
+      ]);
+      return {
+        userId: row.user_id as string,
+        cookie: refreshCookie(await issueRefresh(client, row.user_id, row.family_id)),
+      };
     });
     if ('error' in result) {
       ctx.setCookies.push(clearRefreshCookie());
@@ -221,14 +310,24 @@ export function authRoutes(router: Router, deps: Deps): void {
       throw new ApiError(401, banned?.banned_at ? 'BANNED' : 'UNAUTHORIZED', 'Session not allowed');
     }
     if (result.cookie) ctx.setCookies.push(result.cookie);
-    return { accessToken: signJwt({ sub: user.userId, role: user.role }, jwtSecret(), ACCESS_TTL), expiresIn: ACCESS_TTL, user };
+    return {
+      accessToken: signJwt({ sub: user.userId, role: user.role }, jwtSecret(), ACCESS_TTL),
+      expiresIn: ACCESS_TTL,
+      user,
+    };
   });
 
   router.post('/v1/auth/logout', async (ctx) => {
     const token = ctx.cookies[REFRESH_COOKIE];
     if (token) {
-      const row = await one(deps.pool, 'SELECT family_id FROM identity.refresh_tokens WHERE token_hash = $1', [sha256(token)]);
-      if (row) await deps.pool.query('UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [row.family_id]);
+      const row = await one(deps.pool, 'SELECT family_id FROM identity.refresh_tokens WHERE token_hash = $1', [
+        sha256(token),
+      ]);
+      if (row)
+        await deps.pool.query(
+          'UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL',
+          [row.family_id],
+        );
     }
     return noContent({ 'set-cookie': [clearRefreshCookie()] });
   });
@@ -243,11 +342,15 @@ export function authRoutes(router: Router, deps: Deps): void {
     const { userId } = requireUser(ctx);
     const body = await ctx.body();
     if (body.displayName !== undefined) {
-      await deps.pool.query('UPDATE identity.users SET display_name = $2 WHERE user_id = $1', [userId, v.str(body.displayName, 'displayName', { min: 2, max: 40 })]);
+      await deps.pool.query('UPDATE identity.users SET display_name = $2 WHERE user_id = $1', [
+        userId,
+        v.str(body.displayName, 'displayName', { min: 2, max: 40 }),
+      ]);
     }
     if (body.avatarUrl !== undefined) {
       const avatarUrl = body.avatarUrl === null ? null : v.str(body.avatarUrl, 'avatarUrl', { max: 500 });
-      if (avatarUrl !== null && !/^https:\/\//.test(avatarUrl)) throw new ApiError(422, 'VALIDATION_FAILED', 'avatarUrl: must be an https URL');
+      if (avatarUrl !== null && !avatarUrl.startsWith('https://'))
+        throw new ApiError(422, 'VALIDATION_FAILED', 'avatarUrl: must be an https URL');
       await deps.pool.query('UPDATE identity.users SET avatar_url = $2 WHERE user_id = $1', [userId, avatarUrl]);
     }
     return userWithProviders(deps.pool, userId);
@@ -256,6 +359,8 @@ export function authRoutes(router: Router, deps: Deps): void {
   router.post('/v1/me/providers/:provider/link', async (ctx) => {
     const { userId } = requireUser(ctx);
     const p = provider(ctx.params.provider);
-    return { url: `/v1/auth/${p.id}/start?redirect=${encodeURIComponent('/me')}&linkToken=${encodeURIComponent(seal(userId, jwtSecret(), 300))}` };
+    return {
+      url: `/v1/auth/${p.id}/start?redirect=${encodeURIComponent('/me')}&linkToken=${encodeURIComponent(seal(userId, jwtSecret(), 300))}`,
+    };
   });
 }

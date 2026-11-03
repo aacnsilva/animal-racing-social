@@ -2,14 +2,23 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let shifted = days + 719_468;
-    let era = if shifted >= 0 { shifted } else { shifted - 146_096 } / 146_097;
+    let era = if shifted >= 0 {
+        shifted
+    } else {
+        shifted - 146_096
+    } / 146_097;
     let day_of_era = (shifted - era * 146_097) as u64;
-    let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let year = year_of_era as i64 + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_index = (5 * day_of_year + 2) / 153;
     let day = (day_of_year - (153 * month_index + 2) / 5 + 1) as u32;
-    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 } as u32;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    } as u32;
     (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
@@ -17,8 +26,9 @@ fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     let year = if month <= 2 { year - 1 } else { year };
     let era = if year >= 0 { year } else { year - 399 } / 400;
     let year_of_era = (year - era * 400) as u64;
-    let month = month as u64;
-    let day_of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day as u64 - 1;
+    let month = u64::from(month);
+    let day_of_year =
+        (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + u64::from(day) - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
     era * 146_097 + day_of_era as i64 - 719_468
 }
@@ -69,7 +79,7 @@ pub fn parse_rfc3339(text: &str) -> Option<SystemTime> {
     let mut rest = &text[19..];
     let mut millis = 0i64;
     if let Some(fraction) = rest.strip_prefix('.') {
-        let digits: String = fraction.chars().take_while(|character| character.is_ascii_digit()).collect();
+        let digits: String = fraction.chars().take_while(char::is_ascii_digit).collect();
         rest = &fraction[digits.len()..];
         let padded = format!("{digits:0<3}");
         millis = padded[..3].parse().ok()?;
@@ -100,8 +110,14 @@ mod tests {
         assert_eq!(text, "2026-10-30T12:20:00.123Z");
         assert_eq!(parse_rfc3339(&text), Some(time));
         assert_eq!(parse_rfc3339("2026-10-30T14:20:00.123+02:00"), Some(time));
-        assert_eq!(parse_rfc3339("2026-10-30T12:20:00Z"), Some(from_unix_millis(1_793_362_800_000)));
-        assert_eq!(format_rfc3339(from_unix_millis(951_782_400_000)), "2000-02-29T00:00:00.000Z");
+        assert_eq!(
+            parse_rfc3339("2026-10-30T12:20:00Z"),
+            Some(from_unix_millis(1_793_362_800_000))
+        );
+        assert_eq!(
+            format_rfc3339(from_unix_millis(951_782_400_000)),
+            "2000-02-29T00:00:00.000Z"
+        );
         assert_eq!(parse_rfc3339("garbage"), None);
     }
 }

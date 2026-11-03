@@ -27,7 +27,17 @@ function useDebounced<T>(value: T, ms: number): T {
 
 type VerifyState = { kind: 'running' | 'ok' | 'bad' | 'partial' | 'error'; text: string; details: string[] };
 
-function VerifyCommitment({ raceId, seed, seedHash, scriptHash }: { raceId: string; seed: string | null; seedHash: string | null; scriptHash: string | null }) {
+function VerifyCommitment({
+  raceId,
+  seed,
+  seedHash,
+  scriptHash,
+}: {
+  raceId: string;
+  seed: string | null;
+  seedHash: string | null;
+  scriptHash: string | null;
+}) {
   const [state, setState] = useState<VerifyState | null>(null);
   const run = async () => {
     setState({ kind: 'running', text: 'Checking…', details: [] });
@@ -49,14 +59,24 @@ function VerifyCommitment({ raceId, seed, seedHash, scriptHash }: { raceId: stri
           scriptOk = digest.hex === scriptHash.toLowerCase();
           details.push(`SHA-256(script, ${bytes.length.toLocaleString()} bytes) = ${digest.hex}`);
         } catch (error) {
-          details.push(`Script unavailable: ${error instanceof ApiError ? `${friendlyCode(error.code)} (${error.code})` : 'download failed'}`);
+          details.push(
+            `Script unavailable: ${error instanceof ApiError ? `${friendlyCode(error.code)} (${error.code})` : 'download failed'}`,
+          );
         }
       }
       details.push(`Hashed with ${via === 'webcrypto' ? 'WebCrypto' : 'built-in SHA-256 (WebCrypto needs HTTPS)'}`);
       if (seedOk === false || scriptOk === false) {
-        setState({ kind: 'bad', text: `FAILED · ${seedOk === false ? 'seed' : 'script'} hash differs from the published commitment`, details });
+        setState({
+          kind: 'bad',
+          text: `FAILED · ${seedOk === false ? 'seed' : 'script'} hash differs from the published commitment`,
+          details,
+        });
       } else if (seedOk && scriptOk) {
-        setState({ kind: 'ok', text: 'VERIFIED · seed and script hashes match the commitments published before betting opened', details });
+        setState({
+          kind: 'ok',
+          text: 'VERIFIED · seed and script hashes match the commitments published before betting opened',
+          details,
+        });
       } else if (seedOk) {
         setState({ kind: 'partial', text: 'Seed VERIFIED · the script could not be checked', details });
       } else {
@@ -69,13 +89,23 @@ function VerifyCommitment({ raceId, seed, seedHash, scriptHash }: { raceId: stri
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="row wrap">
-        <button className="btn" data-testid="verify-commitment" onClick={() => void run()} disabled={state?.kind === 'running'}>
+        <button
+          className="btn"
+          data-testid="verify-commitment"
+          onClick={() => void run()}
+          disabled={state?.kind === 'running'}
+        >
           {state?.kind === 'running' ? <Spinner /> : '🔒'} Verify commitment
         </button>
       </div>
       {state && (
-        <div className={`notice ${state.kind === 'ok' ? 'success' : state.kind === 'bad' || state.kind === 'error' ? 'error' : 'info'}`}>
-          <div data-testid="verify-status" className={state.kind === 'ok' ? 'verify-ok' : state.kind === 'bad' ? 'verify-bad' : ''}>
+        <div
+          className={`notice ${state.kind === 'ok' ? 'success' : state.kind === 'bad' || state.kind === 'error' ? 'error' : 'info'}`}
+        >
+          <div
+            data-testid="verify-status"
+            className={state.kind === 'ok' ? 'verify-ok' : state.kind === 'bad' ? 'verify-bad' : ''}
+          >
             {state.text}
           </div>
           {state.details.map((line) => (
@@ -103,7 +133,10 @@ export function RaceResult({
   replayLoading: boolean;
 }) {
   const debouncedVersion = useDebounced(version, 700);
-  const { data, error, loading, reload } = useAsync(() => api<RaceResultResponse>(`/v1/races/${raceId}/result`), [raceId, debouncedVersion]);
+  const { data, error, loading, reload } = useAsync(
+    () => api<RaceResultResponse>(`/v1/races/${raceId}/result`),
+    [raceId, debouncedVersion],
+  );
   const [result, setResult] = useState<RaceResultResponse | null>(null);
   useEffect(() => {
     if (data) setResult(data);
@@ -128,7 +161,11 @@ export function RaceResult({
   const allEntrants = result.race.entrants?.length ? result.race.entrants : entrants;
   const byId = new Map(allEntrants.map((e) => [e.entrantId, e]));
   const name = nameLookup(allEntrants);
-  const order = result.order.length ? result.order : [...allEntrants].sort((a, b) => (a.result?.officialPosition ?? 99) - (b.result?.officialPosition ?? 99)).map((e) => e.entrantId);
+  const order = result.order.length
+    ? result.order
+    : [...allEntrants]
+        .sort((a, b) => (a.result?.officialPosition ?? 99) - (b.result?.officialPosition ?? 99))
+        .map((e) => e.entrantId);
   const winnerTime = byId.get(order[0] ?? '')?.result?.finishTimeMs ?? null;
   const lapsLed = new Map<string, number>();
   for (const leader of result.lapLeaders) lapsLed.set(leader.entrantId, (lapsLed.get(leader.entrantId) ?? 0) + 1);
@@ -157,10 +194,15 @@ export function RaceResult({
               const entrant = byId.get(entrantId);
               const r = entrant?.result;
               const pos = r?.officialPosition ?? index + 1;
-              const chip = RESULT_CHIP[r?.resultStatus ?? 'FINISHED']!;
+              const chip = RESULT_CHIP[r?.resultStatus ?? 'FINISHED'];
               const counted = r?.resultStatus === 'FINISHED' || r?.resultStatus === 'DISQUALIFIED';
               return (
-                <tr key={entrantId} data-testid="result-row" data-entrant-id={entrantId} data-result-status={r?.resultStatus ?? ''}>
+                <tr
+                  key={entrantId}
+                  data-testid="result-row"
+                  data-entrant-id={entrantId}
+                  data-result-status={r?.resultStatus ?? ''}
+                >
                   <td>
                     <span className={`pos-badge${pos <= 3 ? ` p${pos}` : ''}`}>{pos}</span>
                   </td>
@@ -173,9 +215,17 @@ export function RaceResult({
                   <td>
                     <span className={`chip ${chip.cls}`}>{chip.label}</span>
                   </td>
-                  <td className="right num">{counted ? fmtRaceTime(r?.finishTimeMs) : r ? `${Math.round(r.distanceCovered)} m` : '—'}</td>
-                  <td className="right num hide-sm">{counted && winnerTime !== null && r?.finishTimeMs && index > 0 ? `+${((r.finishTimeMs - winnerTime) / 1000).toFixed(2)}s` : ''}</td>
-                  <td className="right num hide-sm">{r?.asRunPosition && r.asRunPosition !== pos ? ordinal(r.asRunPosition) : ''}</td>
+                  <td className="right num">
+                    {counted ? fmtRaceTime(r?.finishTimeMs) : r ? `${Math.round(r.distanceCovered)} m` : '—'}
+                  </td>
+                  <td className="right num hide-sm">
+                    {counted && winnerTime !== null && r?.finishTimeMs && index > 0
+                      ? `+${((r.finishTimeMs - winnerTime) / 1000).toFixed(2)}s`
+                      : ''}
+                  </td>
+                  <td className="right num hide-sm">
+                    {r?.asRunPosition && r.asRunPosition !== pos ? ordinal(r.asRunPosition) : ''}
+                  </td>
                   <td className="right num hide-sm">{lapsLed.get(entrantId) ?? ''}</td>
                 </tr>
               );
@@ -209,7 +259,8 @@ export function RaceResult({
                 <div key={incident.seq}>
                   <span className="t">{incident.tick !== null ? `t${incident.tick}` : ''}</span>
                   <span>
-                    <b>{incident.type.replace(/_/g, ' ')}</b> {incident.entrantId ? `· ${name(incident.entrantId)}` : ''}
+                    <b>{incident.type.replace(/_/g, ' ')}</b>{' '}
+                    {incident.entrantId ? `· ${name(incident.entrantId)}` : ''}
                   </span>
                 </div>
               ))}
@@ -257,7 +308,9 @@ export function RaceResult({
       <div className="grid-2">
         <div className="fair">
           <h3>Provably fair</h3>
-          <span className="small muted">The seed and script hashes were published before betting opened. Recompute them here.</span>
+          <span className="small muted">
+            The seed and script hashes were published before betting opened. Recompute them here.
+          </span>
           <span className="tiny muted">Seed</span>
           <code>{result.seed ?? 'not revealed yet'}</code>
           <span className="tiny muted">Seed hash (SHA-256 of the 32 seed bytes)</span>
@@ -265,13 +318,20 @@ export function RaceResult({
           <span className="tiny muted">Script hash (SHA-256 of the exact script JSON)</span>
           <code>{result.scriptHash ?? '—'}</code>
           <span className="tiny muted">Engine {result.engineVersion}</span>
-          <VerifyCommitment raceId={raceId} seed={result.seed} seedHash={result.seedHash} scriptHash={result.scriptHash} />
+          <VerifyCommitment
+            raceId={raceId}
+            seed={result.seed}
+            seedHash={result.seedHash}
+            scriptHash={result.scriptHash}
+          />
         </div>
         <div className="stack" style={{ gap: 8 }}>
           <h3>Replay</h3>
           {result.replay.available ? (
             <>
-              <span className="small muted">Full tick replay available until {fmtDateTime(result.replay.expiresAt)}.</span>
+              <span className="small muted">
+                Full tick replay available until {fmtDateTime(result.replay.expiresAt)}.
+              </span>
               <div>
                 <button className="btn primary" onClick={onWatchReplay} disabled={replayLoading}>
                   {replayLoading ? <Spinner /> : '▶'} Watch replay
@@ -279,7 +339,9 @@ export function RaceResult({
               </div>
             </>
           ) : (
-            <span className="small muted">The replay window has passed. Results, seed and hashes stay available forever.</span>
+            <span className="small muted">
+              The replay window has passed. Results, seed and hashes stay available forever.
+            </span>
           )}
         </div>
       </div>

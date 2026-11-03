@@ -14,7 +14,10 @@ export function MyBetsPage() {
   const tab = query.get('tab') === 'settled' ? 'settled' : 'open';
   const authed = session.status === 'authed';
   const paged = usePaged(
-    (cursor) => (authed ? api<Page<Bet>>(`/v1/me/bets${qs({ status: tab === 'open' ? 'OPEN' : 'SETTLED', cursor, limit: 20 })}`) : Promise.resolve({ items: [], nextCursor: null })),
+    (cursor) =>
+      authed
+        ? api<Page<Bet>>(`/v1/me/bets${qs({ status: tab === 'open' ? 'OPEN' : 'SETTLED', cursor, limit: 20 })}`)
+        : Promise.resolve({ items: [], nextCursor: null }),
     [tab, authed],
   );
   const races = useRaceInfos(paged.items.flatMap((bet) => bet.legs.map((leg) => leg.raceId)));
@@ -36,13 +39,19 @@ export function MyBetsPage() {
         <div>
           <div className="eyebrow">Betting</div>
           <h1>My bets</h1>
-          <p>Singles and combos for the current and past seasons. Open bets can be cashed out while their markets trade.</p>
+          <p>
+            Singles and combos for the current and past seasons. Open bets can be cashed out while their markets trade.
+          </p>
         </div>
         <div className="tabs">
           <button className={tab === 'open' ? 'active' : ''} onClick={() => setQuery({ tab: null })} data-tab="open">
             Open
           </button>
-          <button className={tab === 'settled' ? 'active' : ''} onClick={() => setQuery({ tab: 'settled' })} data-tab="settled">
+          <button
+            className={tab === 'settled' ? 'active' : ''}
+            onClick={() => setQuery({ tab: 'settled' })}
+            data-tab="settled"
+          >
             Settled
           </button>
         </div>

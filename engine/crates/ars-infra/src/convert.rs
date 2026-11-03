@@ -9,7 +9,10 @@ fn temperament(text: &str) -> Res<Temperament> {
 }
 
 pub fn entrant_from_proto(info: &EntrantInfo) -> Res<EntrantInput> {
-    let stats = info.stats.as_ref().context(&format!("entrant {} has no stats", info.entrant_id))?;
+    let stats = info
+        .stats
+        .as_ref()
+        .context(&format!("entrant {} has no stats", info.entrant_id))?;
     Ok(EntrantInput {
         entrant_id: info.entrant_id.clone(),
         animal_id: info.animal_id.to_string(),
@@ -45,7 +48,8 @@ pub fn stats_from_json(value: &serde_json::Value) -> Res<Stats> {
     })
 }
 
-pub const ENTRANT_COLUMNS: &str = "race_id, entrant_id, animal_id, lane, temperament, stats_snapshot";
+pub const ENTRANT_COLUMNS: &str =
+    "race_id, entrant_id, animal_id, lane, temperament, stats_snapshot";
 
 pub fn entrant_from_row(row: &tokio_postgres::Row) -> Res<EntrantInput> {
     let entrant_id: i32 = row.try_get("entrant_id").context("entrant_id")?;
@@ -71,7 +75,9 @@ impl<'de> Deserialize<'de> for IdText {
         match value {
             serde_json::Value::String(text) => Ok(IdText(text)),
             serde_json::Value::Number(number) => Ok(IdText(number.to_string())),
-            other => Err(serde::de::Error::custom(format!("expected id string, got {other}"))),
+            other => Err(serde::de::Error::custom(format!(
+                "expected id string, got {other}"
+            ))),
         }
     }
 }

@@ -13,13 +13,13 @@ export type SpeciesConfig = {
 
 export function interpolate(curve: readonly [number, number][], day: number): number {
   if (curve.length === 0) return 1;
-  if (day <= curve[0]![0]) return curve[0]![1];
+  if (day <= curve[0][0]) return curve[0][1];
   for (let i = 1; i < curve.length; i++) {
-    const [d1, f1] = curve[i]!;
-    const [d0, f0] = curve[i - 1]!;
+    const [d1, f1] = curve[i];
+    const [d0, f0] = curve[i - 1];
     if (day <= d1) return f0 + ((f1 - f0) * (day - d0)) / (d1 - d0);
   }
-  return curve[curve.length - 1]![1];
+  return curve[curve.length - 1][1];
 }
 
 export function ageFactor(config: SpeciesConfig, careerDay: number, declineRate = 1): number {

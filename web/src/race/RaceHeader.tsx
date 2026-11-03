@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { RaceStatus } from '../components/ui';
-import { CLASS_LABEL, fmtClock, fmtCountdown, fmtDateTime, fmtTime, shortHash, SPECIES_ICON, titleCase } from '../lib/format';
+import {
+  CLASS_LABEL,
+  fmtClock,
+  fmtCountdown,
+  fmtDateTime,
+  fmtTime,
+  shortHash,
+  SPECIES_ICON,
+  titleCase,
+} from '../lib/format';
 import { Link } from '../lib/router';
 import type { Race, Venue } from '../lib/types';
 import type { Connection } from './stream';
@@ -27,9 +36,23 @@ function Hash({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-const CONNECTION_LABEL: Record<Connection, string> = { connecting: 'Connecting', open: 'Live feed', reconnecting: 'Reconnecting' };
+const CONNECTION_LABEL: Record<Connection, string> = {
+  connecting: 'Connecting',
+  open: 'Live feed',
+  reconnecting: 'Reconnecting',
+};
 
-export function RaceHeader({ race, venue, connection, now }: { race: Race; venue: Venue | null; connection: Connection; now: number }) {
+export function RaceHeader({
+  race,
+  venue,
+  connection,
+  now,
+}: {
+  race: Race;
+  venue: Venue | null;
+  connection: Connection;
+  now: number;
+}) {
   const closesIn = Date.parse(race.bettingClosesAt) - now;
   const startsIn = Date.parse(race.startAt) - now;
   const started = race.startedAt ? Date.parse(race.startedAt) : Date.parse(race.startAt);
@@ -39,7 +62,8 @@ export function RaceHeader({ race, venue, connection, now }: { race: Race; venue
     <section className="race-head" data-testid="race-header">
       <div className="title">
         <div className="eyebrow">
-          {CLASS_LABEL[race.class]} · {SPECIES_ICON[race.species]} {titleCase(race.species)} race · {fmtDateTime(race.startAt)}
+          {CLASS_LABEL[race.class]} · {SPECIES_ICON[race.species]} {titleCase(race.species)} race ·{' '}
+          {fmtDateTime(race.startAt)}
         </div>
         <h1>
           <Link to={`/venues/${race.venueId}`}>{race.venueName}</Link>
@@ -71,15 +95,27 @@ export function RaceHeader({ race, venue, connection, now }: { race: Race; venue
           <>
             <div className="clock">
               <div className="label">Betting closes</div>
-              <div className="value">{closesIn > 0 && preRace ? fmtCountdown(closesIn) : race.status === 'LIVE' ? 'In-running' : 'Closed'}</div>
+              <div className="value">
+                {closesIn > 0 && preRace ? fmtCountdown(closesIn) : race.status === 'LIVE' ? 'In-running' : 'Closed'}
+              </div>
               <div className="tiny muted">{fmtTime(race.bettingClosesAt)}</div>
             </div>
             <div className="clock">
               <div className="label">{preRace ? 'Starts in' : finished ? 'Finished' : 'Running'}</div>
               <div className="value">
-                {preRace ? (startsIn > 0 ? fmtCountdown(startsIn) : 'Any moment') : finished ? fmtTime(race.finishedAt) : fmtClock(now - started)}
+                {preRace
+                  ? startsIn > 0
+                    ? fmtCountdown(startsIn)
+                    : 'Any moment'
+                  : finished
+                    ? fmtTime(race.finishedAt)
+                    : fmtClock(now - started)}
               </div>
-              <div className="tiny muted">{race.status === 'LIVE' && race.currentLap ? `Lap ${Math.min(race.currentLap, race.laps)} of ${race.laps}` : `Off ${fmtTime(race.startAt)}`}</div>
+              <div className="tiny muted">
+                {race.status === 'LIVE' && race.currentLap
+                  ? `Lap ${Math.min(race.currentLap, race.laps)} of ${race.laps}`
+                  : `Off ${fmtTime(race.startAt)}`}
+              </div>
             </div>
           </>
         )}

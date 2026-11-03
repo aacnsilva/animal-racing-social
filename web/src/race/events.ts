@@ -5,7 +5,7 @@ export type Tone = 'info' | 'warn' | 'good' | 'move';
 
 export function nameLookup(entrants: Entrant[] | undefined): (id: string | undefined) => string {
   const map = new Map((entrants ?? []).map((e) => [e.entrantId, `${e.animal.name} (${e.lane})`]));
-  return (id) => (id ? map.get(id) ?? id : '?');
+  return (id) => (id ? (map.get(id) ?? id) : '?');
 }
 
 export function eventText(event: TickEvent, name: (id: string | undefined) => string): { text: string; tone: Tone } {
@@ -33,4 +33,11 @@ export function eventText(event: TickEvent, name: (id: string | undefined) => st
   }
 }
 
-export const INCIDENT_TYPES = new Set(['STUMBLE', 'FALSE_START', 'REFUSED_TO_RUN', 'PULLED_UP', 'PHOTO_FINISH', 'DISQUALIFIED']);
+export const INCIDENT_TYPES = new Set([
+  'STUMBLE',
+  'FALSE_START',
+  'REFUSED_TO_RUN',
+  'PULLED_UP',
+  'PHOTO_FINISH',
+  'DISQUALIFIED',
+]);
