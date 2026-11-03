@@ -33,7 +33,13 @@
     "import/no-duplicates": "error",
     "promise/no-return-wrap": "error",
     "ars/no-comments": "error",
-    "no-await-in-loop": "off"
+    "no-await-in-loop": "off",
+    "import/no-unassigned-import": [
+      "warn",
+      {
+        "allow": ["**/*.css"]
+      }
+    ]
   },
   "ignorePatterns": [
     "**/node_modules/**",
