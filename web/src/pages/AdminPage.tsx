@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useEffectEvent, useState, type ReactNode } from 'react';
 import { Empty, ErrorNotice, Loading, Pager, SignInPrompt } from '../components/ui';
 import { api, ApiError, qs, useSession } from '../lib/api';
 import { toast } from '../lib/app';
 import { friendlyError } from '../lib/errors';
-import { CLASS_LABEL, fmtDateTime, fmtPoints, fmtSigned, fmtTime } from '../lib/format';
+import { CLASS_LABEL, fmtDateTime, fmtPoints, fmtSigned, fmtTime, pickOption } from '../lib/format';
 import { useAsync, usePaged } from '../lib/hooks';
 import { Link, setQuery, useLocation } from '../lib/router';
 import type { LedgerEntry, Page, Race, RaceClass, Season, Species, User, Venue } from '../lib/types';
@@ -42,6 +42,14 @@ function Card({ title, children, hint }: { title: string; children: ReactNode; h
   );
 }
 
+const SPECIES_OPTIONS: readonly Species[] = ['HORSE', 'GIRAFFE'];
+const RACE_CLASS_OPTIONS: readonly RaceClass[] = ['SPRINT', 'STANDARD', 'ENDURANCE'];
+
+function fieldOf(value: unknown, key: string): unknown {
+  if (!value || typeof value !== 'object') return undefined;
+  return Object.fromEntries(Object.entries(value))[key];
+}
+
 function ScheduleRace() {
   const [species, setSpecies] = useState<Species>('HORSE');
   const [raceClass, setRaceClass] = useState<RaceClass>('SPRINT');
@@ -52,8 +60,6 @@ function ScheduleRace() {
   const [raceId, setRaceId] = useState<string | null>(null);
   const [result, setResult] = useState<Result>(null);
   const venues = useAsync(() => api<Venue[]>(`/v1/venues${qs({ class: raceClass })}`), [raceClass]);
-
-  useEffect(() => setVenueId(''), [raceClass]);
 
   const submit = async () => {
     setBusy(true);
@@ -97,7 +103,7 @@ function ScheduleRace() {
             className="select"
             data-testid="admin-race-species"
             value={species}
-            onChange={(e) => setSpecies(e.target.value as Species)}
+            onChange={(e) => setSpecies(pickOption(SPECIES_OPTIONS, e.target.value, 'HORSE'))}
           >
             <option value="HORSE">Horse</option>
             <option value="GIRAFFE">Giraffe</option>
@@ -109,7 +115,10 @@ function ScheduleRace() {
             className="select"
             data-testid="admin-race-class"
             value={raceClass}
-            onChange={(e) => setRaceClass(e.target.value as RaceClass)}
+            onChange={(e) => {
+              setRaceClass(pickOption(RACE_CLASS_OPTIONS, e.target.value, 'SPRINT'));
+              setVenueId('');
+            }}
           >
             <option value="SPRINT">Sprint</option>
             <option value="STANDARD">Standard</option>
@@ -360,25 +369,40 @@ function JsonEditor({
   const [loaded, setLoaded] = useState<unknown>(null);
   const [result, setResult] = useState<Result>(null);
   const [busy, setBusy] = useState(false);
+  const applyLoaded = (value: unknown) => {
+    setLoaded(value);
+    setText(JSON.stringify(transform ? transform(value) : value, null, 2));
+  };
   const reload = async () => {
     setResult(null);
     try {
-      const value = await load();
-      setLoaded(value);
-      setText(JSON.stringify(transform ? transform(value) : value, null, 2));
+      applyLoaded(await load());
     } catch (error) {
       setResult(fail(error));
     }
   };
+  const applyInitial = useEffectEvent(applyLoaded);
   useEffect(() => {
-    void reload();
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const value = await load();
+        if (!cancelled) applyInitial(value);
+      } catch (error) {
+        if (!cancelled) setResult(fail(error));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
   const submit = async () => {
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch (error) {
-      setResult({ kind: 'error', text: `Invalid JSON: ${(error as Error).message}` });
+      setResult({ kind: 'error', text: `Invalid JSON: ${error instanceof Error ? error.message : 'parse failed'}` });
       return;
     }
     setBusy(true);
@@ -393,7 +417,8 @@ function JsonEditor({
       setBusy(false);
     }
   };
-  const version = (loaded as { version?: number } | null)?.version;
+  const loadedVersion = fieldOf(loaded, 'version');
+  const version = typeof loadedVersion === 'number' ? loadedVersion : undefined;
   return (
     <Card title={title} hint={hint}>
       {version !== undefined && <span className="chip">version {version}</span>}
@@ -415,16 +440,14 @@ const programmeLoad = () => api<unknown>('/v1/admin/programme');
 const programmeSave = (value: unknown) => api<unknown>('/v1/admin/programme', { method: 'PUT', body: value });
 const stripProgramme = (value: unknown) => {
   if (!value || typeof value !== 'object') return value;
-  const { racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes } = value as Record<string, unknown>;
+  const { racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes }: Record<string, unknown> =
+    Object.fromEntries(Object.entries(value));
   return { racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes };
 };
 
 function Templates() {
   const [raceClass, setRaceClass] = useState<RaceClass>('STANDARD');
-  const [load, setLoad] = useState(() => () => api<unknown>(`/v1/admin/market-templates/STANDARD`));
-  useEffect(() => {
-    setLoad(() => () => api<unknown>(`/v1/admin/market-templates/${raceClass}`));
-  }, [raceClass]);
+  const load = useCallback(() => api<unknown>(`/v1/admin/market-templates/${raceClass}`), [raceClass]);
   return (
     <div className="stack">
       <div className="tabs">
@@ -442,10 +465,10 @@ function Templates() {
         save={(value) =>
           api<unknown>(`/v1/admin/market-templates/${raceClass}`, {
             method: 'PUT',
-            body: { markets: (value as { markets?: unknown }).markets ?? value },
+            body: { markets: fieldOf(value, 'markets') ?? value },
           })
         }
-        transform={(value) => ({ markets: (value as { markets?: unknown } | null)?.markets ?? [] })}
+        transform={(value) => ({ markets: fieldOf(value, 'markets') ?? [] })}
       />
     </div>
   );
@@ -842,7 +865,7 @@ function Ops() {
                   <th>Consumer / topic</th>
                   <th>Event</th>
                   <th>Error</th>
-                  <th />
+                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>

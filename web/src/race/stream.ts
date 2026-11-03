@@ -1,6 +1,6 @@
 import { publishBet, publishCashoutRejected, refreshWallet, toast, unreadStore } from '../lib/app';
 import type { Bet, Market, Notification, Race, RaceTick, Selection, TickEvent } from '../lib/types';
-import { notificationText } from '../lib/notifications';
+import { notificationText, str } from '../lib/notifications';
 
 export type CashoutLive = { amount: number; quoteId: string; expiresAtTick: number | null; at: number };
 export type FeedItem = { seq: number; tick: number; event: TickEvent };
@@ -24,10 +24,25 @@ type TickListener = (tick: RaceTick | null, kind: 'snapshot' | 'tick') => void;
 const TYPE_ORDER: Record<string, number> = { FINISH_POSITION: 1, TOP_N: 2, LEADER_AT_LAP: 3, TRICAST: 4 };
 const paramKey = (market: Market) => market.params.position ?? market.params.n ?? market.params.lap ?? 0;
 
+type StreamEvents = {
+  snapshot: { race: Race; tick: RaceTick | null; markets: Market[]; myBets: Bet[] };
+  'race.lifecycle': { status: Race['status']; at: string; order?: string[]; reason?: string };
+  'race.tick': RaceTick;
+  'race.lap': { lap: number; leaderEntrantId: string; standings: string[] };
+  'market.opened': Market;
+  'market.price': { marketId: string; priceVersion: number; tick: number; selections: Selection[] };
+  'market.suspended': { marketId: string };
+  'market.resumed': { marketId: string; priceVersion?: number };
+  'market.closed': { marketId: string };
+  'market.resulted': { marketId: string; winning: string[]; order: string[] };
+  'market.voided': { marketId: string };
+  'bet.updated': Bet;
+  'cashout.updated': { betId: string; amount: number; quoteId: string; expiresAtTick: number | null };
+  notification: { notification: Notification; unreadCount: number | null };
+};
+
 export function sortMarkets(markets: Market[]): Market[] {
-  return [...markets].sort(
-    (a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9) || paramKey(a) - paramKey(b),
-  );
+  return markets.toSorted((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9) || paramKey(a) - paramKey(b));
 }
 
 const BACKOFF = [500, 1000, 2000, 5000];
@@ -99,7 +114,7 @@ export class RaceStream {
     const others = this.state.myBets.filter((b) => b.id !== bet.id);
     const cashouts = { ...this.state.cashouts };
     if (bet.status !== 'ACCEPTED') delete cashouts[bet.id];
-    this.set({ myBets: [bet, ...others].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)), cashouts });
+    this.set({ myBets: [bet, ...others].toSorted((a, b) => b.requestedAt.localeCompare(a.requestedAt)), cashouts });
   }
 
   start(): void {
@@ -137,13 +152,13 @@ export class RaceStream {
     const es = new EventSource(`/v1/races/${encodeURIComponent(this.raceId)}/stream`);
     this.es = es;
     this.lastEventAt = Date.now();
-    const on = <T>(name: string, handler: (data: T) => void) => {
+    const on = <K extends keyof StreamEvents>(name: K, handler: (data: StreamEvents[K]) => void) => {
       es.addEventListener(name, (event) => {
         if (this.es !== es) return;
         this.lastEventAt = Date.now();
-        let data: T;
+        let data: StreamEvents[K];
         try {
-          data = JSON.parse((event as MessageEvent<string>).data) as T;
+          data = JSON.parse(event.data);
         } catch {
           return;
         }
@@ -201,17 +216,14 @@ export class RaceStream {
       );
       if (/^(BET_|CASHOUT_)/.test(data.notification.type)) refreshWallet(200);
       if (data.notification.type === 'CASHOUT_REJECTED')
-        publishCashoutRejected(
-          String(data.notification.payload?.betId ?? ''),
-          String(data.notification.payload?.reason ?? ''),
-        );
+        publishCashoutRejected(str(data.notification.payload?.betId), str(data.notification.payload?.reason));
     });
-    es.onerror = () => {
+    es.addEventListener('error', () => {
       if (this.es !== es) return;
       es.close();
       this.es = null;
       this.scheduleReconnect();
-    };
+    });
   }
 
   private marketById(id: string): Market | undefined {

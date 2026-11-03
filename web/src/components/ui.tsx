@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ApiError, login, useSession } from '../lib/api';
 import { friendlyError } from '../lib/errors';
-import { fmtStat, formClass, STAT_LABEL, statPct } from '../lib/format';
+import { fmtStat, formClass, STAT_KEYS, STAT_LABEL, statPct } from '../lib/format';
 import { laneColor, laneText } from '../lib/track';
 import type { Frame, PodiumTier, ProviderId, Stats } from '../lib/types';
 
@@ -29,17 +29,19 @@ export function Form({ last5 }: { last5: string[] }) {
   if (!last5?.length) return <span className="muted small">no form</span>;
   return (
     <span className="form" title="Last five, most recent first">
-      {last5.map((entry, i) => (
-        <span key={i} className={formClass(entry)}>
-          {entry}
-        </span>
-      ))}
+      {last5
+        .map((entry, ago) => ({ entry, ago }))
+        .map(({ entry, ago }) => (
+          <span key={ago} className={formClass(entry)}>
+            {entry}
+          </span>
+        ))}
     </span>
   );
 }
 
 export function StatBars({ stats, compare }: { stats: Stats; compare?: Stats }) {
-  const keys = Object.keys(STAT_LABEL) as (keyof Stats)[];
+  const keys = STAT_KEYS;
   return (
     <div className="statbars">
       {keys.map((key) => (
@@ -62,7 +64,7 @@ function StatLine({ k, value, compare }: { k: keyof Stats; value: number; compar
 }
 
 export function MiniStats({ stats }: { stats: Stats }) {
-  const keys = Object.keys(STAT_LABEL) as (keyof Stats)[];
+  const keys = STAT_KEYS;
   return (
     <span className="minibars" title={keys.map((k) => `${STAT_LABEL[k]} ${fmtStat(k, stats[k])}`).join(' · ')}>
       {keys.map((k) => (

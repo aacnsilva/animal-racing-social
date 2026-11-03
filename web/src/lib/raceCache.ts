@@ -18,18 +18,18 @@ export function loadRaceInfo(raceId: string): Promise<Race | null> {
 
 export function useRaceInfos(raceIds: string[]): Record<string, Race> {
   const [races, setRaces] = useState<Record<string, Race>>({});
-  const key = [...new Set(raceIds)].sort().join(',');
+  const key = [...new Set(raceIds)].toSorted().join(',');
   useEffect(() => {
     let cancelled = false;
     const ids = key ? key.split(',') : [];
-    void Promise.all(ids.map((id) => loadRaceInfo(id))).then((list) => {
+    const execute = async () => {
+      const list = await Promise.all(ids.map((id) => loadRaceInfo(id)));
       if (cancelled) return;
       const next: Record<string, Race> = {};
-      list.forEach((race) => {
-        if (race) next[race.id] = race;
-      });
+      for (const race of list) if (race) next[race.id] = race;
       setRaces(next);
-    });
+    };
+    void execute();
     return () => {
       cancelled = true;
     };

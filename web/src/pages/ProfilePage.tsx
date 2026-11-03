@@ -20,11 +20,15 @@ export function ProfilePage() {
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string; code?: string } | null>(null);
   const [linking, setLinking] = useState<ProviderId | null>(null);
 
-  useEffect(() => {
-    if (!user) return;
-    setName(user.displayName);
-    setAvatarUrl(user.avatarUrl ?? '');
-  }, [user?.userId]);
+  const userId = user?.userId;
+  const [formUserId, setFormUserId] = useState(userId);
+  if (formUserId !== userId) {
+    setFormUserId(userId);
+    if (user) {
+      setName(user.displayName);
+      setAvatarUrl(user.avatarUrl ?? '');
+    }
+  }
 
   useEffect(() => {
     if (session.status !== 'authed') return;

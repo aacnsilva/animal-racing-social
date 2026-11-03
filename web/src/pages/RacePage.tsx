@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { BetCard } from '../components/BetCard';
 import { ErrorNotice, Loading } from '../components/ui';
 import { api, ApiError, useSession } from '../lib/api';
@@ -25,10 +25,14 @@ export function RacePage({ id }: { id: string }) {
   const session = useSession();
   const ready = session.status !== 'loading';
   const userKey = session.user?.userId ?? 'anon';
-  const stream = useMemo(() => new RaceStream(id), [id, userKey]);
+  const [owned, setOwned] = useState(() => ({ userKey, stream: new RaceStream(id) }));
+  if (owned.userKey !== userKey) setOwned({ userKey, stream: new RaceStream(id) });
+  const stream = owned.stream;
   const state = useSyncExternalStore(stream.subscribe, stream.getState);
-  const [notFound, setNotFound] = useState(false);
-  const [loadError, setLoadError] = useState<unknown>(null);
+  const [failure, setFailure] = useState<{ stream: RaceStream; notFound: boolean; error: unknown } | null>(null);
+  const currentFailure = failure?.stream === stream ? failure : null;
+  const notFound = currentFailure?.notFound ?? false;
+  const loadError = currentFailure ? currentFailure.error : null;
   const [slip, setSlip] = useState<SlipSelection | null>(null);
   const [replay, setReplay] = useState<ReplayPlayback | null>(null);
   const [replayLoading, setReplayLoading] = useState(false);
@@ -37,22 +41,21 @@ export function RacePage({ id }: { id: string }) {
   const now = useNow(1000);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready) return undefined;
     stream.start();
     return () => stream.stop();
   }, [stream, ready]);
 
+  const authed = session.status === 'authed';
   useEffect(() => {
-    if (!ready) return;
+    if (!ready) return undefined;
     let cancelled = false;
-    setNotFound(false);
-    setLoadError(null);
-    (async () => {
+    const load = async () => {
       try {
         const [race, markets, bets] = await Promise.all([
           api<Race>(`/v1/races/${id}`),
           api<Market[]>(`/v1/races/${id}/markets`).catch(() => null),
-          session.status === 'authed'
+          authed
             ? api<Page<Bet>>(`/v1/me/bets?raceId=${id}&limit=50`)
                 .then((p) => p.items)
                 .catch(() => null)
@@ -62,32 +65,36 @@ export function RacePage({ id }: { id: string }) {
       } catch (error) {
         if (cancelled) return;
         if (error instanceof ApiError && (error.status === 404 || error.code === 'VALIDATION_FAILED'))
-          setNotFound(true);
-        else setLoadError(error);
+          setFailure({ stream, notFound: true, error: null });
+        else setFailure({ stream, notFound: false, error });
       }
-    })();
+    };
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [stream, ready]);
+  }, [stream, ready, id, authed]);
 
   useEffect(() => onBet((bet) => stream.upsertBet(bet)), [stream]);
 
   const raceStatus = state.race?.status;
-  useEffect(() => {
+  const [seenStatus, setSeenStatus] = useState(raceStatus);
+  if (seenStatus !== raceStatus) {
+    setSeenStatus(raceStatus);
     if (raceStatus === 'LIVE' || raceStatus === 'FINISHED') setSection(null);
-  }, [raceStatus]);
+  }
 
+  const hasResults = Boolean(state.race?.entrants?.some((e) => e.result));
   useEffect(() => {
-    if (raceStatus !== 'FINISHED' && raceStatus !== 'SETTLED') return;
-    if (state.race?.entrants?.some((e) => e.result)) return;
+    if (raceStatus !== 'FINISHED' && raceStatus !== 'SETTLED') return undefined;
+    if (hasResults) return undefined;
     const timer = setTimeout(() => {
       api<Race>(`/v1/races/${id}`)
         .then((fresh) => stream.mergeRace(fresh))
         .catch(() => undefined);
     }, 1500);
     return () => clearTimeout(timer);
-  }, [raceStatus, stream]);
+  }, [raceStatus, hasResults, stream, id]);
 
   const race = state.race;
   const venue = useAsync<Venue | null>(
@@ -104,7 +111,7 @@ export function RacePage({ id }: { id: string }) {
 
   const onPick = useCallback((selection: SlipSelection) => setSlip(selection), []);
 
-  const watchReplay = useCallback(async () => {
+  const watchReplay = async () => {
     if (!race) return;
     setReplayLoading(true);
     try {
@@ -121,7 +128,7 @@ export function RacePage({ id }: { id: string }) {
     } finally {
       setReplayLoading(false);
     }
-  }, [race?.id, race?.tickMs]);
+  };
 
   if (notFound) {
     return (

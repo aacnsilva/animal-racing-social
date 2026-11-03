@@ -72,10 +72,12 @@ export function App({ authError }: { authError: string | null }) {
   }, []);
 
   useEffect(() => {
-    if (session.status !== 'authed') {
-      if (session.status === 'anon') resetUserStores();
-      return;
-    }
+    if (session.status === 'anon') resetUserStores();
+  }, [session.status]);
+
+  const authedUserId = session.status === 'authed' ? (session.user?.userId ?? '') : null;
+  useEffect(() => {
+    if (authedUserId === null) return undefined;
     refreshWallet(0);
     void refreshUnread();
     void refreshDaily();
@@ -87,11 +89,13 @@ export function App({ authError }: { authError: string | null }) {
       clearInterval(wallet);
       clearInterval(daily);
     };
-  }, [session.status, session.user?.userId]);
+  }, [authedUserId]);
 
-  useEffect(() => {
+  const [seenSessionError, setSeenSessionError] = useState<string | null>(null);
+  if (seenSessionError !== session.error) {
+    setSeenSessionError(session.error);
     if (session.error === 'BANNED') setBannerError('BANNED');
-  }, [session.error]);
+  }
 
   let content: ReactNode = <NotFound />;
   let title = 'Not found';

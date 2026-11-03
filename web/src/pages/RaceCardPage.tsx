@@ -9,7 +9,7 @@ import type { Page, Race } from '../lib/types';
 function Filters({ species, raceClass }: { species: string; raceClass: string }) {
   return (
     <div className="filters">
-      <div className="tabs" role="group" aria-label="Species">
+      <fieldset className="tabs" aria-label="Species">
         {[
           ['', 'All species'],
           ['HORSE', '🐎 Horses'],
@@ -24,8 +24,8 @@ function Filters({ species, raceClass }: { species: string; raceClass: string })
             {label}
           </button>
         ))}
-      </div>
-      <div className="tabs" role="group" aria-label="Class">
+      </fieldset>
+      <fieldset className="tabs" aria-label="Class">
         {[
           ['', 'All classes'],
           ['SPRINT', 'Sprint'],
@@ -41,7 +41,7 @@ function Filters({ species, raceClass }: { species: string; raceClass: string })
             {label}
           </button>
         ))}
-      </div>
+      </fieldset>
     </div>
   );
 }

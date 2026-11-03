@@ -44,7 +44,11 @@ export const NOTIFICATION_ICON: Record<string, string> = {
   SEASON_RESULT: '♛',
 };
 
-const str = (value: unknown) => (value === undefined || value === null ? '' : String(value));
+export const str = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  return '';
+};
 
 export function notificationText(n: Notification): string {
   const p = n.payload ?? {};

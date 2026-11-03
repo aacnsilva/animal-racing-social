@@ -83,7 +83,11 @@ function VerifyCommitment({
         setState({ kind: 'partial', text: 'Nothing to check yet', details });
       }
     } catch (error) {
-      setState({ kind: 'error', text: `Could not verify: ${(error as Error).message}`, details });
+      setState({
+        kind: 'error',
+        text: `Could not verify: ${error instanceof Error ? error.message : 'unknown error'}`,
+        details,
+      });
     }
   };
   return (
@@ -137,10 +141,7 @@ export function RaceResult({
     () => api<RaceResultResponse>(`/v1/races/${raceId}/result`),
     [raceId, debouncedVersion],
   );
-  const [result, setResult] = useState<RaceResultResponse | null>(null);
-  useEffect(() => {
-    if (data) setResult(data);
-  }, [data]);
+  const result = data;
 
   if (!result) {
     if (error) {
@@ -163,8 +164,8 @@ export function RaceResult({
   const name = nameLookup(allEntrants);
   const order = result.order.length
     ? result.order
-    : [...allEntrants]
-        .sort((a, b) => (a.result?.officialPosition ?? 99) - (b.result?.officialPosition ?? 99))
+    : allEntrants
+        .toSorted((a, b) => (a.result?.officialPosition ?? 99) - (b.result?.officialPosition ?? 99))
         .map((e) => e.entrantId);
   const winnerTime = byId.get(order[0] ?? '')?.result?.finishTimeMs ?? null;
   const lapsLed = new Map<string, number>();

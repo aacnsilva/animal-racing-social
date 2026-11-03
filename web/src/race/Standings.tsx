@@ -27,7 +27,7 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
   const entrants = race.entrants ?? [];
   const byId = new Map(entrants.map((e) => [e.entrantId, e]));
   if (tick && tick.entrants.length) {
-    const sorted = [...tick.entrants].sort((a, b) => a.pos - b.pos);
+    const sorted = tick.entrants.toSorted((a, b) => a.pos - b.pos);
     const leaderDist = Math.max(...sorted.filter((e) => e.state !== 'DNF').map((e) => e.dist), 0);
     return sorted.map((t) => {
       const entrant = byId.get(t.id);
@@ -55,8 +55,8 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
   }
   const withResult = entrants.filter((e) => e.result);
   if (withResult.length) {
-    return [...entrants]
-      .sort((a, b) => (a.result?.officialPosition ?? 99) - (b.result?.officialPosition ?? 99))
+    return entrants
+      .toSorted((a, b) => (a.result?.officialPosition ?? 99) - (b.result?.officialPosition ?? 99))
       .map((e) => ({
         id: e.entrantId,
         pos: e.result?.officialPosition ?? null,
@@ -72,8 +72,8 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
         state: e.result?.resultStatus ?? '',
       }));
   }
-  return [...entrants]
-    .sort((a, b) => a.lane - b.lane)
+  return entrants
+    .toSorted((a, b) => a.lane - b.lane)
     .map((e: Entrant) => ({
       id: e.entrantId,
       pos: null,
@@ -133,7 +133,7 @@ export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | 
 
 export function RaceFeed({ race, feed }: { race: Race; feed: FeedItem[] }) {
   const name = nameLookup(race.entrants);
-  const items = [...feed].reverse().slice(0, 40);
+  const items = feed.toReversed().slice(0, 40);
   return (
     <section className="card">
       <div className="card-head">

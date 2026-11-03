@@ -219,11 +219,11 @@ export class RaceScene {
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.scene.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
-      const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-      if (Array.isArray(material)) material.forEach((m) => m.dispose());
-      else material?.dispose();
+      if ('geometry' in object && object.geometry instanceof THREE.BufferGeometry) object.geometry.dispose();
+      const material: unknown = 'material' in object ? object.material : undefined;
+      if (Array.isArray(material)) {
+        for (const m of material) if (m instanceof THREE.Material) m.dispose();
+      } else if (material instanceof THREE.Material) material.dispose();
     });
     for (const item of this.disposables) item.dispose();
     this.renderer.dispose();
@@ -392,7 +392,7 @@ export class RaceScene {
   private buildGrandstand(random: () => number): void {
     const track = this.track;
     const straights = track.ranges.filter((range) => range.type !== 'CURVE');
-    const longest = straights.sort((x, y) => y.end - y.start - (x.end - x.start))[0] ?? track.ranges[0];
+    const longest = straights.toSorted((x, y) => y.end - y.start - (x.end - x.start))[0] ?? track.ranges[0];
     if (!longest) return;
     const length = Math.min(90, (longest.end - longest.start) * 0.8);
     const mid = (longest.start + longest.end) / 2;
@@ -695,7 +695,7 @@ export class RaceScene {
       out.set(f.x + f.nx * this.track.laneOffset(midLane), f.y, f.z + f.nz * this.track.laneOffset(midLane));
       return f;
     }
-    const sorted = [...active].sort((a, b) => a.pos - b.pos);
+    const sorted = active.toSorted((a, b) => a.pos - b.pos);
     const leader = sorted.find((e) => e.state !== 'FINISHED') ?? sorted[0];
     const runner = this.runners.get(leader.id);
     const s = leader.dist + coast(leader.finishedForMs, leader.finishSpeed);

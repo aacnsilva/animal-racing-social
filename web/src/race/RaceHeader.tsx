@@ -17,19 +17,17 @@ import type { Connection } from './stream';
 function Hash({ label, value }: { label: string; value: string | null }) {
   const [copied, setCopied] = useState(false);
   if (!value) return null;
+  const copy = async () => {
+    if (!navigator.clipboard) return;
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
   return (
     <span className="row" style={{ gap: 6 }}>
       {label}
       <code title={value}>{shortHash(value, 10)}</code>
-      <button
-        className="btn ghost small"
-        onClick={() => {
-          void navigator.clipboard?.writeText(value).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1200);
-          });
-        }}
-      >
+      <button className="btn ghost small" onClick={() => void copy()}>
         {copied ? 'copied' : 'copy'}
       </button>
     </span>

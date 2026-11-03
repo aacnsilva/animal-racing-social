@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ErrorNotice, Lane, Spinner } from '../components/ui';
 import { api } from '../lib/api';
 import { fmtPrice, marketLabelOf } from '../lib/format';
@@ -88,7 +88,7 @@ function MarketCardInner({
   const canBet = market.status === 'OPEN' && bettingOpen;
   const prices = new Map(market.selections.map((s) => [s.entrantId, s]));
   const winning = new Set(market.result?.winning ?? []);
-  const sorted = [...entrants].sort((a, b) => a.lane - b.lane);
+  const sorted = entrants.toSorted((a, b) => a.lane - b.lane);
   return (
     <div
       className={`market${market.type === 'TRICAST' ? ' wide' : ''}`}
@@ -196,20 +196,27 @@ function TricastBuilder({
     }
   };
 
-  useEffect(() => {
-    setQuote(null);
-    setError(null);
-  }, [picks[0], picks[1], picks[2]]);
+  const refreshStaleQuote = useEffectEvent(async (priceVersion: number) => {
+    if (quote && priceVersion > quote.priceVersion && market.status === 'OPEN') await requestQuote(true);
+  });
 
+  const priceVersion = market.priceVersion;
   useEffect(() => {
-    if (quote && market.priceVersion > quote.priceVersion && market.status === 'OPEN') void requestQuote(true);
-  }, [market.priceVersion]);
+    const refresh = async () => {
+      await refreshStaleQuote(priceVersion);
+    };
+    void refresh();
+  }, [priceVersion]);
 
   const name = (id: string) => entrants.find((e) => e.entrantId === id)?.animal.name ?? id;
   const setPick = (index: number, value: string) => {
     const next = [...picks] as [string, string, string];
     next[index] = value;
     setPicks(next);
+    if (picks[index] !== value) {
+      setQuote(null);
+      setError(null);
+    }
   };
 
   return (

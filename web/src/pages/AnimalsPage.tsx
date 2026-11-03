@@ -187,7 +187,7 @@ export function AnimalPage({ id }: { id: string }) {
             <table className="table">
               <thead>
                 <tr>
-                  <th />
+                  <th aria-label="Stat" />
                   <th className="right">Current</th>
                   <th className="right">Base</th>
                 </tr>

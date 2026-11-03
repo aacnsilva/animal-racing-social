@@ -1,7 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { fmtStat, STAT_LABEL } from '../lib/format';
+import { fmtStat, STAT_KEYS, STAT_LABEL } from '../lib/format';
 import { TrackPath, surfaceColors } from '../lib/track';
-import type { Animal, Stats, Venue } from '../lib/types';
+import type { Animal, Venue } from '../lib/types';
 
 const SERIES = { curve: '#3987e5', tight: '#d95926', down: '#199e70', up: '#c98500' };
 
@@ -38,10 +38,13 @@ export function TrackMap({
       });
     const outer = edge(track.outerOffset());
     const inner = edge(track.innerOffset());
-    const surface = pathFrom([...outer, ...[...inner].reverse()], true);
+    const surface = pathFrom([...outer, ...inner.toReversed()], true);
     const lanes = mini
       ? []
-      : Array.from({ length: (venue.lanes || 10) - 1 }, (_, i) => pathFrom(edge(track.laneOffset(i + 1) + 0.7)));
+      : Array.from({ length: (venue.lanes || 10) - 1 }, (_, i) => ({
+          lane: i + 1,
+          d: pathFrom(edge(track.laneOffset(i + 1) + 0.7)),
+        }));
     const mid = track.laneOffset(((venue.lanes || 10) + 1) / 2);
     const overlays = track.ranges
       .filter((range) => range.type !== 'STRAIGHT')
@@ -75,10 +78,10 @@ export function TrackMap({
       strokeScale,
       hasHills: track.maxY > 0.05,
     };
-  }, [venue.id, venue.segments, venue.lapLength, venue.lanes, mini]);
+  }, [venue.segments, venue.lapLength, venue.lanes, mini]);
   const colors = surfaceColors(venue.surface);
   return (
-    <svg className="trackmap" viewBox={`0 0 ${geometry.width} ${geometry.height}`} role="img" aria-label="Track map">
+    <svg className="trackmap" viewBox={`0 0 ${geometry.width} ${geometry.height}`} aria-label="Track map">
       <path
         d={geometry.surface}
         fill={colors.track}
@@ -86,8 +89,8 @@ export function TrackMap({
         stroke="rgba(255,255,255,0.65)"
         strokeWidth={mini ? 1 : 1.5}
       />
-      {geometry.lanes.map((d, i) => (
-        <path key={i} d={d} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={0.6} />
+      {geometry.lanes.map(({ lane, d }) => (
+        <path key={lane} d={d} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={0.6} />
       ))}
       {geometry.overlays.map((overlay) => (
         <path
@@ -168,7 +171,7 @@ export function ElevationProfile({ venue }: { venue: Venue }) {
       maxY: track.maxY,
       lap: track.lapLength,
     };
-  }, [venue.id, venue.segments, venue.lapLength]);
+  }, [venue.segments, venue.lapLength, venue.lanes]);
   if (data.maxY < 0.05) return <div className="small muted">Flat track: no elevation change.</div>;
   const width = 640;
   const height = 120;
@@ -181,7 +184,6 @@ export function ElevationProfile({ venue }: { venue: Venue }) {
     <svg
       className="chart"
       viewBox={`0 0 ${width} ${height}`}
-      role="img"
       aria-label={`Elevation profile, highest point ${data.maxY.toFixed(1)} metres`}
     >
       <line x1={pad.l} x2={width - pad.r} y1={y(0)} y2={y(0)} stroke="var(--line-2)" />
@@ -220,9 +222,9 @@ const STAGE_TINT: Record<string, string> = {
 export function AgingChart({ animal }: { animal: Animal }) {
   const [hover, setHover] = useState<number | null>(null);
   const points = useMemo(() => {
-    const keys = Object.keys(STAT_LABEL) as (keyof Stats)[];
-    return [...animal.agingHistory]
-      .sort((a, b) => a.careerDay - b.careerDay)
+    const keys = STAT_KEYS;
+    return animal.agingHistory
+      .toSorted((a, b) => a.careerDay - b.careerDay)
       .map((row) => ({
         day: row.careerDay,
         date: row.day,
@@ -273,7 +275,6 @@ export function AgingChart({ animal }: { animal: Animal }) {
       <svg
         className="chart"
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
         aria-label="Condition relative to base stats by career day"
       >
         {bands.map((band, i) => {
@@ -366,7 +367,7 @@ export function AgingChart({ animal }: { animal: Animal }) {
           </b>
           <div className="muted tiny">{hovered.date}</div>
           <div>Condition {hovered.condition.toFixed(1)}% of base</div>
-          {(Object.keys(STAT_LABEL) as (keyof Stats)[]).map((k) => (
+          {STAT_KEYS.map((k) => (
             <div key={k} className="tiny">
               {STAT_LABEL[k]} {fmtStat(k, hovered.stats[k])}
             </div>

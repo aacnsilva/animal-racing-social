@@ -129,26 +129,28 @@ export function VenuePage({ id }: { id: string }) {
                 </tr>
               </thead>
               <tbody>
-                {v.segments.map((segment, index) => {
-                  const length =
-                    segment.type === 'CURVE'
-                      ? (segment.radius ?? 0) * Math.abs(((segment.angle ?? 0) * Math.PI) / 180)
-                      : (segment.length ?? 0);
-                  return (
-                    <tr key={index}>
-                      <td className="muted">{index + 1}</td>
-                      <td>{titleCase(segment.type)}</td>
-                      <td className="right num">{length.toFixed(1)} m</td>
-                      <td className="right num small">
-                        {segment.type === 'CURVE'
-                          ? `r ${segment.radius} m · ${segment.angle}°${(segment.radius ?? 99) < 30 ? ' · tight' : ''}`
-                          : segment.grade
-                            ? `${(segment.grade * 100).toFixed(0)}% grade`
-                            : ''}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {v.segments
+                  .map((segment, index) => ({ segment, number: index + 1 }))
+                  .map(({ segment, number }) => {
+                    const length =
+                      segment.type === 'CURVE'
+                        ? (segment.radius ?? 0) * Math.abs(((segment.angle ?? 0) * Math.PI) / 180)
+                        : (segment.length ?? 0);
+                    return (
+                      <tr key={number}>
+                        <td className="muted">{number}</td>
+                        <td>{titleCase(segment.type)}</td>
+                        <td className="right num">{length.toFixed(1)} m</td>
+                        <td className="right num small">
+                          {segment.type === 'CURVE'
+                            ? `r ${segment.radius} m · ${segment.angle}°${(segment.radius ?? 99) < 30 ? ' · tight' : ''}`
+                            : segment.grade
+                              ? `${(segment.grade * 100).toFixed(0)}% grade`
+                              : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

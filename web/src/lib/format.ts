@@ -1,4 +1,4 @@
-import type { BetLeg, BetSelection, Entrant, Market, MarketType, RaceClass, RaceStatus, Stats } from './types';
+import type { BetLeg, BetSelection, Entrant, Market, PricePolicy, RaceClass, RaceStatus, Stats } from './types';
 
 const pointsFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
@@ -110,7 +110,7 @@ export const TEMPERAMENT_LABEL: Record<string, string> = {
   STEADY: 'Steady',
 };
 
-export function marketLabel(type: MarketType | string, params: Record<string, number> | undefined): string {
+export function marketLabel(type: string, params: Record<string, number> | undefined): string {
   const p = params ?? {};
   switch (type) {
     case 'FINISH_POSITION':
@@ -122,7 +122,7 @@ export function marketLabel(type: MarketType | string, params: Record<string, nu
     case 'LEADER_AT_LAP':
       return `Leader after lap ${p.lap ?? '?'}`;
     default:
-      return titleCase(String(type));
+      return titleCase(type);
   }
 }
 
@@ -173,9 +173,17 @@ export const STAT_LABEL: Record<keyof Stats, string> = {
   consistency: 'Consistency',
 };
 
+export const STAT_KEYS: readonly (keyof Stats)[] = ['velocity', 'stamina', 'acceleration', 'consistency'];
+
 export function formClass(entry: string): string {
   if (entry === '1') return 'form-win';
   if (entry === '2' || entry === '3') return 'form-place';
   if (/^\d+$/.test(entry)) return 'form-other';
   return 'form-bad';
 }
+
+export function pickOption<T extends string>(options: readonly T[], value: string, fallback: T): T {
+  return options.find((option) => option === value) ?? fallback;
+}
+
+export const PRICE_POLICIES: readonly PricePolicy[] = ['NONE', 'BETTER', 'ANY'];

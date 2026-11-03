@@ -53,13 +53,13 @@ export function refreshSession(): Promise<boolean> {
         headers: { accept: 'application/json' },
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { code?: string } | null;
+        const body: { code?: string } | null = await res.json().catch(() => null);
         token = null;
         clearTimeout(refreshTimer);
         emit({ status: 'anon', user: null, error: body?.code === 'BANNED' ? 'BANNED' : state.error });
         return false;
       }
-      const session = (await res.json()) as Session;
+      const session: Session = await res.json();
       token = session.accessToken;
       scheduleRefresh(session.expiresIn - 60);
       emit({ status: 'authed', user: session.user, error: null });
@@ -107,6 +107,10 @@ type RequestOptions = {
   signal?: AbortSignal;
 };
 
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+}
+
 async function send(path: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = { accept: 'application/json', ...options.headers };
   if (options.body !== undefined) headers['content-type'] = 'application/json';
@@ -120,7 +124,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
       signal: options.signal,
     });
   } catch (error) {
-    if ((error as Error).name === 'AbortError') throw error;
+    if (isAbortError(error)) throw error;
     throw new ApiError(0, 'NETWORK_ERROR', 'The server could not be reached');
   }
 }
@@ -153,9 +157,8 @@ async function withRetry(path: string, options: RequestOptions): Promise<Respons
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const res = await withRetry(path, options);
   if (!res.ok) throw await failure(res);
-  if (res.status === 204) return undefined as T;
-  const text = await res.text();
-  return (text ? JSON.parse(text) : null) as T;
+  const text = res.status === 204 ? '' : await res.text();
+  return JSON.parse(text || 'null');
 }
 
 export async function apiBytes(path: string): Promise<ArrayBuffer> {

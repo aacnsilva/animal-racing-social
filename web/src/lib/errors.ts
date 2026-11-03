@@ -57,5 +57,7 @@ export function friendlyError(error: unknown): string {
     if (base) return base;
     return error.message || friendlyCode(error.code);
   }
-  return (error as Error)?.message ?? 'Something went wrong.';
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string')
+    return error.message;
+  return 'Something went wrong.';
 }

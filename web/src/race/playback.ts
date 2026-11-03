@@ -162,7 +162,7 @@ export class ReplayPlayback implements FrameSource {
   private lastNotifiedTick = -1;
 
   constructor(ticks: RaceTick[], tickMs: number) {
-    this.ticks = [...ticks].sort((a, b) => a.tick - b.tick);
+    this.ticks = ticks.toSorted((a, b) => a.tick - b.tick);
     this.tickMs = tickMs || 500;
     const first = this.ticks[0]?.tick ?? 0;
     const lastTick = this.ticks[this.ticks.length - 1]?.tick ?? 0;

@@ -20,14 +20,15 @@ export function MyBetsPage() {
         : Promise.resolve({ items: [], nextCursor: null }),
     [tab, authed],
   );
-  const races = useRaceInfos(paged.items.flatMap((bet) => bet.legs.map((leg) => leg.raceId)));
+  const { items, reload } = paged;
+  const races = useRaceInfos(items.flatMap((bet) => bet.legs.map((leg) => leg.raceId)));
 
   useEffect(
     () =>
       onBet((bet) => {
-        if (paged.items.some((b) => b.id === bet.id && b.status !== bet.status)) paged.reload();
+        if (items.some((b) => b.id === bet.id && b.status !== bet.status)) reload();
       }),
-    [paged.items, paged.reload],
+    [items, reload],
   );
 
   if (session.status === 'loading') return <Loading />;

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Lane, ProviderIcon } from '../components/ui';
 import { api, ApiError, login, useSession } from '../lib/api';
 import { onBet, refreshWallet, toast, walletStore, watchBet } from '../lib/app';
 import { addComboLeg } from '../lib/combo';
 import { uuid } from '../lib/crypto';
 import { friendlyCode, friendlyError } from '../lib/errors';
-import { fmtPoints, fmtPrice, fmtTime, marketLabel } from '../lib/format';
+import { fmtPoints, fmtPrice, fmtTime, marketLabel, pickOption, PRICE_POLICIES } from '../lib/format';
 import { useStore } from '../lib/hooks';
 import type { Bet, BetSelection, Market, MarketType, PricePolicy, Race } from '../lib/types';
 
@@ -88,14 +88,16 @@ export function BetSlip({
   const [stake, setStake] = useState('');
   const [policy, setPolicy] = useState<PricePolicy>('NONE');
   const [status, setStatus] = useState<SlipStatus | null>(null);
-  const keyRef = useRef<string | null>(null);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
   const stopWatch = useRef<(() => void) | null>(null);
   const slipKey = `${slip.marketId}:${'order' in slip.selection ? slip.selection.order.join('>') : slip.selection.entrantId}`;
 
-  useEffect(() => {
+  const [trackedSlipKey, setTrackedSlipKey] = useState(slipKey);
+  if (trackedSlipKey !== slipKey) {
+    setTrackedSlipKey(slipKey);
     setStatus(null);
-    keyRef.current = null;
-  }, [slipKey]);
+    setPendingKey(null);
+  }
 
   useEffect(() => () => stopWatch.current?.(), []);
 
@@ -122,22 +124,36 @@ export function BetSlip({
     }
   }
 
-  useEffect(() => {
-    if (!market || !('order' in slip.selection) || market.priceVersion <= slip.priceVersion || market.status !== 'OPEN')
-      return;
-    let cancelled = false;
-    api<{ price: number; priceVersion: number }>(`/v1/markets/${market.id}/quotes`, {
+  const requoteKey =
+    market && 'order' in slip.selection && market.priceVersion > slip.priceVersion && market.status === 'OPEN'
+      ? `${slipKey}@${market.priceVersion}`
+      : null;
+
+  const fetchRequote = useEffectEvent(async () => {
+    if (!market || !('order' in slip.selection)) return undefined;
+    const quote = await api<{ price: number; priceVersion: number }>(`/v1/markets/${market.id}/quotes`, {
       method: 'POST',
       body: { order: slip.selection.order },
-    })
-      .then((quote) => {
-        if (!cancelled) onRequote({ ...slip, price: quote.price, priceVersion: quote.priceVersion });
-      })
-      .catch(() => undefined);
+    });
+    return () => onRequote({ ...slip, price: quote.price, priceVersion: quote.priceVersion });
+  });
+
+  useEffect(() => {
+    if (requoteKey === null) return undefined;
+    let cancelled = false;
+    const execute = async () => {
+      try {
+        const apply = await fetchRequote();
+        if (!cancelled) apply?.();
+      } catch {
+        return;
+      }
+    };
+    void execute();
     return () => {
       cancelled = true;
     };
-  }, [market?.priceVersion, slipKey]);
+  }, [requoteKey]);
 
   const moved = slip.price !== price;
 
@@ -155,8 +171,8 @@ export function BetSlip({
       setStatus({ kind: 'error', code: 'STAKE_OUT_OF_RANGE', message: friendlyCode('STAKE_OUT_OF_RANGE') });
       return;
     }
-    const key = keyRef.current ?? uuid();
-    keyRef.current = key;
+    const key = pendingKey ?? uuid();
+    setPendingKey(key);
     setStatus({ kind: 'placing', message: 'Placing bet…' });
     try {
       const bet = await api<Bet>(`/v1/markets/${slip.marketId}/bets`, {
@@ -170,7 +186,7 @@ export function BetSlip({
           acceptPriceChanges: policy,
         },
       });
-      keyRef.current = null;
+      setPendingKey(null);
       onPlaced(bet);
       setStatus(statusFromBet(bet));
       if (bet.status === 'PENDING') {
@@ -179,7 +195,7 @@ export function BetSlip({
       } else refreshWallet();
     } catch (error) {
       const code = error instanceof ApiError ? error.code : 'UNKNOWN';
-      if (code !== 'NETWORK_ERROR') keyRef.current = null;
+      if (code !== 'NETWORK_ERROR') setPendingKey(null);
       setStatus({ kind: 'error', code, message: friendlyError(error) });
     }
   };
@@ -261,7 +277,7 @@ export function BetSlip({
             className="select"
             data-testid="accept-changes-select"
             value={policy}
-            onChange={(e) => setPolicy(e.target.value as PricePolicy)}
+            onChange={(e) => setPolicy(pickOption(PRICE_POLICIES, e.target.value, 'NONE'))}
           >
             <option value="NONE">Small changes only</option>
             <option value="BETTER">Better or small drops</option>

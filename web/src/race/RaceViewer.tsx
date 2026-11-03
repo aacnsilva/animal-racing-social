@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Spinner } from '../components/ui';
 import { fmtClock, fmtCountdown } from '../lib/format';
 import { readLocal, writeLocal } from '../lib/hooks';
-import type { Race, RaceTick, Venue } from '../lib/types';
+import type { Entrant, Race, RaceTick, Venue } from '../lib/types';
 import { eventText, nameLookup, type Tone } from './events';
-import type { ReplayPlayback } from './playback';
-import { LivePlayback, StaticPlayback, type FrameSource } from './playback';
+import { LivePlayback, StaticPlayback, type FrameSource, type ReplayPlayback } from './playback';
 import type { CameraMode, RaceScene } from './scene';
 import type { FeedItem, RaceStream } from './stream';
 
@@ -16,6 +15,30 @@ const CAMERAS: { mode: CameraMode; label: string; short: string }[] = [
 ];
 
 const noopSubscribe = () => () => undefined;
+
+function buildStaticSource(entrants: Entrant[], finished: boolean, totalLength: number): FrameSource {
+  if (finished) {
+    return new StaticPlayback(
+      entrants.map((e) => ({
+        id: e.entrantId,
+        lane: e.lane,
+        dist: e.result
+          ? e.result.resultStatus === 'FINISHED' || e.result.resultStatus === 'DISQUALIFIED'
+            ? totalLength
+            : e.result.distanceCovered
+          : 0,
+        state:
+          e.result && (e.result.resultStatus === 'DNF' || e.result.resultStatus === 'NON_RUNNER')
+            ? 'DNF'
+            : e.result
+              ? 'FINISHED'
+              : 'RUNNING',
+        pos: e.result?.officialPosition,
+      })),
+    );
+  }
+  return new StaticPlayback(entrants.map((e) => ({ id: e.entrantId, lane: e.lane })));
+}
 
 function ReplayBar({ replay, onExit }: { replay: ReplayPlayback; onExit: () => void }) {
   const position = useSyncExternalStore(
@@ -91,11 +114,11 @@ export function RaceViewer({
   onExitReplay: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<RaceScene | null>(null);
-  const [sceneReady, setSceneReady] = useState(false);
+  const [scene, setScene] = useState<RaceScene | null>(null);
+  const sceneReady = scene !== null;
   const [webglError, setWebglError] = useState<string | null>(null);
   const [mode, setMode] = useState<CameraMode>(() => readLocal<CameraMode>('ars.camera', 'follow'));
-  const live = useMemo(() => new LivePlayback(race.tickMs), [race.id, race.tickMs]);
+  const live = useMemo(() => new LivePlayback(race.tickMs), [race.tickMs]);
   const entrants = race.entrants ?? [];
   const entrantKey = entrants.map((e) => `${e.entrantId}:${e.lane}`).join(',');
   const resultKey = entrants.map((e) => `${e.result?.officialPosition ?? ''}${e.result?.resultStatus ?? ''}`).join(',');
@@ -108,101 +131,100 @@ export function RaceViewer({
     });
   }, [stream, live]);
 
+  const sceneKey = venue && entrants.length ? `${venue.id}@${venue.version}|${entrantKey}|${race.species}` : null;
+
+  const createScene = useEffectEvent((SceneClass: typeof RaceScene, container: HTMLDivElement) => {
+    if (!venue) return null;
+    return new SceneClass(container, {
+      venueId: venue.id,
+      segments: venue.segments,
+      lapLength: venue.lapLength,
+      lanes: venue.lanes || 10,
+      surface: venue.surface || race.surface,
+      species: race.species,
+      entrants: entrants.map((e) => ({ id: e.entrantId, lane: e.lane })),
+    });
+  });
+
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !venue || !entrants.length) return;
+    if (!container || sceneKey === null) return undefined;
     let disposed = false;
-    let scene: RaceScene | null = null;
-    import('./scene')
-      .then(({ RaceScene: SceneClass }) => {
-        if (disposed) return;
-        try {
-          scene = new SceneClass(container, {
-            venueId: venue.id,
-            segments: venue.segments,
-            lapLength: venue.lapLength,
-            lanes: venue.lanes || 10,
-            surface: venue.surface || race.surface,
-            species: race.species,
-            entrants: entrants.map((e) => ({ id: e.entrantId, lane: e.lane })),
-          });
-          scene.setCameraMode(readLocal<CameraMode>('ars.camera', 'follow'));
-          sceneRef.current = scene;
-          setSceneReady(true);
-          setWebglError(null);
-        } catch (error) {
-          setWebglError((error as Error)?.message || 'WebGL is not available');
-        }
-      })
-      .catch(() => setWebglError('The 3D viewer failed to load'));
+    let created: RaceScene | null = null;
+    const build = async () => {
+      let SceneClass: typeof RaceScene;
+      try {
+        ({ RaceScene: SceneClass } = await import('./scene'));
+      } catch {
+        setWebglError('The 3D viewer failed to load');
+        return;
+      }
+      if (disposed) return;
+      try {
+        created = createScene(SceneClass, container);
+        if (!created) return;
+        created.setCameraMode(readLocal<CameraMode>('ars.camera', 'follow'));
+        setScene(created);
+        setWebglError(null);
+      } catch (error) {
+        setWebglError((error instanceof Error && error.message) || 'WebGL is not available');
+      }
+    };
+    void build();
     return () => {
       disposed = true;
-      scene?.dispose();
-      sceneRef.current = null;
-      setSceneReady(false);
+      created?.dispose();
+      setScene(null);
     };
-  }, [venue?.id, venue?.version, entrantKey, race.species]);
+  }, [sceneKey]);
 
   const finished = race.status === 'FINISHED' || race.status === 'SETTLED';
   const hasLiveTick = Boolean(stream.getState().tick);
 
-  const staticSource = useMemo<FrameSource>(() => {
-    const totalLength = venue ? venue.lapLength * race.laps : 0;
-    if (finished) {
-      return new StaticPlayback(
-        entrants.map((e) => ({
-          id: e.entrantId,
-          lane: e.lane,
-          dist: e.result
-            ? e.result.resultStatus === 'FINISHED' || e.result.resultStatus === 'DISQUALIFIED'
-              ? totalLength
-              : e.result.distanceCovered
-            : 0,
-          state:
-            e.result && (e.result.resultStatus === 'DNF' || e.result.resultStatus === 'NON_RUNNER')
-              ? 'DNF'
-              : e.result
-                ? 'FINISHED'
-                : 'RUNNING',
-          pos: e.result?.officialPosition,
-        })),
-      );
-    }
-    return new StaticPlayback(entrants.map((e) => ({ id: e.entrantId, lane: e.lane })));
-  }, [entrantKey, resultKey, finished, venue?.lapLength, race.laps]);
+  const totalLength = venue ? venue.lapLength * race.laps : 0;
+  const staticKey = `${entrantKey}|${resultKey}|${finished}|${totalLength}`;
+  const [staticSource, setStaticSource] = useState(() => ({
+    key: staticKey,
+    source: buildStaticSource(entrants, finished, totalLength),
+  }));
+  if (staticSource.key !== staticKey) {
+    setStaticSource({ key: staticKey, source: buildStaticSource(entrants, finished, totalLength) });
+  }
+  const staticFrames = staticSource.source;
 
   useEffect(() => {
-    const scene = sceneRef.current;
     if (!scene) return;
     if (replay) scene.setSource(replay);
     else if (hasLiveTick) scene.setSource(live);
-    else scene.setSource(staticSource);
-  }, [sceneReady, replay, hasLiveTick, live, staticSource]);
+    else scene.setSource(staticFrames);
+  }, [scene, replay, hasLiveTick, live, staticFrames]);
 
   const chooseMode = (next: CameraMode) => {
     setMode(next);
     writeLocal('ars.camera', next);
-    sceneRef.current?.setCameraMode(next);
+    scene?.setCameraMode(next);
   };
 
   const name = nameLookup(entrants);
-  const tickerSource: { key: string | number; text: string; tone: Tone }[] = useMemo(() => {
-    if (replay) {
-      const current = displayTick?.tick ?? 0;
-      const items: { key: string; text: string; tone: Tone }[] = [];
-      for (let t = Math.max(0, current - 16); t <= current; t += 1) {
-        const tick = replay.ticks[t];
-        if (!tick) continue;
-        tick.events.forEach((event, i) => items.push({ key: `${tick.tick}-${i}`, ...eventText(event, name) }));
-      }
-      return items.slice(-4);
+  const tickerSource: { key: string | number; text: string; tone: Tone }[] = [];
+  if (replay) {
+    const current = displayTick?.tick ?? 0;
+    for (let t = Math.max(0, current - 16); t <= current; t += 1) {
+      const tick = replay.ticks[t];
+      if (!tick) continue;
+      tick.events.forEach((event, i) => {
+        const { text, tone } = eventText(event, name);
+        tickerSource.push({ key: `${tick.tick}-${i}`, text, tone });
+      });
     }
+  } else {
     const latestTick = displayTick?.tick ?? 0;
-    return feed
-      .filter((item) => latestTick - item.tick < 16)
-      .slice(-4)
-      .map((item) => ({ key: item.seq, ...eventText(item.event, name) }));
-  }, [replay, displayTick?.tick, feed, entrantKey]);
+    for (const item of feed.filter((entry) => latestTick - entry.tick < 16)) {
+      const { text, tone } = eventText(item.event, name);
+      tickerSource.push({ key: item.seq, text, tone });
+    }
+  }
+  const ticker = tickerSource.slice(-4);
 
   const preRace = race.status === 'SCHEDULED' || race.status === 'OPEN' || race.status === 'LOCKED';
   const startsIn = Date.parse(race.startAt) - now;
@@ -250,7 +272,7 @@ export function RaceViewer({
             )}
           </div>
           {!webglError && (
-            <div className="hud-cams" role="group" aria-label="Camera">
+            <fieldset className="hud-cams" aria-label="Camera">
               {CAMERAS.map((camera) => (
                 <button
                   key={camera.mode}
@@ -263,12 +285,12 @@ export function RaceViewer({
                   <span className="show-sm">{camera.short}</span>
                 </button>
               ))}
-            </div>
+            </fieldset>
           )}
         </div>
         <div className="stack" style={{ gap: 8 }}>
           <div className="hud-ticker">
-            {tickerSource.map((item) => (
+            {ticker.map((item) => (
               <div key={item.key} className={item.tone}>
                 {item.text}
               </div>

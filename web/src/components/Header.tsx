@@ -163,9 +163,13 @@ export function Header() {
   const unread = useStore(unreadStore);
   const season = useStore(seasonStore);
   const [open, setOpen] = useState(false);
-  useEffect(() => setOpen(false), [path]);
+  const [menuPath, setMenuPath] = useState(path);
+  if (menuPath !== path) {
+    setMenuPath(path);
+    setOpen(false);
+  }
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
     };

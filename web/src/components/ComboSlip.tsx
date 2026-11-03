@@ -4,10 +4,10 @@ import { onBet, refreshWallet, walletStore, watchBet } from '../lib/app';
 import { clearCombo, comboStore, patchCombo, removeComboLeg, selectionKey } from '../lib/combo';
 import { uuid } from '../lib/crypto';
 import { friendlyCode, friendlyError } from '../lib/errors';
-import { fmtPoints, fmtPrice, marketLabel } from '../lib/format';
+import { fmtPoints, fmtPrice, marketLabel, pickOption, PRICE_POLICIES } from '../lib/format';
 import { useStore } from '../lib/hooks';
 import { Link } from '../lib/router';
-import type { Bet, PricePolicy } from '../lib/types';
+import type { Bet } from '../lib/types';
 
 type Placement = {
   kind: 'placing' | 'pending' | 'accepted' | 'rejected' | 'error';
@@ -57,12 +57,22 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
 
   const signature = combo.legs.map((leg) => `${leg.marketId}:${selectionKey(leg.selection)}`).join('|');
 
-  useEffect(() => {
+  const [trackedSignature, setTrackedSignature] = useState(signature);
+  if (trackedSignature !== signature) {
+    setTrackedSignature(signature);
     if (!combo.legs.length) {
       setQuote(null);
       setQuoteError(null);
-      return;
+    } else if (
+      placement &&
+      (placement.kind === 'accepted' || placement.kind === 'rejected' || placement.kind === 'error')
+    ) {
+      setPlacement(null);
     }
+  }
+
+  useEffect(() => {
+    if (!signature) return undefined;
     let cancelled = false;
     const run = async () => {
       const legs = comboStore.get().legs;
@@ -116,15 +126,6 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
   );
 
   useEffect(() => () => stopWatch.current?.(), []);
-
-  useEffect(() => {
-    if (comboStore.get().legs.length > 0)
-      setPlacement((current) =>
-        current && (current.kind === 'accepted' || current.kind === 'rejected' || current.kind === 'error')
-          ? null
-          : current,
-      );
-  }, [signature]);
 
   if (!combo.legs.length && !placement) return null;
 
@@ -273,7 +274,7 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
               <select
                 className="select"
                 value={combo.policy}
-                onChange={(e) => patchCombo({ policy: e.target.value as PricePolicy })}
+                onChange={(e) => patchCombo({ policy: pickOption(PRICE_POLICIES, e.target.value, 'NONE') })}
               >
                 <option value="NONE">Small changes only</option>
                 <option value="BETTER">Better or small drops</option>
@@ -291,7 +292,7 @@ export function ComboSlip({ docked = false }: { docked?: boolean }) {
           <button
             className="btn primary block"
             data-testid="place-combo"
-            onClick={place}
+            onClick={() => void place()}
             disabled={placement?.kind === 'placing'}
           >
             Place combo

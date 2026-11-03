@@ -55,7 +55,7 @@ export function matchPath(pattern: string, path: string): Record<string, string>
 
 type LinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; replace?: boolean };
 
-export function Link({ to, replace, onClick, ...rest }: LinkProps) {
+export function Link({ to, replace, onClick, children, ...rest }: LinkProps) {
   const handle = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
     if (
@@ -71,5 +71,9 @@ export function Link({ to, replace, onClick, ...rest }: LinkProps) {
     event.preventDefault();
     navigate(to, { replace });
   };
-  return <a href={to} onClick={handle} {...rest} />;
+  return (
+    <a href={to} onClick={handle} {...rest}>
+      {children}
+    </a>
+  );
 }

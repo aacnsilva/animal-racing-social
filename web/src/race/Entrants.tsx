@@ -6,7 +6,7 @@ import type { Entrant, Market } from '../lib/types';
 
 function EntrantsInner({ entrants, winMarket }: { entrants: Entrant[]; winMarket: Market | undefined }) {
   const prices = new Map((winMarket?.selections ?? []).map((s) => [s.entrantId, s]));
-  const sorted = [...entrants].sort((a, b) => a.lane - b.lane);
+  const sorted = entrants.toSorted((a, b) => a.lane - b.lane);
   return (
     <section className="card">
       <div className="card-head">

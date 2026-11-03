@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { onBet, onCashoutRejected, publishBet, refreshWallet, watchBet } from '../lib/app';
 import { uuid } from '../lib/crypto';
@@ -17,10 +17,6 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
   const [confirming, setConfirming] = useState(false);
   const [state, setState] = useState<CashState>({ kind: 'idle' });
   const stopWatch = useRef<(() => void) | null>(null);
-  const liveRef = useRef(live);
-  liveRef.current = live;
-  const unavailableRef = useRef(unavailable);
-  unavailableRef.current = unavailable;
 
   const fetchQuote = useCallback(async (): Promise<LiveCashout | null> => {
     try {
@@ -36,14 +32,20 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
     }
   }, [bet.id]);
 
+  const quoteIsFresh = useEffectEvent(() => {
+    if (unavailable && Date.now() - unavailable.at < (unavailable.code === 'MARKET_SUSPENDED' ? 8000 : 20000))
+      return true;
+    return Boolean(live && Date.now() - live.at <= 4000);
+  });
+
   useEffect(() => {
-    if (!poll) return;
-    void fetchQuote();
+    if (!poll) return undefined;
+    const refresh = async () => {
+      await fetchQuote();
+    };
+    void refresh();
     const id = setInterval(() => {
-      const current = liveRef.current;
-      const blocked = unavailableRef.current;
-      if (blocked && Date.now() - blocked.at < (blocked.code === 'MARKET_SUSPENDED' ? 8000 : 20000)) return;
-      if (!current || Date.now() - current.at > 4000) void fetchQuote();
+      if (!quoteIsFresh()) void refresh();
     }, 5000);
     return () => clearInterval(id);
   }, [poll, fetchQuote]);
@@ -64,7 +66,7 @@ export function CashOut({ bet, live, poll }: { bet: Bet; live?: LiveCashout; pol
   );
 
   useEffect(() => {
-    if (state.kind !== 'pending') return;
+    if (state.kind !== 'pending') return undefined;
     const timer = setTimeout(
       () =>
         setState({

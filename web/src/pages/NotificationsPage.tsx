@@ -83,16 +83,18 @@ export function NotificationsPage() {
     [authed, onlyUnread],
   );
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
+  const [readItems, setReadItems] = useState(paged.items);
+  if (readItems !== paged.items) {
+    setReadItems(paged.items);
     setReadIds(new Set());
-  }, [paged.items]);
+  }
 
+  const { reload } = paged;
   const previousUnread = useRef(unread);
   useEffect(() => {
-    if (unread > previousUnread.current) paged.reload();
+    if (unread > previousUnread.current) reload();
     previousUnread.current = unread;
-  }, [unread]);
+  }, [unread, reload]);
 
   if (session.status === 'loading') return <Loading />;
   if (!authed) return <SignInPrompt message="Sign in to see your notifications." />;
@@ -145,7 +147,8 @@ export function NotificationsPage() {
               const isUnread = !n.readAt && !readIds.has(n.id);
               const link = notificationLink(n);
               return (
-                <div
+                <button
+                  type="button"
                   key={n.id}
                   className={`notif${isUnread ? ' unread' : ''}`}
                   data-testid="notification-item"
@@ -158,13 +161,13 @@ export function NotificationsPage() {
                   }}
                 >
                   <span className="ico">{NOTIFICATION_ICON[n.type] ?? '•'}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <span className="notif-body">
                     <b>{NOTIFICATION_LABEL[n.type] ?? n.type}</b>
-                    <div className="small">{notificationText(n)}</div>
-                    <div className="tiny muted">{fmtRelative(n.createdAt)}</div>
-                  </div>
+                    <span className="small">{notificationText(n)}</span>
+                    <span className="tiny muted">{fmtRelative(n.createdAt)}</span>
+                  </span>
                   {isUnread && <span className="dot" title="Unread" />}
-                </div>
+                </button>
               );
             })
           )}

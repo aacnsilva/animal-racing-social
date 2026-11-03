@@ -30,6 +30,8 @@ const K = new Uint32Array([
   0xc67178f2,
 ]);
 
+const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+
 function sha256Fallback(data: Uint8Array): Uint8Array {
   const h = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
@@ -42,7 +44,6 @@ function sha256Fallback(data: Uint8Array): Uint8Array {
   view.setUint32(padded.length - 8, Math.floor(bitLength / 0x100000000));
   view.setUint32(padded.length - 4, bitLength >>> 0);
   const w = new Uint32Array(64);
-  const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
   for (let offset = 0; offset < padded.length; offset += 64) {
     for (let i = 0; i < 16; i += 1) w[i] = view.getUint32(offset + i * 4);
     for (let i = 16; i < 64; i += 1) {
@@ -85,7 +86,7 @@ function sha256Fallback(data: Uint8Array): Uint8Array {
 export async function sha256Hex(data: Uint8Array): Promise<{ hex: string; via: 'webcrypto' | 'fallback' }> {
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {
-    const digest = await subtle.digest('SHA-256', data as Uint8Array<ArrayBuffer>);
+    const digest = await subtle.digest('SHA-256', new Uint8Array(data));
     return { hex: bytesToHex(new Uint8Array(digest)), via: 'webcrypto' };
   }
   return { hex: bytesToHex(sha256Fallback(data)), via: 'fallback' };
