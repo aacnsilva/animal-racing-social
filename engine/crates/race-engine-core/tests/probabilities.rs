@@ -2,6 +2,11 @@ mod support;
 
 use race_engine_core::{PreparedRace, RevealedState, estimate_probabilities, plan_race, simulate};
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a fraction of a positive finish tick truncates to a valid tick"
+)]
 #[test]
 fn probabilities_from_revealed_state_are_valid_and_sharpen() {
     let params = support::params();
@@ -19,8 +24,9 @@ fn probabilities_from_revealed_state_are_valid_and_sharpen() {
     for fraction in [0.0, 0.3, 0.6, 0.85, 0.97] {
         let tick = (f64::from(finish) * fraction) as u32;
         let revealed = RevealedState::from_script(script, tick).expect("tick");
-        let table = estimate_probabilities(&race, Some(&revealed), 1500, 2, [tick as u8; 32])
-            .expect("estimate");
+        let table =
+            estimate_probabilities(&race, Some(&revealed), 1500, 2, [tick.to_le_bytes()[0]; 32])
+                .expect("estimate");
         let count = field.len();
         for row in &table.positions {
             let sum: f64 = row.iter().sum();

@@ -54,10 +54,19 @@ pub fn ranges(species: &str) -> [(f64, f64); 4] {
     }
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a 53-bit integer is exactly representable in f64"
+)]
 fn uniform(rng: &mut ChaCha8Rng) -> f64 {
     (rng.next_u64() >> 11) as f64 / 9_007_199_254_740_992.0
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "field sizes are tiny test values"
+)]
 pub fn typical_field(species: &str, count: usize) -> Vec<EntrantInput> {
     let base = typical_stats(species);
     (0..count)
@@ -79,6 +88,10 @@ pub fn typical_field(species: &str, count: usize) -> Vec<EntrantInput> {
         .collect()
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "lane picks are below the lane count"
+)]
 pub fn varied_field(species: &str, count: usize, seed: u8) -> Vec<EntrantInput> {
     let mut rng = fast_rng([seed; 32]);
     let ranges = ranges(species);

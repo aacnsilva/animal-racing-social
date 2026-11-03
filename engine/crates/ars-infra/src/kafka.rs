@@ -106,6 +106,12 @@ pub struct Producer {
     inner: FutureProducer,
 }
 
+impl std::fmt::Debug for Producer {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("Producer").finish_non_exhaustive()
+    }
+}
+
 impl Producer {
     pub fn new(brokers: &str, client_id: &str) -> Res<Producer> {
         let inner: FutureProducer = ClientConfig::new()

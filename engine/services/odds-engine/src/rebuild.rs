@@ -4,7 +4,7 @@ use ars_infra::convert::{ENTRANT_COLUMNS, entrant_from_row};
 use ars_infra::{Context, Res};
 
 use crate::pricing::MarketKind;
-use crate::registry::{Market, MarketStatus, RaceInfo};
+use crate::registry::{Market, MarketStatus, RaceInfo, Registry};
 use crate::state::Shared;
 
 pub async fn load_race(app: &Shared, race_id: i64) -> Res<Option<RaceInfo>> {
@@ -29,12 +29,77 @@ pub async fn load_race(app: &Shared, race_id: i64) -> Res<Option<RaceInfo>> {
     Ok(Some(RaceInfo {
         species: row.get(0),
         venue_id: row.get(1),
-        venue_version: row.get::<_, i32>(2) as u32,
-        laps: row.get::<_, i32>(3) as u32,
+        venue_version: u32::try_from(row.get::<_, i32>(2)).context("venue_version")?,
+        laps: u32::try_from(row.get::<_, i32>(3)).context("laps")?,
         engine_version: row.get(4),
         race_class: row.get(5),
         entrants,
     }))
+}
+
+async fn cached_price_versions(app: &Shared, market_ids: &[i64]) -> Res<HashMap<i64, u32>> {
+    let mut cached_versions: HashMap<i64, u32> = HashMap::new();
+    if market_ids.is_empty() {
+        return Ok(cached_versions);
+    }
+    let mut pipe = redis::pipe();
+    for market_id in market_ids {
+        pipe.hget(format!("price:{market_id}"), "version");
+    }
+    let mut redis = app.redis.clone();
+    let versions: Vec<Option<u32>> = pipe
+        .query_async(&mut redis)
+        .await
+        .context("load cached price versions")?;
+    for (market_id, version) in market_ids.iter().zip(versions) {
+        if let Some(version) = version {
+            cached_versions.insert(*market_id, version);
+        }
+    }
+    Ok(cached_versions)
+}
+
+fn register_markets(
+    registry: &mut Registry,
+    markets: &[tokio_postgres::Row],
+    mut selections: HashMap<i64, Vec<(i64, String)>>,
+    cached_versions: &HashMap<i64, u32>,
+) -> usize {
+    let mut market_count = 0;
+    for row in markets {
+        let market_id: i64 = row.get(0);
+        let kind_text: String = row.get(2);
+        let params: serde_json::Value = row.get(3);
+        let status: String = row.get(4);
+        let kind = match MarketKind::from_json(&kind_text, &params) {
+            Ok(kind) => kind,
+            Err(err) => {
+                tracing::warn!(marketId = %market_id, "market {market_id}: {err}");
+                continue;
+            }
+        };
+        registry.markets.insert(
+            market_id,
+            Market {
+                market_id,
+                race_id: row.get(1),
+                kind,
+                status: if status == "SUSPENDED" {
+                    MarketStatus::Suspended
+                } else {
+                    MarketStatus::Open
+                },
+                selections: selections.remove(&market_id).unwrap_or_default(),
+                price_version: row
+                    .get::<_, i32>(5)
+                    .max(0)
+                    .unsigned_abs()
+                    .max(cached_versions.get(&market_id).copied().unwrap_or(0)),
+            },
+        );
+        market_count += 1;
+    }
+    market_count
 }
 
 pub async fn rebuild(app: &Shared) -> Res<()> {
@@ -83,71 +148,32 @@ pub async fn rebuild(app: &Shared) -> Res<()> {
         selections.entry(market_id).or_default().push((row.get(0), ars_infra::ids::entrant_wire_id(entrant)));
     }
     drop(conn);
-    let mut cached_versions: HashMap<i64, u32> = HashMap::new();
-    if !market_ids.is_empty() {
-        let mut pipe = redis::pipe();
-        for market_id in &market_ids {
-            pipe.hget(format!("price:{market_id}"), "version");
-        }
-        let mut redis = app.redis.clone();
-        let versions: Vec<Option<u32>> = pipe
-            .query_async(&mut redis)
-            .await
-            .context("load cached price versions")?;
-        for (market_id, version) in market_ids.iter().zip(versions) {
-            if let Some(version) = version {
-                cached_versions.insert(*market_id, version);
-            }
-        }
-    }
+    let cached_versions = cached_price_versions(app, &market_ids).await?;
     let mut registry = app
         .registry
         .lock()
         .map_err(|_| "registry poisoned".to_string())?;
     for row in &races {
         let race_id: i64 = row.get(0);
+        let (Ok(venue_version), Ok(laps)) = (
+            u32::try_from(row.get::<_, i32>(3)),
+            u32::try_from(row.get::<_, i32>(4)),
+        ) else {
+            tracing::warn!(raceId = %race_id, "race {race_id}: skipping race with negative venue_version or laps");
+            continue;
+        };
         let entry = registry.races.entry(race_id).or_default();
         entry.info = Some(RaceInfo {
             species: row.get(1),
             venue_id: row.get(2),
-            venue_version: row.get::<_, i32>(3) as u32,
-            laps: row.get::<_, i32>(4) as u32,
+            venue_version,
+            laps,
             engine_version: row.get(5),
             race_class: row.get(6),
             entrants: entrants.remove(&race_id).unwrap_or_default(),
         });
     }
-    let mut market_count = 0;
-    for row in &markets {
-        let market_id: i64 = row.get(0);
-        let kind_text: String = row.get(2);
-        let params: serde_json::Value = row.get(3);
-        let status: String = row.get(4);
-        let kind = match MarketKind::from_json(&kind_text, &params) {
-            Ok(kind) => kind,
-            Err(err) => {
-                tracing::warn!(marketId = %market_id, "market {market_id}: {err}");
-                continue;
-            }
-        };
-        registry.markets.insert(
-            market_id,
-            Market {
-                market_id,
-                race_id: row.get(1),
-                kind,
-                status: if status == "SUSPENDED" {
-                    MarketStatus::Suspended
-                } else {
-                    MarketStatus::Open
-                },
-                selections: selections.remove(&market_id).unwrap_or_default(),
-                price_version: (row.get::<_, i32>(5).max(0) as u32)
-                    .max(cached_versions.get(&market_id).copied().unwrap_or(0)),
-            },
-        );
-        market_count += 1;
-    }
+    let market_count = register_markets(&mut registry, &markets, selections, &cached_versions);
     tracing::info!(
         races = races.len(),
         markets = market_count,

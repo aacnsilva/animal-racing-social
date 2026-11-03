@@ -7,7 +7,7 @@ use ars_infra::sealing::{Keyring, compress};
 use ars_infra::{Context, Res};
 use ars_proto::envelope::Payload;
 use ars_proto::{GenerateScript, ScriptFailed, ScriptSealed};
-use race_engine_core::{LoadedParams, RaceInputs, Venue, simulate};
+use race_engine_core::{EntrantInput, LoadedParams, RaceInputs, Venue, simulate};
 use rdkafka::Message;
 use rdkafka::consumer::{CommitMode, Consumer};
 use rdkafka::message::BorrowedMessage;
@@ -212,6 +212,55 @@ struct Sealed {
     script_hash_hex: String,
 }
 
+fn input_mismatches(command: &GenerateScript, race: &RaceRow) -> Vec<String> {
+    let mut mismatches = Vec::new();
+    if !command.venue_id.is_empty() && command.venue_id != race.venue_id {
+        mismatches.push(format!("venueId {} != {}", command.venue_id, race.venue_id));
+    }
+    if command.venue_version != 0
+        && i64::from(command.venue_version) != i64::from(race.venue_version)
+    {
+        mismatches.push(format!(
+            "venueVersion {} != {}",
+            command.venue_version, race.venue_version
+        ));
+    }
+    if command.laps != 0 && i64::from(command.laps) != i64::from(race.laps) {
+        mismatches.push(format!("laps {} != {}", command.laps, race.laps));
+    }
+    if !command.engine_version.is_empty() && command.engine_version != race.engine_version {
+        mismatches.push(format!(
+            "engineVersion {} != {}",
+            command.engine_version, race.engine_version
+        ));
+    }
+    if !command.species.is_empty() && command.species != race.species {
+        mismatches.push(format!("species {} != {}", command.species, race.species));
+    }
+    mismatches
+}
+
+async fn load_entrants(
+    conn: &tokio_postgres::Client,
+    race_id: i64,
+    command: &GenerateScript,
+) -> Result<Vec<EntrantInput>, Failure> {
+    if command.entrants.is_empty() {
+        let rows = conn
+            .query(&format!("SELECT {ENTRANT_COLUMNS} FROM racing.race_entrants WHERE race_id = $1 ORDER BY entrant_id"), &[&race_id])
+            .await
+            .context("load entrants")
+            .map_err(Failure::Transient)?;
+        rows.iter()
+            .map(entrant_from_row)
+            .collect::<Res<Vec<_>>>()
+            .map_err(|err| Failure::Permanent(format!("ENTRANTS_INVALID {err}")))
+    } else {
+        entrants_from_proto(&command.entrants)
+            .map_err(|err| Failure::Permanent(format!("ENTRANTS_INVALID {err}")))
+    }
+}
+
 async fn generate(
     state: &AppState,
     producer: &Producer,
@@ -240,58 +289,27 @@ async fn generate(
     if race.status == "CANCELLED" {
         return Err(Failure::Permanent("RACE_CANCELLED".into()));
     }
-    let mut mismatches = Vec::new();
-    if !command.venue_id.is_empty() && command.venue_id != race.venue_id {
-        mismatches.push(format!("venueId {} != {}", command.venue_id, race.venue_id));
-    }
-    if command.venue_version != 0 && command.venue_version as i32 != race.venue_version {
-        mismatches.push(format!(
-            "venueVersion {} != {}",
-            command.venue_version, race.venue_version
-        ));
-    }
-    if command.laps != 0 && command.laps as i32 != race.laps {
-        mismatches.push(format!("laps {} != {}", command.laps, race.laps));
-    }
-    if !command.engine_version.is_empty() && command.engine_version != race.engine_version {
-        mismatches.push(format!(
-            "engineVersion {} != {}",
-            command.engine_version, race.engine_version
-        ));
-    }
-    if !command.species.is_empty() && command.species != race.species {
-        mismatches.push(format!("species {} != {}", command.species, race.species));
-    }
+    let mismatches = input_mismatches(command, &race);
     if !mismatches.is_empty() {
         return Err(Failure::Permanent(format!(
             "INPUT_MISMATCH {}",
             mismatches.join(", ")
         )));
     }
-    let entrants = if command.entrants.is_empty() {
-        let rows = conn
-            .query(&format!("SELECT {ENTRANT_COLUMNS} FROM racing.race_entrants WHERE race_id = $1 ORDER BY entrant_id"), &[&race_id])
-            .await
-            .context("load entrants")
-            .map_err(Failure::Transient)?;
-        rows.iter()
-            .map(entrant_from_row)
-            .collect::<Res<Vec<_>>>()
-            .map_err(|err| Failure::Permanent(format!("ENTRANTS_INVALID {err}")))?
-    } else {
-        entrants_from_proto(&command.entrants)
-            .map_err(|err| Failure::Permanent(format!("ENTRANTS_INVALID {err}")))?
-    };
+    let entrants = load_entrants(&conn, race_id, command).await?;
+    let venue_version = u32::try_from(race.venue_version)
+        .map_err(|_| Failure::Permanent("VENUE_VERSION_INVALID".into()))?;
+    let laps = u32::try_from(race.laps).map_err(|_| Failure::Permanent("LAPS_INVALID".into()))?;
     let venue = state
         .catalog
-        .venue(&conn, &race.venue_id, race.venue_version as u32)
+        .venue(&conn, &race.venue_id, venue_version)
         .await?;
     let params = state.catalog.params(&conn, &race.engine_version).await?;
     let inputs = RaceInputs {
         race_id: race_id.to_string(),
         engine_version: race.engine_version.clone(),
         species: race.species.clone(),
-        laps: race.laps as u32,
+        laps,
         entrants,
     };
     let span = tracing::info_span!(
@@ -372,6 +390,8 @@ async fn seal(
         hex::decode(&sealed.seed_hash).map_err(|err| Failure::Permanent(err.to_string()))?;
     let script_hash =
         hex::decode(&sealed.script_hash).map_err(|err| Failure::Permanent(err.to_string()))?;
+    let script_bytes = i32::try_from(sealed.json.len())
+        .map_err(|_| Failure::Permanent("SCRIPT_TOO_LARGE".into()))?;
     let transaction = client
         .transaction()
         .await
@@ -393,7 +413,7 @@ async fn seal(
         .execute(
             "INSERT INTO sealed.race_scripts (race_id, key_id, seed_ciphertext, script_ciphertext, script_bytes)
              VALUES ($1, $2, $3, $4, $5)",
-            &[&race_id, &keyring.current_id(), &seed_ciphertext, &script_ciphertext, &(sealed.json.len() as i32)],
+            &[&race_id, &keyring.current_id(), &seed_ciphertext, &script_ciphertext, &script_bytes],
         )
         .await
         .context("insert sealed script")

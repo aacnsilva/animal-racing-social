@@ -28,6 +28,11 @@ USAGE:
 ENV: DATABASE_URL KAFKA_BROKERS REDIS_URL PORT ODDS_MARGIN ODDS_RUNS_PRERACE ODDS_RUNS_LIVE ODDS_THREADS ODDS_STALE_MS
      RUST_LOG OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME OTEL_RESOURCE_ATTRIBUTES OTEL_SDK_DISABLED";
 
+#[expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "CLI usage, version and fatal argument errors go to the terminal before telemetry starts"
+)]
 fn main() {
     match std::env::args().nth(1).as_deref() {
         Some("--help" | "-h" | "help") => println!("{USAGE}"),

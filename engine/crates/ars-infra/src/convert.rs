@@ -60,7 +60,7 @@ pub fn entrant_from_row(row: &tokio_postgres::Row) -> Res<EntrantInput> {
     Ok(EntrantInput {
         entrant_id: crate::ids::entrant_wire_id(entrant_id),
         animal_id: animal_id.to_string(),
-        lane: lane as u32,
+        lane: u32::try_from(lane).context("lane")?,
         temperament: temperament(&temperament_text)?,
         stats: stats_from_json(&snapshot)?,
     })

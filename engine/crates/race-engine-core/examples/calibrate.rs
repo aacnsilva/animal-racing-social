@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use race_engine_core::{
     EntrantInput, EventKind, LoadedParams, PreparedRace, RaceInputs, ResultStatus, Temperament,
-    Venue, estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
+    estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
 };
 
 const SPECIES: [&str; 2] = ["HORSE", "GIRAFFE"];
@@ -22,6 +22,10 @@ fn scaled(field: &[EntrantInput], factor: f64) -> Vec<EntrantInput> {
         .collect()
 }
 
+#[expect(
+    clippy::print_stdout,
+    reason = "calibration report is written to stdout"
+)]
 fn plan_report(params: &LoadedParams) {
     println!("== plan (typical field of 8; slow = velocity x0.94, fast = x1.06)");
     for venue in support::venues() {
@@ -57,6 +61,10 @@ fn plan_report(params: &LoadedParams) {
     }
 }
 
+#[expect(
+    clippy::print_stdout,
+    reason = "calibration report is written to stdout"
+)]
 fn field_report(params: &LoadedParams, runs: u32) {
     println!("== varied fields of 8: winners over {runs} runs");
     let venue_ids = [
@@ -122,17 +130,21 @@ fn field_report(params: &LoadedParams, runs: u32) {
     );
 }
 
+#[expect(
+    clippy::print_stdout,
+    reason = "calibration report is written to stdout"
+)]
 fn temperament_report(params: &LoadedParams, runs: u32) {
     println!("== temperament balance (identical stats, 2 of each temperament)");
     for venue in support::venues() {
         for species in SPECIES {
             let base = support::typical_stats(species);
-            let field: Vec<EntrantInput> = (0..8)
+            let field: Vec<EntrantInput> = (0..8u32)
                 .map(|index| EntrantInput {
                     entrant_id: format!("e{}", index + 1),
                     animal_id: format!("{index}"),
-                    lane: index as u32 + 1,
-                    temperament: support::TEMPERAMENTS[index % 4],
+                    lane: index + 1,
+                    temperament: support::TEMPERAMENTS[index as usize % 4],
                     stats: base,
                 })
                 .collect();
@@ -169,6 +181,11 @@ fn temperament_report(params: &LoadedParams, runs: u32) {
     }
 }
 
+#[expect(
+    clippy::print_stdout,
+    clippy::cast_precision_loss,
+    reason = "calibration report averages small counts and writes them to stdout"
+)]
 fn incident_report(params: &LoadedParams, races: u32) {
     println!("== full scripts: incidents, overtakes, stamina");
     let mut total_races = 0u32;
@@ -268,6 +285,10 @@ fn incident_report(params: &LoadedParams, races: u32) {
     );
 }
 
+#[expect(
+    clippy::print_stdout,
+    reason = "calibration report is written to stdout"
+)]
 fn stat_effects(params: &LoadedParams, runs: u32) {
     println!("== single stat advantage: win share of e1 boosted (others typical, 8 runners)");
     for venue_id in [
@@ -282,11 +303,11 @@ fn stat_effects(params: &LoadedParams, runs: u32) {
             let mut cells = Vec::new();
             for stat in ["velocity", "stamina", "acceleration", "consistency"] {
                 let base = support::typical_stats(species);
-                let mut field: Vec<EntrantInput> = (0..8)
+                let mut field: Vec<EntrantInput> = (0..8u32)
                     .map(|index| EntrantInput {
                         entrant_id: format!("e{}", index + 1),
                         animal_id: format!("{index}"),
-                        lane: index as u32 + 1,
+                        lane: index + 1,
                         temperament: Temperament::Steady,
                         stats: base,
                     })
@@ -320,6 +341,10 @@ fn stat_effects(params: &LoadedParams, runs: u32) {
     }
 }
 
+#[expect(
+    clippy::print_stdout,
+    reason = "calibration report is written to stdout"
+)]
 fn timing(params: &LoadedParams) {
     let venue = support::venue("v_jungle_marathon");
     let field = support::varied_field("GIRAFFE", 10, 7);
@@ -347,7 +372,6 @@ fn main() {
         .get(2)
         .and_then(|value| value.parse().ok())
         .unwrap_or(400);
-    let _unused: Option<Venue> = None;
     if mode == "all" || mode == "plan" {
         plan_report(&params);
     }

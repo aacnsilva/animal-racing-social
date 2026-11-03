@@ -57,6 +57,11 @@ pub fn median(values: &[f64]) -> f64 {
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "median durations are positive seconds well within u32"
+)]
 pub fn plan_race(
     params: &LoadedParams,
     venue: &Venue,

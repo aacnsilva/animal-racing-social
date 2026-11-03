@@ -330,6 +330,10 @@ impl<'a> Sim<'a> {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "candidate count is bounded by the field size"
+    )]
     pub fn start<S: Streams>(&mut self, streams: &mut S) {
         let count = self.runners.len();
         for index in 0..count {
@@ -398,6 +402,10 @@ impl<'a> Sim<'a> {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "incident count per race is far below u32::MAX"
+    )]
     fn push_incident(&mut self, kind: IncidentKind, index: Option<usize>, data: serde_json::Value) {
         if self.record {
             let seq = self.incidents.len() as u32 + 1;
@@ -422,6 +430,11 @@ impl<'a> Sim<'a> {
         self.running_count() == 0
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "distance is non-negative and laps are clamped to the track lap count"
+    )]
     pub fn sync_cursor(&mut self, index: usize) {
         let track = &self.race.track;
         let runner = &mut self.runners[index];
@@ -441,7 +454,12 @@ impl<'a> Sim<'a> {
                 let current = self.order[cursor];
                 let before_dist = self.snapshot_dist[before];
                 let current_dist = self.snapshot_dist[current];
-                if current_dist > before_dist || (current_dist == before_dist && current < before) {
+                let moves_ahead = match current_dist.partial_cmp(&before_dist) {
+                    Some(std::cmp::Ordering::Greater) => true,
+                    Some(std::cmp::Ordering::Equal) => current < before,
+                    _ => false,
+                };
+                if moves_ahead {
                     self.order.swap(cursor - 1, cursor);
                     cursor -= 1;
                 } else {
@@ -749,46 +767,10 @@ impl<'a> Sim<'a> {
             - entrant.drain_per_meter * cost * segment.drain_factor * advance)
             .max(0.0);
         runner.speed = new_speed;
-        if runner.stumble_ticks > 0 {
-            runner.stumble_ticks -= 1;
-        } else {
-            let tired = if runner.stamina < stamina_params.tired_threshold {
-                incidents.stumble_tired_multiplier
-            } else {
-                1.0
-            };
-            runner.stumble_budget -=
-                entrant.stumble_per_meter * segment.stumble_factor * advance * tired;
-            if runner.stumble_budget <= 0.0 {
-                let span = incidents.stumble_ticks_max - incidents.stumble_ticks_min + 1;
-                let ticks = incidents.stumble_ticks_min + streams.incident().below(span);
-                let budget = streams.incident().exponential();
-                let runner = &mut self.runners[index];
-                runner.stumble_budget = budget;
-                runner.stumble_ticks = ticks;
-                runner.speed *= incidents.stumble_speed_drop;
-                self.push_event(TickEvent::single(EventKind::Stumble, &entrant.id));
-                self.push_incident(
-                    IncidentKind::Stumble,
-                    Some(index),
-                    serde_json::json!({ "ticks": ticks }),
-                );
-            }
-        }
+        self.update_stumble(index, segment.stumble_factor, advance, streams);
         let new_dist = dist + advance;
         if advance > 0.0 {
-            while self.runners[index].laps_done < track.laps {
-                let lap_number = self.runners[index].laps_done + 1;
-                let line = f64::from(lap_number) * track.lap_length;
-                if line > new_dist {
-                    break;
-                }
-                if self.lap_leaders[(lap_number - 1) as usize].is_none() {
-                    let time = f64::from(self.tick - 1) + (line - dist) / advance;
-                    self.lap_crossings.push((lap_number, time, index));
-                }
-                self.runners[index].laps_done = lap_number;
-            }
+            self.record_lap_crossings(index, dist, new_dist, advance);
         }
         let runner = &mut self.runners[index];
         if new_dist >= track.length && advance > 0.0 {
@@ -808,6 +790,65 @@ impl<'a> Sim<'a> {
         }
     }
 
+    fn update_stumble<S: Streams>(
+        &mut self,
+        index: usize,
+        stumble_factor: f64,
+        advance: f64,
+        streams: &mut S,
+    ) {
+        let race = self.race;
+        let entrant = &race.entrants[index];
+        let stamina_params = &race.stamina;
+        let incidents = &race.incidents;
+        let runner = &mut self.runners[index];
+        if runner.stumble_ticks > 0 {
+            runner.stumble_ticks -= 1;
+            return;
+        }
+        let tired = if runner.stamina < stamina_params.tired_threshold {
+            incidents.stumble_tired_multiplier
+        } else {
+            1.0
+        };
+        runner.stumble_budget -= entrant.stumble_per_meter * stumble_factor * advance * tired;
+        if runner.stumble_budget <= 0.0 {
+            let span = incidents.stumble_ticks_max - incidents.stumble_ticks_min + 1;
+            let ticks = incidents.stumble_ticks_min + streams.incident().below(span);
+            let budget = streams.incident().exponential();
+            let runner = &mut self.runners[index];
+            runner.stumble_budget = budget;
+            runner.stumble_ticks = ticks;
+            runner.speed *= incidents.stumble_speed_drop;
+            self.push_event(TickEvent::single(EventKind::Stumble, &entrant.id));
+            self.push_incident(
+                IncidentKind::Stumble,
+                Some(index),
+                serde_json::json!({ "ticks": ticks }),
+            );
+        }
+    }
+
+    fn record_lap_crossings(&mut self, index: usize, dist: f64, new_dist: f64, advance: f64) {
+        let track = &self.race.track;
+        while self.runners[index].laps_done < track.laps {
+            let lap_number = self.runners[index].laps_done + 1;
+            let line = f64::from(lap_number) * track.lap_length;
+            if line > new_dist {
+                break;
+            }
+            if self.lap_leaders[(lap_number - 1) as usize].is_none() {
+                let time = f64::from(self.tick - 1) + (line - dist) / advance;
+                self.lap_crossings.push((lap_number, time, index));
+            }
+            self.runners[index].laps_done = lap_number;
+        }
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "tie groups are bounded by the field size"
+    )]
     fn resolve_laps<S: Streams>(&mut self, streams: &mut S) {
         if self.lap_crossings.is_empty() {
             return;
@@ -863,6 +904,10 @@ impl<'a> Sim<'a> {
         self.lap_crossings = crossings;
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "tie groups and finish positions are bounded by the field size"
+    )]
     fn resolve_finishes<S: Streams>(&mut self, streams: &mut S) {
         if self.finish_crossings.is_empty() {
             return;
@@ -988,6 +1033,10 @@ impl<'a> Sim<'a> {
         pulled
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "ranks are bounded by the field size"
+    )]
     pub fn positions(&self) -> Vec<u32> {
         let count = self.runners.len();
         let mut order: Vec<usize> = (0..count).collect();
@@ -1038,6 +1087,11 @@ impl<'a> Sim<'a> {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "leader distance is non-negative and bounded by the track length"
+    )]
     pub fn leader_lap(&self) -> u32 {
         let track = &self.race.track;
         let leader = self

@@ -123,6 +123,9 @@ mod tests {
         assert_eq!(decoded, envelope);
         assert_eq!(event_type(&decoded), "ScriptSealed");
         assert_eq!(decoded.payload.as_ref().and_then(race_id), Some(123));
-        assert_eq!(race_id(&Payload::AdminAudit(Default::default())), None);
+        assert_eq!(
+            race_id(&Payload::AdminAudit(ars_proto::AdminAudit::default())),
+            None
+        );
     }
 }

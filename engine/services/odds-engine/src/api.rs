@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use ars_infra::Res;
 use ars_infra::convert::{WireEntrant, entrants_from_wire};
 use ars_infra::http::{bad_request, classify, internal};
 use axum::Json;
@@ -8,7 +9,9 @@ use axum::Router;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use race_engine_core::{PreparedRace, estimate_probabilities};
+use race_engine_core::{
+    EntrantInput, LoadedParams, PreparedRace, ProbabilityTable, Venue, estimate_probabilities,
+};
 use serde::Deserialize;
 use tracing::Instrument;
 use tracing::field::Empty;
@@ -51,6 +54,63 @@ struct PriceRequest {
     markets: Vec<MarketRequest>,
 }
 
+fn market_kinds(markets: &[MarketRequest]) -> Result<Vec<MarketKind>, String> {
+    markets
+        .iter()
+        .map(|market| MarketKind::from_json(&market.kind, &market.params))
+        .collect()
+}
+
+fn priced_markets(
+    markets: &[MarketRequest],
+    kinds: &[MarketKind],
+    entrants: &[EntrantInput],
+    table: &ProbabilityTable,
+    margin: f64,
+) -> Vec<serde_json::Value> {
+    markets
+        .iter()
+        .zip(kinds)
+        .map(|(market, kind)| {
+            let selections: Vec<serde_json::Value> = entrants
+                .iter()
+                .filter_map(|entrant| {
+                    let index = table.index_of(&entrant.entrant_id)?;
+                    let probability = floor_probability(kind.probability(table, index), table.runs);
+                    Some(serde_json::json!({
+                        "entrantId": entrant.entrant_id,
+                        "probability": round_probability(probability),
+                        "price": price(probability, margin),
+                    }))
+                })
+                .collect();
+            let params = if market.params.is_null() {
+                serde_json::json!({})
+            } else {
+                market.params.clone()
+            };
+            serde_json::json!({ "type": market.kind, "params": params, "selections": selections })
+        })
+        .collect()
+}
+
+async fn load_venue_and_params(
+    app: &Shared,
+    request: &PriceRequest,
+) -> Res<(Venue, Arc<LoadedParams>)> {
+    let conn = app.db.acquire().await?;
+    let version = match &request.engine_version {
+        Some(version) if !version.is_empty() => version.clone(),
+        _ => app.catalog.active_engine_version(&conn).await?,
+    };
+    let venue = app
+        .catalog
+        .venue(&conn, &request.venue_id, request.venue_version)
+        .await?;
+    let params = app.catalog.params(&conn, &version).await?;
+    Ok((venue, params))
+}
+
 async fn price_handler(
     State(app): State<Shared>,
     body: Result<Json<PriceRequest>, axum::extract::rejection::JsonRejection>,
@@ -63,27 +123,11 @@ async fn price_handler(
         Ok(entrants) => entrants,
         Err(err) => return bad_request(err),
     };
-    let mut kinds = Vec::with_capacity(request.markets.len());
-    for market in &request.markets {
-        match MarketKind::from_json(&market.kind, &market.params) {
-            Ok(kind) => kinds.push(kind),
-            Err(err) => return bad_request(err),
-        }
-    }
-    let loaded = async {
-        let conn = app.db.acquire().await?;
-        let version = match &request.engine_version {
-            Some(version) if !version.is_empty() => version.clone(),
-            _ => app.catalog.active_engine_version(&conn).await?,
-        };
-        let venue = app
-            .catalog
-            .venue(&conn, &request.venue_id, request.venue_version)
-            .await?;
-        let params = app.catalog.params(&conn, &version).await?;
-        Ok::<_, String>((venue, params))
-    }
-    .await;
+    let kinds = match market_kinds(&request.markets) {
+        Ok(kinds) => kinds,
+        Err(err) => return bad_request(err),
+    };
+    let loaded = load_venue_and_params(&app, &request).await;
     let (venue, params) = match loaded {
         Ok(loaded) => loaded,
         Err(err) => return classify(err),
@@ -140,7 +184,7 @@ async fn price_handler(
         entrants = entrants.len(),
         markets = kinds.len(),
         runs,
-        elapsedMs = elapsed.as_millis() as u64,
+        elapsedMs = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
         "priced {} {} laps {} ({} entrants, {} markets) from {runs} runs in {} ms",
         request.venue_id,
         request.species,
@@ -149,32 +193,12 @@ async fn price_handler(
         kinds.len(),
         elapsed.as_millis()
     );
-    let margin = app.settings.margin;
-    let markets: Vec<serde_json::Value> = request
-        .markets
-        .iter()
-        .zip(&kinds)
-        .map(|(market, kind)| {
-            let selections: Vec<serde_json::Value> = entrants
-                .iter()
-                .filter_map(|entrant| {
-                    let index = table.index_of(&entrant.entrant_id)?;
-                    let probability =
-                        floor_probability(kind.probability(&table, index), table.runs);
-                    Some(serde_json::json!({
-                        "entrantId": entrant.entrant_id,
-                        "probability": round_probability(probability),
-                        "price": price(probability, margin),
-                    }))
-                })
-                .collect();
-            let params = if market.params.is_null() {
-                serde_json::json!({})
-            } else {
-                market.params.clone()
-            };
-            serde_json::json!({ "type": market.kind, "params": params, "selections": selections })
-        })
-        .collect();
+    let markets = priced_markets(
+        &request.markets,
+        &kinds,
+        &entrants,
+        &table,
+        app.settings.margin,
+    );
     Json(serde_json::json!({ "runs": table.runs, "markets": markets })).into_response()
 }

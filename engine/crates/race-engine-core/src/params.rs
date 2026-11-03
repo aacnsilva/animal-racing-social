@@ -22,6 +22,10 @@ pub struct EngineParams {
     pub species: BTreeMap<String, SpeciesParams>,
 }
 
+#[expect(
+    clippy::struct_field_names,
+    reason = "field names mirror the minSec/maxSec/targetSec params schema"
+)]
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClassWindow {
@@ -215,7 +219,7 @@ fn write_canonical(value: &serde_json::Value, out: &mut String) {
         }
         serde_json::Value::Number(number) => match number.as_f64() {
             Some(float) if number.is_f64() => {
-                out.push_str(&serde_json::Value::from(float).to_string())
+                out.push_str(&serde_json::Value::from(float).to_string());
             }
             _ => out.push_str(&number.to_string()),
         },

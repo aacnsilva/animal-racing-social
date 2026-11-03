@@ -47,6 +47,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "lateness of whole milliseconds converts to exact seconds"
+    )]
     fn lateness_is_clamped_at_zero() {
         let scheduled = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
         assert_eq!(

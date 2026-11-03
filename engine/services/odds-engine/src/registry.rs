@@ -13,6 +13,10 @@ pub enum MarketStatus {
 }
 
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_field_names,
+    reason = "market_id mirrors the marketId wire field"
+)]
 pub struct Market {
     pub market_id: i64,
     pub race_id: i64,

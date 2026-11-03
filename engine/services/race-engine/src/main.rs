@@ -12,6 +12,7 @@ use ars_infra::kafka::Producer;
 use ars_infra::sealing::Keyring;
 use ars_infra::{Res, config, telemetry};
 
+#[derive(Debug)]
 pub struct AppState {
     pub db: Db,
     pub catalog: Catalog,
@@ -27,6 +28,11 @@ USAGE:
 
 ENV: DATABASE_URL KAFKA_BROKERS PORT SCRIPT_KEYS SCRIPT_KEY_ID RUST_LOG OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME OTEL_RESOURCE_ATTRIBUTES OTEL_SDK_DISABLED";
 
+#[expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "CLI usage, version and fatal argument errors go to the terminal before telemetry starts"
+)]
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {

@@ -112,6 +112,11 @@ pub fn check_revealed(
     Ok(mapping)
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "finish ranks and completed laps are bounded by the field size and lap count"
+)]
 fn restore<S: Streams>(
     sim: &mut Sim<'_>,
     revealed: &RevealedState,
@@ -179,8 +184,9 @@ fn restore<S: Streams>(
     finished.sort_unstable();
     sim.finished = finished.len() as u32;
     for (rank, (_, index)) in finished.iter().enumerate() {
-        sim.runners[*index].finish_rank = rank as u32 + 1;
-        sim.runners[*index].finish_time = rank as f64;
+        let rank = rank as u32;
+        sim.runners[*index].finish_rank = rank + 1;
+        sim.runners[*index].finish_time = f64::from(rank);
     }
     for (lap, id) in &revealed.lap_leaders {
         if let Some(index) = race.entrant_index(id) {
@@ -367,6 +373,10 @@ impl ProbabilityTable {
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "worker count is clamped to the run count which fits u32"
+)]
 pub fn estimate_probabilities(
     race: &PreparedRace,
     revealed: Option<&RevealedState>,

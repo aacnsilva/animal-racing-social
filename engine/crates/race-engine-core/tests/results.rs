@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use race_engine_core::{EntrantState, EventKind, IncidentKind, RaceScript, ResultStatus, simulate};
 
-fn check_script(script: &RaceScript) {
-    let count = script.entrants.len();
+fn check_ticks(script: &RaceScript, count: usize) {
+    let count_u32 = u32::try_from(count).expect("entrant count fits u32");
     let length = script.track.length.0;
     for (position, tick) in script.ticks.iter().enumerate() {
         assert_eq!(tick.tick as usize, position);
@@ -13,7 +13,7 @@ fn check_script(script: &RaceScript) {
         let positions: BTreeSet<u32> = tick.entrants.iter().map(|entrant| entrant.pos).collect();
         assert_eq!(
             positions,
-            (1..=count as u32).collect::<BTreeSet<u32>>(),
+            (1..=count_u32).collect::<BTreeSet<u32>>(),
             "tick {} pos not a permutation",
             tick.tick
         );
@@ -31,6 +31,41 @@ fn check_script(script: &RaceScript) {
             .iter()
             .all(|entrant| matches!(entrant.state, EntrantState::Finished | EntrantState::Dnf))
     );
+}
+
+fn check_lap_leaders(script: &RaceScript) {
+    let result = &script.result;
+    assert_eq!(result.lap_leaders.len(), script.track.laps as usize);
+    let laps: Vec<u32> = result.lap_leaders.iter().map(|leader| leader.lap).collect();
+    assert_eq!(laps, (1..=script.track.laps).collect::<Vec<u32>>());
+    assert_eq!(
+        result.lap_leaders.last().expect("last").entrant_id,
+        result.as_run[0]
+    );
+    let lap_events: Vec<(u32, String)> = script
+        .ticks
+        .iter()
+        .flat_map(|tick| tick.events.iter())
+        .filter(|event| event.kind == EventKind::Lap)
+        .map(|event| (event.lap.expect("lap"), event.id.clone().expect("id")))
+        .collect();
+    assert_eq!(lap_events.len(), result.lap_leaders.len());
+    for leader in &result.lap_leaders {
+        assert!(lap_events.contains(&(leader.lap, leader.entrant_id.clone())));
+        let led = &result
+            .entrants
+            .iter()
+            .find(|entrant| entrant.id == leader.entrant_id)
+            .expect("entrant")
+            .laps_led;
+        assert!(led.contains(&leader.lap));
+    }
+}
+
+fn check_script(script: &RaceScript) {
+    let count = script.entrants.len();
+    let count_u32 = u32::try_from(count).expect("entrant count fits u32");
+    check_ticks(script, count);
     let result = &script.result;
     assert_eq!(result.order.len(), count);
     assert_eq!(result.as_run.len(), count);
@@ -46,8 +81,8 @@ fn check_script(script: &RaceScript) {
         .iter()
         .map(|entrant| entrant.as_run_position)
         .collect();
-    assert_eq!(official, (1..=count as u32).collect::<BTreeSet<u32>>());
-    assert_eq!(as_run, (1..=count as u32).collect::<BTreeSet<u32>>());
+    assert_eq!(official, (1..=count_u32).collect::<BTreeSet<u32>>());
+    assert_eq!(as_run, (1..=count_u32).collect::<BTreeSet<u32>>());
     let rank = |status: ResultStatus| match status {
         ResultStatus::Finished => 0,
         ResultStatus::Disqualified => 1,
@@ -63,7 +98,7 @@ fn check_script(script: &RaceScript) {
                     assert!(pair[0].finish_time_ms <= pair[1].finish_time_ms);
                 }
                 ResultStatus::Dnf => {
-                    assert!(pair[0].distance_covered.0 >= pair[1].distance_covered.0)
+                    assert!(pair[0].distance_covered.0 >= pair[1].distance_covered.0);
                 }
                 ResultStatus::NonRunner => {}
             }
@@ -99,31 +134,7 @@ fn check_script(script: &RaceScript) {
         .count();
     assert_eq!(finishes.len(), finished_count);
     if finished_count > 0 {
-        assert_eq!(result.lap_leaders.len(), script.track.laps as usize);
-        let laps: Vec<u32> = result.lap_leaders.iter().map(|leader| leader.lap).collect();
-        assert_eq!(laps, (1..=script.track.laps).collect::<Vec<u32>>());
-        assert_eq!(
-            result.lap_leaders.last().expect("last").entrant_id,
-            result.as_run[0]
-        );
-        let lap_events: Vec<(u32, String)> = script
-            .ticks
-            .iter()
-            .flat_map(|tick| tick.events.iter())
-            .filter(|event| event.kind == EventKind::Lap)
-            .map(|event| (event.lap.expect("lap"), event.id.clone().expect("id")))
-            .collect();
-        assert_eq!(lap_events.len(), result.lap_leaders.len());
-        for leader in &result.lap_leaders {
-            assert!(lap_events.contains(&(leader.lap, leader.entrant_id.clone())));
-            let led = &result
-                .entrants
-                .iter()
-                .find(|entrant| entrant.id == leader.entrant_id)
-                .expect("entrant")
-                .laps_led;
-            assert!(led.contains(&leader.lap));
-        }
+        check_lap_leaders(script);
     }
     for (index, incident) in result.incidents.iter().enumerate() {
         assert_eq!(incident.seq as usize, index + 1);
@@ -143,7 +154,11 @@ fn scripts_have_unique_positions_and_consistent_results() {
                 let inputs = support::race_inputs(
                     species,
                     venue.laps_range[0],
-                    support::varied_field(species, 6 + value as usize, value as u8 + 1),
+                    support::varied_field(
+                        species,
+                        6 + usize::try_from(value).expect("small value"),
+                        u8::try_from(value).expect("small value") + 1,
+                    ),
                 );
                 let sealed =
                     simulate(&params, &venue, &inputs, &support::seed(value)).expect("simulate");
@@ -168,7 +183,7 @@ fn incidents_classify_in_official_order() {
         let inputs = support::race_inputs(
             "HORSE",
             3,
-            support::varied_field("HORSE", 10, value as u8 + 3),
+            support::varied_field("HORSE", 10, u8::try_from(value).expect("small value") + 3),
         );
         let sealed = simulate(&params, &venue, &inputs, &support::seed(value)).expect("simulate");
         check_script(&sealed.script);
@@ -185,7 +200,7 @@ fn incidents_classify_in_official_order() {
                         .iter()
                         .find(|candidate| candidate.id == entrant.id)
                         .expect("entrant");
-                    assert_eq!(state.dist.0, 0.0);
+                    assert!(state.dist.0 == 0.0, "non-runner moved");
                     assert_eq!(state.state, EntrantState::Dnf);
                 }
             }
@@ -206,7 +221,8 @@ fn incidents_classify_in_official_order() {
                         ResultStatus::Finished | ResultStatus::Disqualified
                     )
                 })
-                .count() as u32;
+                .count();
+            let finishers = u32::try_from(finishers).expect("finisher count fits u32");
             let dq = result
                 .entrants
                 .iter()

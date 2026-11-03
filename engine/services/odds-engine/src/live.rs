@@ -269,7 +269,7 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
             tick,
             markets = published,
             runs,
-            elapsedMs = elapsed.as_millis() as u64,
+            elapsedMs = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
             "race {race_id} tick {tick}: priced {published} markets from {runs} runs in {} ms",
             elapsed.as_millis()
         );

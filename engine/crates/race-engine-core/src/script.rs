@@ -19,9 +19,13 @@ pub fn round2(value: f64) -> f64 {
 }
 
 impl Serialize for Num {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "integral values below 1e15 convert to i64 exactly"
+    )]
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let value = self.0;
-        if value.is_finite() && libm::floor(value) == value && value.abs() < 1e15 {
+        if value.is_finite() && value - libm::floor(value) == 0.0 && value.abs() < 1e15 {
             serializer.serialize_i64(value as i64)
         } else {
             serializer.serialize_f64(value)

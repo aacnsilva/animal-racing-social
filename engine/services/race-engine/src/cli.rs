@@ -40,6 +40,11 @@ fn load(args: &[String]) -> Result<Verification, String> {
     Ok(verify_script_bytes(&params, &venue, &script_bytes))
 }
 
+#[expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "the verify subcommand reports its verdict on the terminal"
+)]
 pub fn verify(args: &[String]) -> i32 {
     match load(args) {
         Ok(Verification::Ok { script_hash }) => {

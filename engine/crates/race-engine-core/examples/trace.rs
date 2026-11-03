@@ -3,18 +3,19 @@ mod support;
 
 use race_engine_core::{EntrantInput, EntrantState, RaceInputs, plan_race, simulate};
 
+#[expect(clippy::print_stdout, reason = "trace output is written to stdout")]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let venue = support::venue(args.get(1).map_or("v_jungle_marathon", String::as_str));
     let species = args.get(2).map_or("HORSE", String::as_str);
     let params = support::params();
     let base = support::typical_stats(species);
-    let field: Vec<EntrantInput> = (0..8)
+    let field: Vec<EntrantInput> = (0..8u32)
         .map(|index| EntrantInput {
             entrant_id: format!("e{}", index + 1),
             animal_id: format!("{index}"),
-            lane: index as u32 + 1,
-            temperament: support::TEMPERAMENTS[index % 4],
+            lane: index + 1,
+            temperament: support::TEMPERAMENTS[index as usize % 4],
             stats: base,
         })
         .collect();

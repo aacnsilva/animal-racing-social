@@ -17,6 +17,7 @@ use axum::extract::State;
 use axum::routing::get;
 use redis::aio::ConnectionManager;
 
+#[derive(Debug)]
 pub struct Ctx {
     pub db: Db,
     pub producer: Producer,
@@ -38,11 +39,16 @@ USAGE:
 ENV: DATABASE_URL KAFKA_BROKERS REDIS_URL PORT SCRIPT_KEYS SCRIPT_KEY_ID REPLAY_RETENTION_HOURS
      RUST_LOG OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME OTEL_RESOURCE_ATTRIBUTES OTEL_SDK_DISABLED";
 
+#[expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "CLI usage, version and fatal argument errors go to the terminal before telemetry starts"
+)]
 fn main() {
     match std::env::args().nth(1).as_deref() {
         Some("--help" | "-h" | "help") => println!("{USAGE}"),
         Some("--version" | "-V") => {
-            println!("race-broadcaster {}", race_engine_core::ENGINE_VERSION)
+            println!("race-broadcaster {}", race_engine_core::ENGINE_VERSION);
         }
         Some(other) => {
             eprintln!("unknown argument {other}\n\n{USAGE}");

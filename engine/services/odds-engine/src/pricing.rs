@@ -11,10 +11,10 @@ pub enum MarketKind {
 impl MarketKind {
     pub fn parse(kind: &str, param: impl Fn(&str) -> Option<i64>) -> Result<MarketKind, String> {
         let positive = |name: &str| -> Result<u32, String> {
-            match param(name) {
-                Some(value) if value >= 1 => Ok(value as u32),
-                _ => Err(format!("{kind} requires a positive params.{name}")),
-            }
+            param(name)
+                .filter(|value| *value >= 1)
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(|| format!("{kind} requires a positive params.{name}"))
         };
         match kind {
             "FINISH_POSITION" => Ok(MarketKind::FinishPosition(positive("position")?)),
@@ -25,6 +25,10 @@ impl MarketKind {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "numeric params saturate to i64 before range validation"
+    )]
     pub fn from_json(kind: &str, params: &serde_json::Value) -> Result<MarketKind, String> {
         MarketKind::parse(kind, |name| match &params[name] {
             serde_json::Value::Number(number) => number.as_f64().map(|value| value as i64),
@@ -33,8 +37,8 @@ impl MarketKind {
         })
     }
 
-    pub fn probability(&self, table: &ProbabilityTable, entrant: usize) -> f64 {
-        match *self {
+    pub fn probability(self, table: &ProbabilityTable, entrant: usize) -> f64 {
+        match self {
             MarketKind::FinishPosition(position) => table.finish_position(entrant, position),
             MarketKind::TopN(n) => table.top_n(entrant, n),
             MarketKind::Tricast => table.win(entrant),
@@ -62,6 +66,10 @@ mod tests {
     use super::*;
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "prices are rounded to exact contract values"
+    )]
     fn price_formula_matches_contract() {
         assert_eq!(price(0.5, 0.05), 1.9);
         assert_eq!(price(0.25, 0.05), 3.81);

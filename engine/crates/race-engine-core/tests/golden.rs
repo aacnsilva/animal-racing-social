@@ -17,7 +17,7 @@ fn golden_script_hash_is_stable() {
             .expect("engineVersion")
             .into(),
         species: fixture["species"].as_str().expect("species").into(),
-        laps: fixture["laps"].as_u64().expect("laps") as u32,
+        laps: u32::try_from(fixture["laps"].as_u64().expect("laps")).expect("laps fits u32"),
         entrants,
     };
     let seed = parse_seed(fixture["seed"].as_str().expect("seed")).expect("seed hex");

@@ -1,5 +1,9 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "day and month are bounded by the civil calendar algorithm"
+)]
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let shifted = days + 719_468;
     let era = if shifted >= 0 {
@@ -7,10 +11,10 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     } else {
         shifted - 146_096
     } / 146_097;
-    let day_of_era = (shifted - era * 146_097) as u64;
+    let day_of_era = (shifted - era * 146_097).cast_unsigned();
     let year_of_era =
         (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let year = year_of_era as i64 + era * 400;
+    let year = year_of_era.cast_signed() + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_index = (5 * day_of_year + 2) / 153;
     let day = (day_of_year - (153 * month_index + 2) / 5 + 1) as u32;
@@ -25,24 +29,24 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
     let year = if month <= 2 { year - 1 } else { year };
     let era = if year >= 0 { year } else { year - 399 } / 400;
-    let year_of_era = (year - era * 400) as u64;
+    let year_of_era = (year - era * 400).cast_unsigned();
     let month = u64::from(month);
     let day_of_year =
         (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + u64::from(day) - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146_097 + day_of_era as i64 - 719_468
+    era * 146_097 + day_of_era.cast_signed() - 719_468
 }
 
 pub fn unix_millis(time: SystemTime) -> i64 {
     match time.duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_millis() as i64,
-        Err(err) => -(err.duration().as_millis() as i64),
+        Ok(duration) => i64::try_from(duration.as_millis()).unwrap_or(i64::MAX),
+        Err(err) => -i64::try_from(err.duration().as_millis()).unwrap_or(i64::MAX),
     }
 }
 
 pub fn from_unix_millis(millis: i64) -> SystemTime {
     if millis >= 0 {
-        UNIX_EPOCH + Duration::from_millis(millis as u64)
+        UNIX_EPOCH + Duration::from_millis(millis.unsigned_abs())
     } else {
         UNIX_EPOCH - Duration::from_millis(millis.unsigned_abs())
     }
@@ -71,8 +75,8 @@ pub fn parse_rfc3339(text: &str) -> Option<SystemTime> {
     }
     let number = |range: std::ops::Range<usize>| text.get(range)?.parse::<i64>().ok();
     let year = number(0..4)?;
-    let month = number(5..7)? as u32;
-    let day = number(8..10)? as u32;
+    let month = u32::try_from(number(5..7)?).ok()?;
+    let day = u32::try_from(number(8..10)?).ok()?;
     let hours = number(11..13)?;
     let minutes = number(14..16)?;
     let seconds = number(17..19)?;

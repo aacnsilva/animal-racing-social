@@ -149,12 +149,13 @@ async fn retention(ctx: &Ctx) -> Res<()> {
         )
         .await
         .context("delete revealed scripts")?;
+    let retention_hours = i32::try_from(ctx.retention_hours).context("retention hours")?;
     let cancelled = conn
         .execute(
             "DELETE FROM sealed.race_scripts s USING racing.races r
               WHERE s.race_id = r.race_id AND r.status = 'CANCELLED' AND s.revealed_at IS NULL
                 AND r.start_at < now() - make_interval(hours => $1)",
-            &[&(ctx.retention_hours as i32)],
+            &[&retention_hours],
         )
         .await
         .context("delete cancelled scripts")?;

@@ -17,6 +17,25 @@ pub struct DbConn<'a> {
     guard: MutexGuard<'a, Option<Client>>,
 }
 
+impl std::fmt::Debug for Db {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Db")
+            .field("slots", &self.slots.len())
+            .field("next", &self.next)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for DbConn<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DbConn")
+            .field("connected", &self.guard.is_some())
+            .finish()
+    }
+}
+
 impl Deref for DbConn<'_> {
     type Target = Client;
 

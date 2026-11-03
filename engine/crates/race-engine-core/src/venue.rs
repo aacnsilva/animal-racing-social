@@ -230,6 +230,11 @@ impl Track {
         f64::from(lap) * self.lap_length + self.segments[index].end
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "lap index is clamped non-negative and bounded by the lap count"
+    )]
     pub fn locate(&self, dist: f64) -> (u32, usize) {
         let lap = libm::floor(dist / self.lap_length).max(0.0) as u32;
         let mut index = 0;

@@ -3,7 +3,7 @@ use std::time::{Duration, Instant, SystemTime};
 use ars_infra::Res;
 use ars_infra::kafka::{MARKET_EVENTS, RACE_LIFECYCLE, RACE_TICKS};
 use ars_proto::envelope::Payload;
-use ars_proto::{EntrantInfo, Envelope, RaceTick};
+use ars_proto::{EntrantInfo, Envelope, MarketOpened, RaceTick};
 use race_engine_core::{EntrantState, RevealedEntrant};
 use rdkafka::Message;
 use rdkafka::consumer::Consumer;
@@ -116,10 +116,43 @@ fn race_info(entrants: &[EntrantInfo], scheduled: &ars_proto::RaceScheduled) -> 
 fn age_ms(envelope: &Envelope) -> i64 {
     match ars_infra::time::parse_rfc3339(&envelope.occurred_at) {
         Some(occurred) => match SystemTime::now().duration_since(occurred) {
-            Ok(age) => age.as_millis() as i64,
+            Ok(age) => i64::try_from(age.as_millis()).unwrap_or(i64::MAX),
             Err(_) => 0,
         },
         None => 0,
+    }
+}
+
+fn open_market(registry: &mut crate::registry::Registry, opened: &MarketOpened) -> bool {
+    let params = serde_json::to_value(&opened.params).unwrap_or_default();
+    match MarketKind::from_json(&opened.r#type, &params) {
+        Ok(kind) => {
+            let previous = registry
+                .markets
+                .get(&opened.market_id)
+                .map_or(0, |market| market.price_version);
+            registry.markets.insert(
+                opened.market_id,
+                Market {
+                    market_id: opened.market_id,
+                    race_id: opened.race_id,
+                    kind,
+                    status: MarketStatus::Open,
+                    selections: opened
+                        .selections
+                        .iter()
+                        .map(|selection| (selection.selection_id, selection.entrant_id.clone()))
+                        .collect(),
+                    price_version: opened.price_version.max(previous),
+                },
+            );
+            registry.races.entry(opened.race_id).or_default();
+            true
+        }
+        Err(err) => {
+            tracing::warn!(marketId = %opened.market_id, "market {}: {err}", opened.market_id);
+            false
+        }
     }
 }
 
@@ -145,36 +178,8 @@ fn handle(app: &Shared, envelope: Envelope) -> bool {
         Payload::RaceFinished(finished) => registry.drop_race(finished.race_id),
         Payload::RaceCancelled(cancelled) => registry.drop_race(cancelled.race_id),
         Payload::MarketOpened(opened) => {
-            let params = serde_json::to_value(&opened.params).unwrap_or_default();
-            match MarketKind::from_json(&opened.r#type, &params) {
-                Ok(kind) => {
-                    let previous = registry
-                        .markets
-                        .get(&opened.market_id)
-                        .map_or(0, |market| market.price_version);
-                    registry.markets.insert(
-                        opened.market_id,
-                        Market {
-                            market_id: opened.market_id,
-                            race_id: opened.race_id,
-                            kind,
-                            status: MarketStatus::Open,
-                            selections: opened
-                                .selections
-                                .iter()
-                                .map(|selection| {
-                                    (selection.selection_id, selection.entrant_id.clone())
-                                })
-                                .collect(),
-                            price_version: opened.price_version.max(previous),
-                        },
-                    );
-                    registry.races.entry(opened.race_id).or_default();
-                }
-                Err(err) => {
-                    tracing::warn!(marketId = %opened.market_id, "market {}: {err}", opened.market_id);
-                    return false;
-                }
+            if !open_market(&mut registry, &opened) {
+                return false;
             }
         }
         Payload::PriceUpdated(updated) => {

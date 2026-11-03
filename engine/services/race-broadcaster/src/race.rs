@@ -9,7 +9,7 @@ use ars_infra::time::{format_rfc3339, unix_millis};
 use ars_infra::{Context, Res};
 use ars_proto::envelope::Payload;
 use ars_proto::{LapCompleted, RaceStarted};
-use race_engine_core::{EventKind, RaceScript, ScriptTick};
+use race_engine_core::{EventKind, RaceScript, ScriptResult, ScriptTick};
 use redis::AsyncCommands;
 use tracing::field::Empty;
 
@@ -127,7 +127,9 @@ async fn last_published_tick(ctx: &Ctx, race_id: i64) -> Option<u32> {
     let mut redis = ctx.redis.clone();
     let text: Option<String> = redis.get(state_key(race_id)).await.ok().flatten();
     let value: serde_json::Value = serde_json::from_str(&text?).ok()?;
-    value["tick"].as_u64().map(|tick| tick as u32)
+    value["tick"]
+        .as_u64()
+        .and_then(|tick| u32::try_from(tick).ok())
 }
 
 async fn write_state(
@@ -182,7 +184,7 @@ async fn publish_tick(ctx: &Ctx, clock: &Clock, tick: &ScriptTick) -> Res<()> {
             SystemTime::now(),
         ),
         Err(err) => {
-            tracing::warn!(raceId = %race_id, tick = tick.tick, "race {race_id}: tick {} not published: {err}", tick.tick)
+            tracing::warn!(raceId = %race_id, tick = tick.tick, "race {race_id}: tick {} not published: {err}", tick.tick);
         }
     }
     publish_lap_events(ctx, race_id, tick).await?;
@@ -283,7 +285,9 @@ pub async fn run_race(
     }
     let elapsed_ms = (unix_millis(SystemTime::now()) - unix_millis(start_at)).max(0);
     let elapsed_tick = elapsed_ms / i64::from(tick_ms);
-    let wall_tick = (elapsed_tick as u32).min(finish_tick);
+    let wall_tick = u32::try_from(elapsed_tick)
+        .unwrap_or(u32::MAX)
+        .min(finish_tick);
     let mut next_tick = 0;
     if resuming {
         let last = last_published_tick(&ctx, race_id).await;
@@ -322,6 +326,79 @@ pub async fn run_race(
     traced(&span, finish(&ctx, race_id, &loaded, &clock.start_text)).await
 }
 
+async fn write_results(
+    transaction: &tokio_postgres::Transaction<'_>,
+    race_id: i64,
+    result: &ScriptResult,
+) -> Res<()> {
+    for entrant in &result.entrants {
+        let finish_time = entrant
+            .finish_time_ms
+            .map(i32::try_from)
+            .transpose()
+            .context("finish time")?;
+        let official_position =
+            i32::try_from(entrant.official_position).context("official position")?;
+        let as_run_position = i32::try_from(entrant.as_run_position).context("as-run position")?;
+        transaction
+            .execute(
+                "UPDATE racing.race_entrants
+                    SET official_position = $3, as_run_position = $4, result_status = $5,
+                        finish_time_ms = $6, distance_covered = $7::float8
+                  WHERE race_id = $1 AND entrant_id = $2",
+                &[
+                    &race_id,
+                    &entrant_number(&entrant.id),
+                    &official_position,
+                    &as_run_position,
+                    &entrant.result_status.key(),
+                    &finish_time,
+                    &entrant.distance_covered.0,
+                ],
+            )
+            .await
+            .context("update entrant result")?;
+    }
+    transaction
+        .execute(
+            "DELETE FROM racing.race_lap_leaders WHERE race_id = $1",
+            &[&race_id],
+        )
+        .await
+        .context("clear lap leaders")?;
+    for leader in &result.lap_leaders {
+        let lap = i32::try_from(leader.lap).context("lap")?;
+        let tick = i32::try_from(leader.tick).context("lap leader tick")?;
+        transaction
+            .execute(
+                "INSERT INTO racing.race_lap_leaders (race_id, lap, entrant_id, tick) VALUES ($1, $2, $3, $4)",
+                &[&race_id, &lap, &entrant_number(&leader.entrant_id), &tick],
+            )
+            .await
+            .context("insert lap leader")?;
+    }
+    transaction
+        .execute(
+            "DELETE FROM racing.race_incidents WHERE race_id = $1",
+            &[&race_id],
+        )
+        .await
+        .context("clear incidents")?;
+    for incident in &result.incidents {
+        let entrant = incident.entrant_id.as_deref().map(entrant_number);
+        let seq = i32::try_from(incident.seq).context("incident seq")?;
+        let tick = i32::try_from(incident.tick).context("incident tick")?;
+        transaction
+            .execute(
+                "INSERT INTO racing.race_incidents (race_id, seq, tick, type, entrant_id, data) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+                &[&race_id, &seq, &tick, &incident.kind.key(), &entrant, &incident.data],
+            )
+            .await
+            .context("insert incident")?;
+    }
+    Ok(())
+}
+
 async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> Res<()> {
     let script = &loaded.script;
     let result = &script.result;
@@ -330,6 +407,8 @@ async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> R
         &race_id.to_string(),
         &loaded.seed_ciphertext,
     )?;
+    let finish_tick = i32::try_from(result.finish_tick).context("finish tick")?;
+    let retention_hours = i32::try_from(ctx.retention_hours).context("retention hours")?;
     let mut conn = ctx.db.acquire().await?;
     let transaction = conn.transaction().await.context("begin reveal")?;
     let finished = transaction
@@ -339,12 +418,7 @@ async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> R
                     replay_expires_at = now() + make_interval(hours => $4)
               WHERE race_id = $1 AND status = 'LIVE'
           RETURNING finished_at, replay_expires_at",
-            &[
-                &race_id,
-                &(result.finish_tick as i32),
-                &seed,
-                &(ctx.retention_hours as i32),
-            ],
+            &[&race_id, &finish_tick, &seed, &retention_hours],
         )
         .await
         .context("set FINISHED")?;
@@ -362,60 +436,7 @@ async fn finish(ctx: &Ctx, race_id: i64, loaded: &Loaded, start_text: &str) -> R
         )
         .await
         .context("clear positions")?;
-    for entrant in &result.entrants {
-        let finish_time = entrant.finish_time_ms.map(|value| value as i32);
-        transaction
-            .execute(
-                "UPDATE racing.race_entrants
-                    SET official_position = $3, as_run_position = $4, result_status = $5,
-                        finish_time_ms = $6, distance_covered = $7::float8
-                  WHERE race_id = $1 AND entrant_id = $2",
-                &[
-                    &race_id,
-                    &entrant_number(&entrant.id),
-                    &(entrant.official_position as i32),
-                    &(entrant.as_run_position as i32),
-                    &entrant.result_status.key(),
-                    &finish_time,
-                    &entrant.distance_covered.0,
-                ],
-            )
-            .await
-            .context("update entrant result")?;
-    }
-    transaction
-        .execute(
-            "DELETE FROM racing.race_lap_leaders WHERE race_id = $1",
-            &[&race_id],
-        )
-        .await
-        .context("clear lap leaders")?;
-    for leader in &result.lap_leaders {
-        transaction
-            .execute(
-                "INSERT INTO racing.race_lap_leaders (race_id, lap, entrant_id, tick) VALUES ($1, $2, $3, $4)",
-                &[&race_id, &(leader.lap as i32), &entrant_number(&leader.entrant_id), &(leader.tick as i32)],
-            )
-            .await
-            .context("insert lap leader")?;
-    }
-    transaction
-        .execute(
-            "DELETE FROM racing.race_incidents WHERE race_id = $1",
-            &[&race_id],
-        )
-        .await
-        .context("clear incidents")?;
-    for incident in &result.incidents {
-        let entrant = incident.entrant_id.as_deref().map(entrant_number);
-        transaction
-            .execute(
-                "INSERT INTO racing.race_incidents (race_id, seq, tick, type, entrant_id, data) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
-                &[&race_id, &(incident.seq as i32), &(incident.tick as i32), &incident.kind.key(), &entrant, &incident.data],
-            )
-            .await
-            .context("insert incident")?;
-    }
+    write_results(&transaction, race_id, result).await?;
     transaction
         .execute(
             "INSERT INTO racing.race_replays (race_id, script, expires_at) VALUES ($1, $2, $3)

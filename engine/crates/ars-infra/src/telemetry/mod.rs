@@ -115,10 +115,10 @@ fn log_filter() -> EnvFilter {
 }
 
 pub fn init(default_service: &str) {
-    init_with(Settings::from_env(default_service));
+    init_with(&Settings::from_env(default_service));
 }
 
-pub fn init_with(settings: Settings) {
+pub fn init_with(settings: &Settings) {
     let _ = SERVICE.set(settings.service.clone());
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
     let logs = JsonLayer::stdout(&settings.service).with_filter(log_filter());
@@ -133,7 +133,7 @@ pub fn init_with(settings: Settings) {
         match SpanExporter::builder().with_http().build() {
             Ok(exporter) => {
                 tracer_builder = tracer_builder
-                    .with_span_processor(BatchSpanProcessor::builder(exporter, Tokio).build())
+                    .with_span_processor(BatchSpanProcessor::builder(exporter, Tokio).build());
             }
             Err(err) => failures.push(format!("trace exporter disabled: {err}")),
         }
@@ -166,7 +166,7 @@ pub fn init_with(settings: Settings) {
     if let Some(meter_provider) = &meter_provider {
         opentelemetry::global::set_meter_provider(meter_provider.clone());
     }
-    let traces = tracing_opentelemetry::layer()
+    let trace_layer = tracing_opentelemetry::layer()
         .with_tracer(tracer)
         .with_threads(false)
         .with_location(false)
@@ -175,7 +175,7 @@ pub fn init_with(settings: Settings) {
         .with_filter(LevelFilter::INFO);
     let _ = tracing_subscriber::registry()
         .with(logs)
-        .with(traces)
+        .with(trace_layer)
         .try_init();
     let _ = PROVIDERS.set(Providers {
         tracer: tracer_provider,
@@ -302,7 +302,7 @@ mod tests {
 
     #[tokio::test]
     async fn init_without_endpoint_installs_no_exporters_and_shuts_down() {
-        init_with(Settings::from_lookup("telemetry-test", lookup(&[])));
+        init_with(&Settings::from_lookup("telemetry-test", lookup(&[])));
         assert_eq!(service_name(), "telemetry-test");
         assert!(
             PROVIDERS

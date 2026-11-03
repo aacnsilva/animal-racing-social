@@ -6,10 +6,15 @@ use tokio_postgres::Client;
 
 use crate::{Context, Res};
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Catalog {
     venues: Arc<Mutex<HashMap<(String, u32), Venue>>>,
     params: Arc<Mutex<HashMap<String, Arc<LoadedParams>>>>,
+}
+
+fn column_u32(row: &tokio_postgres::Row, column: &str) -> Res<u32> {
+    let value: i32 = row.try_get(column).context(column)?;
+    u32::try_from(value).context(column)
 }
 
 pub fn venue_from_row(row: &tokio_postgres::Row) -> Res<Venue> {
@@ -18,16 +23,13 @@ pub fn venue_from_row(row: &tokio_postgres::Row) -> Res<Venue> {
         serde_json::from_value(segments).context("venue segments json")?;
     let venue = Venue {
         id: row.try_get("venue_id").context("venue_id")?,
-        version: row.try_get::<_, i32>("version").context("version")? as u32,
+        version: column_u32(row, "version")?,
         name: row.try_get("name").context("name")?,
         class: row.try_get("race_class").context("race_class")?,
         surface: row.try_get("surface").context("surface")?,
-        lanes: row.try_get::<_, i32>("lanes").context("lanes")? as u32,
+        lanes: column_u32(row, "lanes")?,
         lap_length: row.try_get("lap_length").context("lap_length")?,
-        laps_range: [
-            row.try_get::<_, i32>("laps_min").context("laps_min")? as u32,
-            row.try_get::<_, i32>("laps_max").context("laps_max")? as u32,
-        ],
+        laps_range: [column_u32(row, "laps_min")?, column_u32(row, "laps_max")?],
         segments,
     };
     venue.validate().map_err(|err| err.to_string())?;
@@ -54,8 +56,9 @@ impl Catalog {
         let query = format!(
             "SELECT {VENUE_COLUMNS} FROM racing.venues WHERE venue_id = $1 AND version = $2"
         );
+        let version_column = i32::try_from(version).context("venue version")?;
         let row = client
-            .query_opt(&query, &[&venue_id, &(version as i32)])
+            .query_opt(&query, &[&venue_id, &version_column])
             .await
             .context("load venue")?
             .context(&format!("VENUE_NOT_FOUND {venue_id}@{version}"))?;

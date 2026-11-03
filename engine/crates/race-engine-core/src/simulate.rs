@@ -153,6 +153,10 @@ fn tick_record(sim: &Sim<'_>, positions: &[u32], events: Vec<TickEvent>) -> Scri
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "ranks and lap indexes are bounded by the field size and lap count; finish times in ms fit i64"
+)]
 fn build_result(sim: &Sim<'_>) -> ScriptResult {
     let race = sim.race;
     let official = sim.official_order();

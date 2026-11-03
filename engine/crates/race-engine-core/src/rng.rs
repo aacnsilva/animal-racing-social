@@ -16,11 +16,19 @@ impl<R: Rng> Stream<R> {
         }
     }
 
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a 53-bit integer is exactly representable in f64"
+    )]
     #[inline]
     pub fn uniform(&mut self) -> f64 {
         (self.rng.next_u64() >> 11) as f64 * UNIT_SCALE
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "remainder modulo a u32 bound always fits u32"
+    )]
     #[inline]
     pub fn below(&mut self, bound: u32) -> u32 {
         if bound <= 1 {

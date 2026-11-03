@@ -17,6 +17,15 @@ pub struct JsonLayer {
     sink: Sink,
 }
 
+impl Debug for JsonLayer {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("JsonLayer")
+            .field("service", &self.service)
+            .finish_non_exhaustive()
+    }
+}
+
 impl JsonLayer {
     pub fn new(service: &str, sink: impl Fn(&[u8]) + Send + Sync + 'static) -> JsonLayer {
         JsonLayer {
@@ -31,7 +40,7 @@ impl JsonLayer {
         })
     }
 
-    fn render(&self, level: &Level, fields: Fields, ids: Option<(String, String)>) -> String {
+    fn render(&self, level: Level, fields: Fields, ids: Option<(String, String)>) -> String {
         let mut line = String::with_capacity(160);
         line.push_str("{\"t\":");
         push_string(&mut line, &crate::time::now_rfc3339());
@@ -61,8 +70,8 @@ impl JsonLayer {
     }
 }
 
-fn level_name(level: &Level) -> &'static str {
-    match *level {
+fn level_name(level: Level) -> &'static str {
+    match level {
         Level::ERROR => "error",
         Level::WARN => "warn",
         Level::INFO => "info",
@@ -143,7 +152,7 @@ impl<S: Subscriber> Layer<S> for JsonLayer {
     fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
         let mut fields = Fields::default();
         event.record(&mut fields);
-        let line = self.render(event.metadata().level(), fields, current_ids());
+        let line = self.render(*event.metadata().level(), fields, current_ids());
         (self.sink)(line.as_bytes());
     }
 }
@@ -164,7 +173,7 @@ mod tests {
         let provider = SdkTracerProvider::builder().build();
         let subscriber = tracing_subscriber::registry()
             .with(JsonLayer::new("race-broadcaster", move |line| {
-                writer.lock().expect("buffer").extend_from_slice(line)
+                writer.lock().expect("buffer").extend_from_slice(line);
             }))
             .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
         tracing::subscriber::with_default(subscriber, run);
