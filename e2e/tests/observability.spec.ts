@@ -47,7 +47,9 @@ test.afterAll(async () => {
 async function promql(query: string): Promise<{ metric: Record<string, string>; value: [number, string] }[]> {
   const response = await http.get(`${VICTORIA_METRICS}/api/v1/query`, { params: { query } });
   expect(response.ok(), `${query}: ${await response.text()}`).toBeTruthy();
-  return (await response.json()).data.result;
+  const body: { data: { result: { metric: Record<string, string>; value: [number, string] }[] } } =
+    await response.json();
+  return body.data.result;
 }
 
 async function logs(query: string, limit = 1000): Promise<Record<string, string>[]> {
@@ -62,30 +64,30 @@ async function logs(query: string, limit = 1000): Promise<Record<string, string>
 async function trace(traceId: string): Promise<Trace | null> {
   const response = await http.get(`${JAEGER}/api/traces/${traceId}`);
   if (!response.ok()) return null;
-  return ((await response.json()).data?.[0] as Trace | undefined) ?? null;
+  const body: { data?: Trace[] } = await response.json();
+  return body.data?.[0] ?? null;
 }
 
 const serviceOf = (found: Trace, span: Span) => found.processes[span.processID].serviceName;
 
-async function grafana<T = any>(method: string, path: string, data?: unknown): Promise<{ status: number; body: T }> {
+async function grafana(method: string, path: string, data?: unknown) {
   const response = await http.fetch(`${GRAFANA}${path}`, { method, data, headers: { authorization: GRAFANA_AUTH } });
   const text = await response.text();
   return {
     status: response.status(),
-    body: (text.startsWith('{') || text.startsWith('[') ? JSON.parse(text) : text) as T,
+    body: text.startsWith('{') || text.startsWith('[') ? JSON.parse(text) : text,
   };
 }
 
-async function openWinMarket(
-  api: APIRequestContext,
-): Promise<{ id: string; priceVersion: number; selections: { entrantId: string; price: number }[] }> {
-  const races = (await (await api.get('/v1/races?status=OPEN&limit=20')).json()).items as { id: string }[];
-  for (const race of races) {
-    const markets = await (await api.get(`/v1/races/${race.id}/markets`)).json();
-    const market = markets.find(
-      (candidate: { type: string; status: string }) =>
-        candidate.type === 'FINISH_POSITION' && candidate.status === 'OPEN',
-    );
+type WinMarket = { id: string; priceVersion: number; selections: { entrantId: string; price: number }[] };
+
+async function openWinMarket(api: APIRequestContext): Promise<WinMarket> {
+  const races: { items: { id: string }[] } = await (await api.get('/v1/races?status=OPEN&limit=20')).json();
+  for (const race of races.items) {
+    const markets: (WinMarket & { type: string; status: string })[] = await (
+      await api.get(`/v1/races/${race.id}/markets`)
+    ).json();
+    const market = markets.find((candidate) => candidate.type === 'FINISH_POSITION' && candidate.status === 'OPEN');
     if (market) return market;
   }
   throw new Error('No open win market');
@@ -106,7 +108,8 @@ test('a bet is one trace from the edge through Kafka to the wallet, with correla
     },
   });
   expect(placed.status(), await placed.text()).toBeLessThan(300);
-  const betId = (await placed.json()).id as string;
+  const bet: { id: string } = await placed.json();
+  const betId = bet.id;
   const traceId = placed.headers()['x-trace-id'];
   expect(traceId).toMatch(/^[0-9a-f]{32}$/);
   await api.dispose();
@@ -181,7 +184,7 @@ test('metrics from every layer reach VictoriaMetrics', async () => {
       .toBeGreaterThan(0);
   }
   const probes = await promql('min by (probe) (probe_success)');
-  expect(probes.map((probe) => probe.metric.probe).sort()).toEqual([...APP_SERVICES, 'web'].sort());
+  expect(probes.map((probe) => probe.metric.probe).toSorted()).toEqual([...APP_SERVICES, 'web'].toSorted());
   for (const probe of probes) expect(probe.value[1], probe.metric.probe).toBe('1');
   expect((await promql('max(ars_ledger_mismatched_wallets)'))[0]?.value[1]).toBe('0');
   expect((await promql('max(abs(ars_ledger_open_stake_drift))'))[0]?.value[1]).toBe('0');
@@ -200,15 +203,15 @@ test('every service ships JSON logs, and no telemetry leaks sealed race scripts'
   const leaks = await logs(
     `_time:1h AND ${engineJobs} AND (seed:* OR finish_tick:* OR finishTick:* OR script_size:* OR scriptSize:* OR finish_order:* OR i("finish tick") OR i("script size"))`,
   );
-  expect(leaks.map((line) => line._msg)).toEqual([]);
+  expect(leaks.map((line) => line['_msg'])).toEqual([]);
 
   const traces = await http.get(`${JAEGER}/api/traces`, {
     params: { service: 'race-engine', lookback: '2h', limit: '50' },
   });
   expect(traces.ok()).toBeTruthy();
   const keys = new Set<string>();
-  for (const found of (await traces.json()).data as Trace[])
-    for (const span of found.spans) for (const tag of span.tags) keys.add(tag.key);
+  const traceList: { data: Trace[] } = await traces.json();
+  for (const found of traceList.data) for (const span of found.spans) for (const tag of span.tags) keys.add(tag.key);
   expect(keys.size).toBeGreaterThan(0);
   expect([...keys].filter((key) => /seed|finish|order|leader|script_size|position/i.test(key))).toEqual([]);
 });
@@ -230,8 +233,8 @@ test('Grafana is provisioned and its alerts reach Discord', async () => {
     });
   }
 
-  const dashboards = await grafana<{ title: string }[]>('GET', '/api/search?type=dash-db&folderUIDs=ars');
-  expect(dashboards.body.map((dashboard) => dashboard.title).sort()).toEqual([
+  const dashboards: { title: string }[] = (await grafana('GET', '/api/search?type=dash-db&folderUIDs=ars')).body;
+  expect(dashboards.map((dashboard) => dashboard.title).toSorted()).toEqual([
     'ARS · Betting & wallet',
     'ARS · Event pipeline',
     'ARS · Overview',
@@ -275,10 +278,9 @@ test('Grafana is provisioned and its alerts reach Discord', async () => {
   await expect
     .poll(
       async () => {
-        const received = (await (await http.get(DISCORD_SINK)).json()) as {
-          receivedAt: string;
-          body: { content?: string };
-        }[];
+        const received: { receivedAt: string; body: { content?: string } }[] = await (
+          await http.get(DISCORD_SINK)
+        ).json();
         return received
           .filter((entry) => entry.receivedAt >= startedAt)
           .map((entry) => entry.body.content ?? '')

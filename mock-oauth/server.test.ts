@@ -54,23 +54,23 @@ async function token(provider: 'google' | 'github', code: string, redirectUri: s
 describe('mock oauth', () => {
   it('runs the Google code + PKCE flow', async () => {
     const redirectUri = 'http://localhost:8080/v1/auth/google/callback';
-    const exchanged = (await (await token('google', await authorize('google', redirectUri), redirectUri)).json()) as {
-      access_token: string;
-    };
-    const profile = (await (
+    const exchanged: { access_token: string } = await (
+      await token('google', await authorize('google', redirectUri), redirectUri)
+    ).json();
+    const profile: Record<string, unknown> = await (
       await fetch(`${base}/google/userinfo`, { headers: { authorization: `Bearer ${exchanged.access_token}` } })
-    ).json()) as Record<string, unknown>;
+    ).json();
     assert.deepEqual([profile.sub, profile.name], ['alice', 'Alice']);
   });
 
   it('returns numeric GitHub ids', async () => {
     const redirectUri = 'http://localhost:8080/v1/auth/github/callback';
-    const exchanged = (await (await token('github', await authorize('github', redirectUri), redirectUri)).json()) as {
-      access_token: string;
-    };
-    const profile = (await (
+    const exchanged: { access_token: string } = await (
+      await token('github', await authorize('github', redirectUri), redirectUri)
+    ).json();
+    const profile: Record<string, unknown> = await (
       await fetch(`${base}/github/user`, { headers: { authorization: `Bearer ${exchanged.access_token}` } })
-    ).json()) as Record<string, unknown>;
+    ).json();
     assert.equal(typeof profile.id, 'number');
     assert.equal(profile.login, 'alice');
   });
@@ -89,7 +89,7 @@ describe('mock oauth', () => {
       body: JSON.stringify({ content: 'RaceOverdue' }),
     });
     assert.equal(posted.status, 204);
-    const received = (await (await fetch(`${base}/webhooks/discord`)).json()) as { body: { content: string } }[];
+    const received: { body: { content: string } }[] = await (await fetch(`${base}/webhooks/discord`)).json();
     assert.equal(received.at(-1)?.body.content, 'RaceOverdue');
   });
 });

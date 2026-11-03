@@ -51,7 +51,7 @@ export async function apiSession(
   await api.get(approve.headers().location, { maxRedirects: 0 });
   const refreshed = await api.post('/v1/auth/refresh');
   expect(refreshed.ok()).toBeTruthy();
-  const body = await refreshed.json();
+  const body: { accessToken: string; user: { userId: string } } = await refreshed.json();
   return { api, token: body.accessToken, userId: body.user.userId };
 }
 
@@ -59,17 +59,17 @@ export async function adminSession() {
   return apiSession(ADMIN_SUBJECT, 'Admin');
 }
 
-export async function call<T = any>(
+export async function call(
   api: APIRequestContext,
   token: string,
   method: string,
   path: string,
   data?: unknown,
   headers: Record<string, string> = {},
-): Promise<{ status: number; body: T }> {
+) {
   const response = await api.fetch(path, { method, data, headers: { authorization: `Bearer ${token}`, ...headers } });
   const text = await response.text();
-  return { status: response.status(), body: (text ? JSON.parse(text) : undefined) as T };
+  return { status: response.status(), body: text ? JSON.parse(text) : undefined };
 }
 
 export async function scheduleRace(options: {
@@ -80,24 +80,27 @@ export async function scheduleRace(options: {
 }): Promise<string> {
   const admin = await adminSession();
   try {
-    const result = await call<{ raceId: string }>(admin.api, admin.token, 'POST', '/v1/admin/races', {
+    const result = await call(admin.api, admin.token, 'POST', '/v1/admin/races', {
       startAt: new Date(Date.now() + options.startInSeconds * 1000).toISOString(),
       species: options.species ?? 'HORSE',
       class: options.raceClass ?? 'SPRINT',
       fieldSize: options.fieldSize ?? 6,
     });
     expect(result.status).toBe(202);
-    await waitForRace(admin.api, result.body.raceId, ['OPEN'], 60_000);
+    const created: { raceId: string } = result.body;
+    await waitForRace(admin.api, created.raceId, ['OPEN'], 60_000);
     await expect
       .poll(
         async () => {
-          const markets = await (await admin.api.get(`/v1/races/${result.body.raceId}/markets`)).json();
-          return markets.filter((market: { status: string }) => market.status === 'OPEN').length;
+          const markets: { status: string }[] = await (
+            await admin.api.get(`/v1/races/${created.raceId}/markets`)
+          ).json();
+          return markets.filter((entry) => entry.status === 'OPEN').length;
         },
         { timeout: 60_000 },
       )
       .toBeGreaterThan(0);
-    return result.body.raceId;
+    return created.raceId;
   } finally {
     await admin.api.dispose();
   }
@@ -108,8 +111,8 @@ export async function waitForRace(
   raceId: string,
   statuses: string[],
   timeout: number,
-): Promise<any> {
-  let race: any;
+): Promise<{ status: string } | null> {
+  let race: { status: string } | null = null;
   await expect
     .poll(
       async () => {

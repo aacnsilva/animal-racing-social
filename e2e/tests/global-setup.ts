@@ -25,7 +25,11 @@ export default async function globalSetup(): Promise<void> {
   const admin = await adminSession();
   await expect
     .poll(
-      async () => (await call<unknown[]>(admin.api, admin.token, 'GET', '/v1/admin/engine/versions')).body?.length ?? 0,
+      async () => {
+        const versions: unknown[] | undefined = (await call(admin.api, admin.token, 'GET', '/v1/admin/engine/versions'))
+          .body;
+        return versions?.length ?? 0;
+      },
       { timeout: 180_000, intervals: [2000] },
     )
     .toBeGreaterThan(0);

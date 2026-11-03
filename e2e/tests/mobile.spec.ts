@@ -24,7 +24,7 @@ async function overflowingElements(page: Page): Promise<string[]> {
       if (scrollable) continue;
       const testId = element.dataset.testid ? `[data-testid="${element.dataset.testid}"]` : '';
       found.push(
-        `${element.tagName.toLowerCase()}.${String(element.className).trim().replace(/\s+/g, '.')}${testId} spans ${Math.round(rect.left)}..${Math.round(rect.right)}`,
+        `${element.tagName.toLowerCase()}.${(element.getAttribute('class') ?? '').trim().replace(/\s+/g, '.')}${testId} spans ${Math.round(rect.left)}..${Math.round(rect.right)}`,
       );
     }
     return found.slice(0, 10);
