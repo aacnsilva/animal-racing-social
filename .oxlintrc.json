@@ -32,7 +32,8 @@
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
     "promise/no-return-wrap": "error",
-    "ars/no-comments": "error"
+    "ars/no-comments": "error",
+    "no-await-in-loop": "off"
   },
   "ignorePatterns": [
     "**/node_modules/**",
