@@ -66,17 +66,16 @@ mod tests {
     use super::*;
 
     #[test]
-    #[expect(
-        clippy::float_cmp,
-        reason = "prices are rounded to exact contract values"
-    )]
     fn price_formula_matches_contract() {
-        assert_eq!(price(0.5, 0.05), 1.9);
-        assert_eq!(price(0.25, 0.05), 3.81);
-        assert_eq!(price(0.99, 0.05), 1.01);
-        assert_eq!(price(0.00001, 0.05), 1000.0);
-        assert_eq!(floor_probability(0.0, 2000), 0.00025);
-        assert_eq!(floor_probability(0.3, 2000), 0.3);
+        assert_eq!(price(0.5, 0.05).to_bits(), 1.9_f64.to_bits());
+        assert_eq!(price(0.25, 0.05).to_bits(), 3.81_f64.to_bits());
+        assert_eq!(price(0.99, 0.05).to_bits(), 1.01_f64.to_bits());
+        assert_eq!(price(0.00001, 0.05).to_bits(), 1000.0_f64.to_bits());
+        assert_eq!(
+            floor_probability(0.0, 2000).to_bits(),
+            0.00025_f64.to_bits()
+        );
+        assert_eq!(floor_probability(0.3, 2000).to_bits(), 0.3_f64.to_bits());
     }
 
     #[test]
