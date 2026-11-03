@@ -61,30 +61,48 @@ export function shuffle<T>(items: readonly T[], random: () => number = Math.rand
   return copy;
 }
 
-export function validateProgramme(raw: unknown): Programme {
-  const value = raw as Programme;
-  const classes: RaceClass[] = ['SPRINT', 'STANDARD', 'ENDURANCE'];
-  if (!value || typeof value !== 'object') throw new Error('programme must be an object');
-  if (!Number.isInteger(value.racesPerHour) || value.racesPerHour < 1 || value.racesPerHour > 12)
+const RACE_CLASSES: readonly RaceClass[] = ['SPRINT', 'STANDARD', 'ENDURANCE'];
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
+}
+
+export function isRaceClass(value: unknown): value is RaceClass {
+  return RACE_CLASSES.some((cls) => cls === value);
+}
+
+export function isSpecies(value: unknown): value is Species {
+  return value === 'HORSE' || value === 'GIRAFFE';
+}
+
+function assertProgramme(value: unknown): asserts value is Programme {
+  if (!isObject(value)) throw new Error('programme must be an object');
+  if (!isInteger(value.racesPerHour) || value.racesPerHour < 1 || value.racesPerHour > 12)
     throw new Error('racesPerHour must be 1..12');
-  if (!Array.isArray(value.classMix?.slots) || value.classMix.slots.length === 0)
-    throw new Error('classMix.slots must be a non-empty array');
-  for (const slot of value.classMix.slots) {
-    if (!Array.isArray(slot) || slot.length === 0 || slot.some((cls) => !classes.includes(cls)))
+  const slots = isObject(value.classMix) ? value.classMix.slots : undefined;
+  if (!Array.isArray(slots) || slots.length === 0) throw new Error('classMix.slots must be a non-empty array');
+  for (const slot of slots) {
+    if (!Array.isArray(slot) || slot.length === 0 || slot.some((cls) => !isRaceClass(cls)))
       throw new Error('classMix.slots entries must list race classes');
   }
-  if (
-    !Array.isArray(value.speciesRotation) ||
-    value.speciesRotation.length === 0 ||
-    value.speciesRotation.some((s) => s !== 'HORSE' && s !== 'GIRAFFE')
-  ) {
+  const rotation = value.speciesRotation;
+  if (!Array.isArray(rotation) || rotation.length === 0 || rotation.some((s) => !isSpecies(s))) {
     throw new Error('speciesRotation must list HORSE/GIRAFFE');
   }
-  if (!Number.isInteger(value.horizonHours) || value.horizonHours < 1 || value.horizonHours > 48)
+  if (!isInteger(value.horizonHours) || value.horizonHours < 1 || value.horizonHours > 48)
     throw new Error('horizonHours must be 1..48');
-  for (const cls of classes) {
-    if (!Number.isInteger(value.recoveryMinutes?.[cls]) || value.recoveryMinutes[cls] < 0)
-      throw new Error(`recoveryMinutes.${cls} must be a non-negative integer`);
+  const recovery = value.recoveryMinutes;
+  for (const cls of RACE_CLASSES) {
+    const minutes = isObject(recovery) ? recovery[cls] : undefined;
+    if (!isInteger(minutes) || minutes < 0) throw new Error(`recoveryMinutes.${cls} must be a non-negative integer`);
   }
-  return value;
+}
+
+export function validateProgramme(raw: unknown): Programme {
+  assertProgramme(raw);
+  return raw;
 }

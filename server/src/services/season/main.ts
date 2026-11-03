@@ -14,6 +14,7 @@ import {
   applySettled,
   BOARDS,
   boardScore,
+  settledOutcome,
   thresholdCrossings,
   type Board,
   type SeasonStats,
@@ -104,7 +105,7 @@ async function announceStart(client: Client, season: SeasonRow): Promise<void> {
       seasonId: season.season_id,
       startsAt: season.starts_at.toISOString(),
       endsAt: season.ends_at.toISOString(),
-      startingGrant: String(season.starting_grant),
+      startingGrant: season.starting_grant,
       name: season.name,
     }),
   );
@@ -119,7 +120,7 @@ async function endSeason(client: Client, season: SeasonRow): Promise<void> {
     const ranked = rows
       .map((row) => ({ userId: row.user_id, score: boardScore(board, toStats(row), Number(row.rank_score)) }))
       .filter((entry): entry is { userId: string; score: number } => entry.score !== null)
-      .sort((a, b) => b.score - a.score || a.userId.localeCompare(b.userId));
+      .toSorted((a, b) => b.score - a.score || a.userId.localeCompare(b.userId));
     for (const [index, entry] of ranked.entries()) {
       await client.query(
         'INSERT INTO season.season_results (season_id, board, rank, user_id, score) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
@@ -295,7 +296,7 @@ export async function start(): Promise<void> {
             betId: settled.betId,
             userId: settled.userId,
             seasonId: settled.seasonId,
-            outcome: settled.outcome as 'WON' | 'LOST' | 'VOID',
+            outcome: settledOutcome(settled.outcome),
             stake: Number(settled.stake),
             returned: Number(settled.payout),
           });

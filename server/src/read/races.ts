@@ -1,4 +1,4 @@
-import { many, one, type Queryable } from '../lib/db.ts';
+import { many, one, type Queryable, type Row } from '../lib/db.ts';
 import { entrantKey } from '../lib/ids.ts';
 import { getJson, type Redis } from '../lib/redis.ts';
 import { iso } from '../lib/time.ts';
@@ -30,7 +30,7 @@ export function liveState(redis: Redis, raceId: string): Promise<LiveState | nul
 
 const hex = (value: Buffer | null) => (value ? value.toString('hex') : null);
 
-export function raceJson(row: Record<string, any>, live: LiveState | null = null) {
+export function raceJson(row: Row, live: LiveState | null = null) {
   const isLive = row.status === 'LIVE' && live !== null;
   return {
     id: row.race_id,
@@ -96,6 +96,6 @@ export async function loadRace(db: Queryable, redis: Redis, raceId: string) {
   const entrants = await entrantsJson(db, raceId);
   const finished = entrants
     .filter((entrant) => entrant.result)
-    .sort((a, b) => a.result!.officialPosition - b.result!.officialPosition);
+    .toSorted((a, b) => a.result!.officialPosition - b.result!.officialPosition);
   return { ...race, result: finished.length ? finished.map((entrant) => entrant.entrantId) : null, entrants };
 }

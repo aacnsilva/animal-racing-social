@@ -13,7 +13,7 @@ export function priceFromProbability(probability: number, margin: number, runs =
 
 export function harvilleProbability(win: Map<string, number>, order: readonly string[]): number {
   if (order.length !== 3 || new Set(order).size !== 3) return 0;
-  const [a, b, c] = order.map((id) => win.get(id) ?? 0) as [number, number, number];
+  const [a, b, c] = order.map((id) => win.get(id) ?? 0);
   if (a >= 1 || a + b >= 1) return 0;
   return a * (b / (1 - a)) * (c / (1 - a - b));
 }

@@ -25,7 +25,7 @@ export async function framesFor(db: Queryable, userIds: string[]): Promise<Map<s
 }
 
 export async function frameFor(db: Queryable, userId: string): Promise<Frame | null> {
-  return (await framesFor(db, [userId])).get(String(userId)) ?? null;
+  return (await framesFor(db, [userId])).get(userId) ?? null;
 }
 
 export async function podiumsFor(db: Queryable, userId: string): Promise<Podium[]> {

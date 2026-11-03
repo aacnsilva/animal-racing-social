@@ -3,7 +3,7 @@ import { settings } from '../../lib/config.ts';
 import { many, one, tx, type Client } from '../../lib/db.ts';
 import { entrantKey, entrantNumber, newId } from '../../lib/ids.ts';
 import { oddsEngine } from '../../lib/internal.ts';
-import { payload, runConsumer, Topics, type Payload, type PayloadOf } from '../../lib/kafka.ts';
+import { payload, payloadIn, runConsumer, Topics, type Payload, type PayloadOf } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
 import { marketTransition } from '../../lib/instruments.ts';
@@ -34,6 +34,8 @@ type MarketState = {
 type RaceState = { raceId: string; laps: number; lapLength: number; tickMs: number; markets: Map<string, MarketState> };
 
 type MarketRow = { market_id: string; type: MarketType; params: Record<string, number>; status: string };
+
+type PricePoint = [number, Record<string, number>];
 
 type MarketEventKind =
   | 'marketOpened'
@@ -92,14 +94,9 @@ export class MarketManager {
   async publishMarket(
     client: Client,
     raceId: string,
-    marketId: string,
-    body: Record<string, unknown>,
-    kind: MarketEventKind,
+    event: Extract<Payload, { $case: MarketEventKind }>,
   ): Promise<void> {
-    await enqueue(client, 'market', Topics.marketEvents, raceId, {
-      $case: kind,
-      value: { marketId, raceId, ...body },
-    } as Payload);
+    await enqueue(client, 'market', Topics.marketEvents, raceId, event);
   }
 
   async snapshot(client: Client, marketId: string, kind: 'OPENING' | 'AT_LOCK' | 'AT_START'): Promise<void> {
@@ -124,15 +121,15 @@ export class MarketManager {
     await this.publishMarket(
       client,
       raceId,
-      marketId,
-      {
+      payload('marketOpened', {
+        marketId,
+        raceId,
         type: row.type,
         params: row.params,
         selections: price.selections.map((selection) => ({ ...selection })),
         priceVersion: price.version,
         closesAtLap: row.closes_at_lap ?? undefined,
-      },
-      'marketOpened',
+      }),
     );
   }
 
@@ -149,7 +146,8 @@ export class MarketManager {
       [scheduled.raceClass],
     );
     if (!template) throw new Error(`No active market template for ${scheduled.raceClass}`);
-    const specs = expandTemplate(template.definition.markets as TemplateEntry[], scheduled.laps);
+    const entries: TemplateEntry[] = template.definition.markets;
+    const specs = expandTemplate(entries, scheduled.laps);
     const priced = await oddsEngine.price({
       venueId: scheduled.venueId,
       venueVersion: scheduled.venueVersion,
@@ -234,14 +232,22 @@ export class MarketManager {
             market.market_id,
           ]);
           marketTransition(market.type, 'OPEN', 'CLOSED', 'lock');
-          await this.publishMarket(client, raceId, market.market_id, { tick: 0 }, 'marketClosed');
+          await this.publishMarket(
+            client,
+            raceId,
+            payload('marketClosed', { marketId: market.market_id, raceId, tick: 0 }),
+          );
         } else if (!started) {
           await client.query(
             `UPDATE market.markets SET status = 'SUSPENDED', suspend_reason = 'LOCK' WHERE market_id = $1`,
             [market.market_id],
           );
           marketTransition(market.type, 'OPEN', 'SUSPENDED', 'lock');
-          await this.publishMarket(client, raceId, market.market_id, { tick: 0, reason: 'LOCK' }, 'marketSuspended');
+          await this.publishMarket(
+            client,
+            raceId,
+            payload('marketSuspended', { marketId: market.market_id, raceId, tick: 0, reason: 'LOCK' }),
+          );
         }
       }
     });
@@ -264,9 +270,12 @@ export class MarketManager {
         await this.publishMarket(
           client,
           raceId,
-          market.market_id,
-          { tick: 0, priceVersion: price?.version ?? market.price_version },
-          'marketResumed',
+          payload('marketResumed', {
+            marketId: market.market_id,
+            raceId,
+            tick: 0,
+            priceVersion: price?.version ?? market.price_version,
+          }),
         );
       }
       const pending = await many(
@@ -339,7 +348,11 @@ export class MarketManager {
                 `UPDATE market.markets SET status = 'CLOSED', closed_at = now(), suspend_reason = NULL WHERE market_id = $1 AND status IN ('OPEN', 'SUSPENDED')`,
                 [market.id],
               );
-              await this.publishMarket(client, tick.raceId, market.id, { tick: tick.tick }, 'marketClosed');
+              await this.publishMarket(
+                client,
+                tick.raceId,
+                payload('marketClosed', { marketId: market.id, raceId: tick.raceId, tick: tick.tick }),
+              );
               market.status = 'CLOSED';
             } else if (change.to === 'SUSPENDED') {
               await client.query(
@@ -349,9 +362,12 @@ export class MarketManager {
               await this.publishMarket(
                 client,
                 tick.raceId,
-                market.id,
-                { tick: tick.tick, reason: 'INCIDENT' },
-                'marketSuspended',
+                payload('marketSuspended', {
+                  marketId: market.id,
+                  raceId: tick.raceId,
+                  tick: tick.tick,
+                  reason: 'INCIDENT',
+                }),
               );
               market.status = 'SUSPENDED';
               market.suspendReason = 'INCIDENT';
@@ -364,9 +380,12 @@ export class MarketManager {
               await this.publishMarket(
                 client,
                 tick.raceId,
-                market.id,
-                { tick: tick.tick, priceVersion: price?.version ?? 1 },
-                'marketResumed',
+                payload('marketResumed', {
+                  marketId: market.id,
+                  raceId: tick.raceId,
+                  tick: tick.tick,
+                  priceVersion: price?.version ?? 1,
+                }),
               );
               market.status = 'OPEN';
               market.suspendReason = null;
@@ -388,12 +407,12 @@ export class MarketManager {
       await this.voidMarket(client, raceId, market.market_id, 'NO_RESULT');
       return;
     }
-    const selections = await many(
+    const selections = await many<{ selection_id: string; entrant_id: number }>(
       client,
       'SELECT selection_id, entrant_id FROM market.selections WHERE market_id = $1',
       [market.market_id],
     );
-    const byEntrant = new Map(selections.map((row) => [entrantKey(row.entrant_id), row.selection_id as string]));
+    const byEntrant = new Map(selections.map((row) => [entrantKey(row.entrant_id), row.selection_id]));
     const winning =
       market.type === 'TRICAST'
         ? []
@@ -404,7 +423,11 @@ export class MarketManager {
       [market.market_id, JSON.stringify({ winning, order: resultOrder, winningEntrants: winners })],
     );
     marketTransition(market.type, market.status, 'RESULTED', 'result');
-    await this.publishMarket(client, raceId, market.market_id, { winning, order: resultOrder }, 'marketResulted');
+    await this.publishMarket(
+      client,
+      raceId,
+      payload('marketResulted', { marketId: market.market_id, raceId, winning, order: resultOrder }),
+    );
     await this.writeHistory(client, raceId, market.market_id);
   }
 
@@ -415,7 +438,7 @@ export class MarketManager {
       [marketId],
     );
     if (before) marketTransition(before.type, before.status, 'VOID', reason.toLowerCase());
-    await this.publishMarket(client, raceId, marketId, { reason }, 'marketVoided');
+    await this.publishMarket(client, raceId, payload('marketVoided', { marketId, raceId, reason }));
   }
 
   async onLapCompleted(lap: PayloadOf<'lapCompleted'>): Promise<void> {
@@ -500,9 +523,7 @@ export class MarketManager {
 
   async writeHistory(client: Client, raceId: string, marketId: string): Promise<void> {
     const key = `ph:${marketId}`;
-    const points = (await this.runtime.redis.lRange(key, 0, -1)).map(
-      (raw) => JSON.parse(raw) as [number, Record<string, number>],
-    );
+    const points = (await this.runtime.redis.lRange(key, 0, -1)).map((raw): PricePoint => JSON.parse(raw));
     if (points.length === 0) return;
     const ticks = points.map(([tick]) => tick);
     const entrants = [...new Set(points.flatMap(([, prices]) => Object.keys(prices)))];
@@ -538,9 +559,7 @@ export class MarketManager {
         await this.publishMarket(
           client,
           market.race_id,
-          market.market_id,
-          { tick: 0, reason: 'MANUAL' },
-          'marketSuspended',
+          payload('marketSuspended', { marketId: market.market_id, raceId: market.race_id, tick: 0, reason: 'MANUAL' }),
         );
       } else if (command.action === 'RESUME' && market.status === 'SUSPENDED') {
         await client.query(`UPDATE market.markets SET status = 'OPEN', suspend_reason = NULL WHERE market_id = $1`, [
@@ -551,9 +570,12 @@ export class MarketManager {
         await this.publishMarket(
           client,
           market.race_id,
-          market.market_id,
-          { tick: 0, priceVersion: price?.version ?? market.price_version },
-          'marketResumed',
+          payload('marketResumed', {
+            marketId: market.market_id,
+            raceId: market.race_id,
+            tick: 0,
+            priceVersion: price?.version ?? market.price_version,
+          }),
         );
       } else if (command.action === 'VOID' && !['RESULTED', 'VOID'].includes(market.status)) {
         await this.voidMarket(client, market.race_id, market.market_id, command.reason || 'MANUAL');
@@ -576,7 +598,21 @@ export async function start(): Promise<void> {
       attempts: 8,
       handler: async (envelope) => {
         const event = envelope.payload;
-        switch (event?.$case) {
+        if (
+          !payloadIn(event, [
+            'raceScheduled',
+            'raceOpened',
+            'raceLocked',
+            'raceStarted',
+            'raceTick',
+            'lapCompleted',
+            'raceFinished',
+            'raceCancelled',
+            'marketCommand',
+          ])
+        )
+          return;
+        switch (event.$case) {
           case 'raceScheduled':
             return manager.createMarkets(event.value);
           case 'raceOpened':
@@ -595,8 +631,6 @@ export async function start(): Promise<void> {
             return manager.onCancelled(event.value.raceId);
           case 'marketCommand':
             return manager.onCommand(event.value);
-          default:
-            return;
         }
       },
     }),

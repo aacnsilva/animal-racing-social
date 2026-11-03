@@ -1,6 +1,6 @@
 import { many, one, tx, type Client } from '../../lib/db.ts';
 import { newId, shardOf } from '../../lib/ids.ts';
-import { payload, runConsumer, Topics, type PayloadOf } from '../../lib/kafka.ts';
+import { payload, payloadIn, runConsumer, Topics, type Payload } from '../../lib/kafka.ts';
 import { log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
 import { instruments } from '../../lib/instruments.ts';
@@ -92,14 +92,23 @@ async function betContext(runtime: Runtime, userId: string, betId: string): Prom
   return leg ? raceLabel(runtime, leg.race_id) : {};
 }
 
-async function onEvent(
-  runtime: Runtime,
-  envelope: { eventId: string; payload?: { $case: string; value: any } | undefined },
-): Promise<void> {
+async function onEvent(runtime: Runtime, envelope: { eventId: string; payload?: Payload | undefined }): Promise<void> {
   const event = envelope.payload;
-  switch (event?.$case) {
+  if (
+    !payloadIn(event, [
+      'betSettled',
+      'betRejected',
+      'betCashedOut',
+      'cashOutRejected',
+      'seasonEnding',
+      'seasonEnded',
+      'leaderboardMoved',
+    ])
+  )
+    return;
+  switch (event.$case) {
     case 'betSettled': {
-      const settled = event.value as PayloadOf<'betSettled'>;
+      const settled = event.value;
       const context = await betContext(runtime, settled.userId, settled.betId);
       await notifyOne(runtime, settled.userId, settledType(settled.outcome), `BET_SETTLED:${settled.betId}`, {
         ...context,
@@ -112,7 +121,7 @@ async function onEvent(
       break;
     }
     case 'betRejected': {
-      const rejected = event.value as PayloadOf<'betRejected'>;
+      const rejected = event.value;
       const context = await betContext(runtime, rejected.userId, rejected.betId);
       await notifyOne(runtime, rejected.userId, 'BET_REJECTED', `BET_REJECTED:${rejected.betId}`, {
         ...context,
@@ -122,7 +131,7 @@ async function onEvent(
       break;
     }
     case 'betCashedOut': {
-      const cashed = event.value as PayloadOf<'betCashedOut'>;
+      const cashed = event.value;
       const context = await betContext(runtime, cashed.userId, cashed.betId);
       await notifyOne(runtime, cashed.userId, 'CASHOUT_DONE', `CASHOUT_DONE:${cashed.betId}`, {
         ...context,
@@ -132,7 +141,7 @@ async function onEvent(
       break;
     }
     case 'cashOutRejected': {
-      const rejected = event.value as PayloadOf<'cashOutRejected'>;
+      const rejected = event.value;
       await notifyOne(runtime, rejected.userId, 'CASHOUT_REJECTED', `CASHOUT_REJECTED:${rejected.cashoutId}`, {
         betId: rejected.betId,
         reason: rejected.reason,
@@ -140,7 +149,7 @@ async function onEvent(
       break;
     }
     case 'seasonEnding': {
-      const ending = event.value as PayloadOf<'seasonEnding'>;
+      const ending = event.value;
       const users = await many(runtime.pool, 'SELECT user_id FROM wallet.wallets WHERE season_id = $1', [
         ending.seasonId,
       ]);
@@ -153,7 +162,7 @@ async function onEvent(
       break;
     }
     case 'seasonEnded': {
-      const ended = event.value as PayloadOf<'seasonEnded'>;
+      const ended = event.value;
       const ranks = await many(
         runtime.pool,
         `SELECT user_id, rank, score FROM season.season_results WHERE season_id = $1 AND board = 'balance'`,
@@ -172,7 +181,7 @@ async function onEvent(
       break;
     }
     case 'leaderboardMoved': {
-      const moved = event.value as PayloadOf<'leaderboardMoved'>;
+      const moved = event.value;
       await notifyOne(runtime, moved.userId, 'LEADERBOARD_MOVE', `LEADERBOARD_MOVE:${envelope.eventId}`, {
         seasonId: moved.seasonId,
         board: moved.board,

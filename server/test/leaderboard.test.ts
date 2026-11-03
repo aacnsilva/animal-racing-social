@@ -9,8 +9,8 @@ import {
   thresholdCrossings,
 } from '../src/domain/leaderboard.ts';
 
-describe('season stats', () => {
-  it('tracks streaks, biggest payout and returns', () => {
+void describe('season stats', () => {
+  void it('tracks streaks, biggest payout and returns', () => {
     let stats = emptyStats();
     stats = applySettled(stats, { betId: 'b1', outcome: 'WON', stake: 100, returned: 300 });
     stats = applySettled(stats, { betId: 'b2', outcome: 'WON', stake: 100, returned: 150 });
@@ -24,7 +24,7 @@ describe('season stats', () => {
     assert.equal(roi(stats), (530 - 400) / 400);
   });
 
-  it('ranks ROI and streak boards only after 20 settled bets', () => {
+  void it('ranks ROI and streak boards only after 20 settled bets', () => {
     let stats = emptyStats();
     for (let i = 0; i < 19; i++)
       stats = applySettled(stats, { betId: `b${i}`, outcome: 'WON', stake: 10, returned: 20 });
@@ -36,7 +36,7 @@ describe('season stats', () => {
     assert.equal(boardScore('balance', stats, 12345), 12345);
   });
 
-  it('detects top-10 and top-100 crossings', () => {
+  void it('detects top-10 and top-100 crossings', () => {
     assert.deepEqual(thresholdCrossings(150, 50), [{ threshold: 100, entered: true }]);
     assert.deepEqual(thresholdCrossings(11, 3), [{ threshold: 10, entered: true }]);
     assert.deepEqual(thresholdCrossings(5, 120), [
@@ -50,7 +50,7 @@ describe('season stats', () => {
     assert.deepEqual(thresholdCrossings(40, 60), []);
   });
 
-  it('maps the final top 3 to gold, silver and bronze podium tiers', () => {
+  void it('maps the final top 3 to gold, silver and bronze podium tiers', () => {
     assert.equal(podiumTier(1), 'gold');
     assert.equal(podiumTier(2), 'silver');
     assert.equal(podiumTier(3), 'bronze');

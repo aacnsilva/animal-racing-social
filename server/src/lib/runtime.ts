@@ -45,7 +45,7 @@ export async function bootstrap(
     stopping = true;
     log.info('shutting down', { signal });
     for (const consumer of consumers) await consumer.disconnect().catch(() => undefined);
-    for (const stop of stops.reverse())
+    for (const stop of stops.toReversed())
       await Promise.resolve(stop()).catch((error) => log.error('stop failed', errorFields(error)));
     health?.close();
     await producer.disconnect().catch(() => undefined);
@@ -73,7 +73,7 @@ export function every(ms: number, task: () => Promise<void>, runtime: Runtime, l
       running = false;
     }
   };
-  const timer = setInterval(run, ms);
+  const timer = setInterval(() => void run(), ms);
   void run();
   runtime.onStop(() => clearInterval(timer));
 }

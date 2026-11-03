@@ -1,9 +1,9 @@
-import pg from 'pg';
+import { Client as PgClient, Pool as PgPool, types, type PoolClient, type QueryResultRow } from 'pg';
 import { env, envInt } from './config.ts';
 import { failSpan, SpanKind, startSpan, tracing } from './telemetry.ts';
 
-pg.types.setTypeParser(1700, (value) => Number.parseFloat(value));
-pg.types.setTypeParser(1082, (value) => value);
+types.setTypeParser(types.builtins.NUMERIC, (value) => Number.parseFloat(value));
+types.setTypeParser(types.builtins.DATE, (value) => value);
 
 const UNTRACED_STATEMENTS = new Set(['BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE', 'LISTEN', 'SELECT 1']);
 
@@ -17,10 +17,19 @@ export function summarizeSql(text: string): { operation: string; table: string }
   return { operation, table };
 }
 
-function traced<T extends (...args: any[]) => any>(original: T): T {
-  return function patched(this: unknown, ...args: any[]) {
-    const first = args[0];
-    const text: string | undefined = typeof first === 'string' ? first : first?.text;
+type QueryFn = (this: unknown, ...args: unknown[]) => unknown;
+
+function queryText(first: unknown): string | undefined {
+  if (typeof first === 'string') return first;
+  if (typeof first === 'object' && first !== null && 'text' in first && typeof first.text === 'string')
+    return first.text;
+  return undefined;
+}
+
+function patchQuery(target: { query: QueryFn }): void {
+  const original = target.query;
+  target.query = function patched(this: unknown, ...args: unknown[]) {
+    const text = queryText(args[0]);
     if (!text || typeof args[args.length - 1] === 'function' || !tracing()) return original.apply(this, args);
     const { operation, table } = summarizeSql(text);
     if (UNTRACED_STATEMENTS.has(operation) || UNTRACED_STATEMENTS.has(text.trim())) return original.apply(this, args);
@@ -38,29 +47,30 @@ function traced<T extends (...args: any[]) => any>(original: T): T {
         span.end();
         return result;
       },
-      (error) => {
+      (error: unknown) => {
         failSpan(span, error);
         span.end();
         throw error;
       },
     );
-  } as T;
+  };
 }
 
-pg.Pool.prototype.query = traced(pg.Pool.prototype.query);
-pg.Client.prototype.query = traced(pg.Client.prototype.query);
+patchQuery(PgPool.prototype);
+patchQuery(PgClient.prototype);
 
-export type Pool = pg.Pool;
-export type Client = pg.PoolClient;
-export type Queryable = pg.Pool | pg.PoolClient;
+export type Pool = PgPool;
+export type Client = PoolClient;
+export type Queryable = PgPool | PoolClient;
+export type Row = QueryResultRow;
 
-export function createPool(url = env('DATABASE_URL'), max = envInt('DB_POOL_MAX', 10)): pg.Pool {
-  const pool = new pg.Pool({ connectionString: url, max });
+export function createPool(url = env('DATABASE_URL'), max = envInt('DB_POOL_MAX', 10)): PgPool {
+  const pool = new PgPool({ connectionString: url, max });
   pool.on('error', () => undefined);
   return pool;
 }
 
-export async function tx<T>(pool: pg.Pool, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+export async function tx<T>(pool: PgPool, fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -75,18 +85,15 @@ export async function tx<T>(pool: pg.Pool, fn: (client: pg.PoolClient) => Promis
   }
 }
 
-export async function one<T = Record<string, any>>(
-  db: Queryable,
-  sql: string,
-  params: unknown[] = [],
-): Promise<T | undefined> {
-  const result = await db.query(sql, params);
-  return result.rows[0] as T | undefined;
+export async function one<T = Row>(db: Queryable, sql: string, params: unknown[] = []): Promise<T | undefined> {
+  const rows = await many<T>(db, sql, params);
+  return rows[0];
 }
 
-export async function many<T = Record<string, any>>(db: Queryable, sql: string, params: unknown[] = []): Promise<T[]> {
+export async function many<T = Row>(db: Queryable, sql: string, params: unknown[] = []): Promise<T[]> {
   const result = await db.query(sql, params);
-  return result.rows as T[];
+  const rows: T[] = result.rows;
+  return rows;
 }
 
 export function isUniqueViolation(error: unknown): boolean {

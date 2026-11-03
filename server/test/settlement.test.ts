@@ -3,16 +3,16 @@ import { describe, it } from 'node:test';
 import { comboViolation } from '../src/domain/combo.ts';
 import { foldCombo, singleOutcome } from '../src/domain/settlement.ts';
 
-describe('single settlement', () => {
-  it('pays stake × locked price on a win and refunds a void', () => {
+void describe('single settlement', () => {
+  void it('pays stake × locked price on a win and refunds a void', () => {
     assert.deepEqual(singleOutcome(100, 4.2, 'WON'), { status: 'WON', payout: 420 });
     assert.deepEqual(singleOutcome(100, 4.2, 'LOST'), { status: 'LOST', payout: 0 });
     assert.deepEqual(singleOutcome(100, 4.2, 'VOID'), { status: 'VOID', payout: 100 });
   });
 });
 
-describe('combo folding', () => {
-  it('loses as soon as any leg loses', () => {
+void describe('combo folding', () => {
+  void it('loses as soon as any leg loses', () => {
     assert.deepEqual(
       foldCombo(200, [
         { status: 'LOST', lockedPrice: 3 },
@@ -22,7 +22,7 @@ describe('combo folding', () => {
     );
   });
 
-  it('waits while legs are open', () => {
+  void it('waits while legs are open', () => {
     assert.deepEqual(
       foldCombo(200, [
         { status: 'WON', lockedPrice: 3 },
@@ -32,7 +32,7 @@ describe('combo folding', () => {
     );
   });
 
-  it('pays the product of winning legs and treats void legs as 1.00', () => {
+  void it('pays the product of winning legs and treats void legs as 1.00', () => {
     assert.deepEqual(
       foldCombo(200, [
         { status: 'WON', lockedPrice: 3.1 },
@@ -49,7 +49,7 @@ describe('combo folding', () => {
     );
   });
 
-  it('refunds when every leg is void', () => {
+  void it('refunds when every leg is void', () => {
     assert.deepEqual(
       foldCombo(200, [
         { status: 'VOID', lockedPrice: 3.1 },
@@ -60,10 +60,10 @@ describe('combo folding', () => {
   });
 });
 
-describe('combo rules', () => {
-  const leg = (raceId: string, seasonId = 's1') => ({ marketId: `m${raceId}`, raceId, seasonId });
+const leg = (raceId: string, seasonId = 's1') => ({ marketId: `m${raceId}`, raceId, seasonId });
 
-  it('requires 2..max legs on different races in one season', () => {
+void describe('combo rules', () => {
+  void it('requires 2..max legs on different races in one season', () => {
     assert.equal(comboViolation([leg('1')], 8), 'INVALID_SELECTION');
     assert.equal(comboViolation([leg('1'), leg('2')], 8), null);
     assert.equal(comboViolation([leg('1'), leg('1')], 8), 'COMBO_SAME_RACE');

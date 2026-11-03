@@ -37,8 +37,18 @@ export const Topics = {
 
 export const allTopics: string[] = Object.values(Topics);
 
-export function payload<C extends PayloadCase>(kind: C, value: PayloadOf<C>): Payload {
-  return { $case: kind, value } as Payload;
+type PayloadValues = { [P in Payload as P['$case']]: P['value'] };
+type PayloadEntry<C extends PayloadCase> = { [K in C]: { $case: K; value: PayloadValues[K] } }[C];
+
+export function payload<C extends PayloadCase>(kind: C, value: PayloadValues[C]): PayloadEntry<C> {
+  return { $case: kind, value };
+}
+
+export function payloadIn<const C extends PayloadCase>(
+  event: Payload | undefined,
+  cases: readonly C[],
+): event is Extract<Payload, { $case: C }> {
+  return event !== undefined && cases.some((kind) => kind === event.$case);
 }
 
 export function typeName(kind: PayloadCase): string {
@@ -120,7 +130,8 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
   const attempts = options.attempts ?? 5;
   await consumer.run({
     partitionsConsumedConcurrently: options.concurrency ?? 1,
-    eachMessage: async ({ topic, partition, message, heartbeat }) => {
+    eachMessage: async (batch) => {
+      const { topic, partition, message } = batch;
       const meta: MessageMeta = { topic, partition, offset: message.offset, key: message.key?.toString() ?? null };
       if (!message.value) return;
       const value = message.value;
@@ -157,9 +168,9 @@ export async function runConsumer(options: ConsumerOptions): Promise<Consumer> {
               attempt,
               ...errorFields(error),
             });
-            await heartbeat().catch(() => undefined);
+            await batch.heartbeat().catch(() => undefined);
             await sleep(Math.min(250 * 2 ** attempt, 5000));
-            await heartbeat().catch(() => undefined);
+            await batch.heartbeat().catch(() => undefined);
           }
         }
       };

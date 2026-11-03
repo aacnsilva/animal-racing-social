@@ -1,6 +1,6 @@
 import { sha256 } from '../../lib/crypto.ts';
 import { decodeCursor, page, pageLimit } from '../../lib/cursor.ts';
-import { many, one, tx, type Client } from '../../lib/db.ts';
+import { many, one, tx, type Client, type Row } from '../../lib/db.ts';
 import { accepted, ApiError, pathId, v, type Ctx, type Router } from '../../lib/http.ts';
 import { newId } from '../../lib/ids.ts';
 import { walletApi } from '../../lib/internal.ts';
@@ -63,7 +63,7 @@ async function audit(
   return auditId;
 }
 
-function programmeJson(row: Record<string, any>) {
+function programmeJson(row: Row) {
   return {
     version: row.version,
     racesPerHour: row.races_per_hour,
@@ -86,10 +86,9 @@ function parseVenue(body: Record<string, unknown>) {
         angle: v.num(segment.angle, `segments[${index}].angle`, { min: -360, max: 360 }),
       };
     }
-    const base = { type, length: v.num(segment.length, `segments[${index}].length`, { min: 5, max: 1000 }) };
-    return type === 'STRAIGHT'
-      ? base
-      : { ...base, grade: v.num(segment.grade, `segments[${index}].grade`, { min: 0, max: 0.2 }) };
+    const length = v.num(segment.length, `segments[${index}].length`, { min: 5, max: 1000 });
+    if (type === 'STRAIGHT') return { type, length };
+    return { type, length, grade: v.num(segment.grade, `segments[${index}].grade`, { min: 0, max: 0.2 }) };
   });
   const lapsRange = v
     .arr(body.lapsRange, 'lapsRange', { min: 2, max: 2 })
@@ -139,6 +138,21 @@ async function insertVenue(
   ))!;
 }
 
+function seasonInput(body: Record<string, unknown>) {
+  const startsAt = v.date(body.startsAt, 'startsAt');
+  const endsAt = v.date(body.endsAt, 'endsAt');
+  if (startsAt <= new Date()) throw new ApiError(422, 'VALIDATION_FAILED', 'startsAt must be in the future');
+  if (endsAt.getTime() - startsAt.getTime() < 2 * 3600_000)
+    throw new ApiError(422, 'VALIDATION_FAILED', 'A season must last at least 2 hours');
+  return {
+    name: v.str(body.name, 'name', { max: 60 }),
+    startsAt,
+    endsAt,
+    startingGrant: body.startingGrant === undefined ? 10000 : v.int(body.startingGrant, 'startingGrant', { min: 1 }),
+    dailyGrant: body.dailyGrant === undefined ? 50 : v.int(body.dailyGrant, 'dailyGrant', { min: 0 }),
+  };
+}
+
 export function adminRoutes(router: Router, deps: Deps): void {
   const admin = (ctx: Ctx) => requireAdmin(ctx, deps);
 
@@ -154,7 +168,7 @@ export function adminRoutes(router: Router, deps: Deps): void {
     try {
       programme = validateProgramme(await ctx.body());
     } catch (error) {
-      throw new ApiError(422, 'VALIDATION_FAILED', (error as Error).message);
+      throw new ApiError(422, 'VALIDATION_FAILED', error instanceof Error ? error.message : String(error));
     }
     return tx(deps.pool, async (client) => {
       const before = await one(client, 'SELECT * FROM racing.programme ORDER BY version DESC LIMIT 1 FOR UPDATE');
@@ -293,7 +307,7 @@ export function adminRoutes(router: Router, deps: Deps): void {
     try {
       markets = validateTemplate(body.markets);
     } catch (error) {
-      throw new ApiError(422, 'VALIDATION_FAILED', (error as Error).message);
+      throw new ApiError(422, 'VALIDATION_FAILED', error instanceof Error ? error.message : String(error));
     }
     return tx(deps.pool, async (client) => {
       const before = await one(
@@ -565,21 +579,6 @@ export function adminRoutes(router: Router, deps: Deps): void {
     await admin(ctx);
     return (await many<SeasonRow>(deps.pool, 'SELECT * FROM season.seasons ORDER BY starts_at DESC')).map(seasonJson);
   });
-
-  const seasonInput = (body: Record<string, unknown>) => {
-    const startsAt = v.date(body.startsAt, 'startsAt');
-    const endsAt = v.date(body.endsAt, 'endsAt');
-    if (startsAt <= new Date()) throw new ApiError(422, 'VALIDATION_FAILED', 'startsAt must be in the future');
-    if (endsAt.getTime() - startsAt.getTime() < 2 * 3600_000)
-      throw new ApiError(422, 'VALIDATION_FAILED', 'A season must last at least 2 hours');
-    return {
-      name: v.str(body.name, 'name', { max: 60 }),
-      startsAt,
-      endsAt,
-      startingGrant: body.startingGrant === undefined ? 10000 : v.int(body.startingGrant, 'startingGrant', { min: 1 }),
-      dailyGrant: body.dailyGrant === undefined ? 50 : v.int(body.dailyGrant, 'dailyGrant', { min: 0 }),
-    };
-  };
 
   router.post('/v1/admin/seasons', async (ctx) => {
     const { userId } = await admin(ctx);

@@ -67,7 +67,7 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
 export function validateTemplate(entries: unknown): TemplateEntry[] {
   if (!Array.isArray(entries) || entries.length === 0) throw new Error('markets must be a non-empty array');
   return entries.map((raw, index) => {
-    const entry = raw as TemplateEntry;
+    const entry: TemplateEntry = raw;
     if (!MARKET_TYPES.includes(entry.type)) throw new Error(`markets[${index}].type is invalid`);
     if (entry.type === 'FINISH_POSITION' && ![1, 2, 3].includes(entry.params?.position ?? 0))
       throw new Error(`markets[${index}].params.position must be 1, 2 or 3`);
@@ -80,7 +80,7 @@ export function validateTemplate(entries: unknown): TemplateEntry[] {
 }
 
 export function leaderOf(entrants: readonly TickEntrantLike[]): TickEntrantLike | undefined {
-  return entrants.find((entrant) => entrant.pos === 1) ?? [...entrants].sort((a, b) => b.dist - a.dist)[0];
+  return entrants.find((entrant) => entrant.pos === 1) ?? entrants.toSorted((a, b) => b.dist - a.dist)[0];
 }
 
 export function shouldCloseInRunning(
@@ -134,6 +134,11 @@ export function winningEntrants(
       return leader ? [leader] : [];
     }
   }
+  return unknownMarketType(type);
+}
+
+function unknownMarketType(type: never): never {
+  throw new Error(`unknown market type ${String(type)}`);
 }
 
 export type LegSelection = { entrantId?: string | null; order?: readonly string[] | null };

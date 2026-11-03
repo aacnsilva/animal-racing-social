@@ -41,6 +41,8 @@ export const noContent = (headers: Record<string, string | string[]> = {}) => ne
 export const redirect = (location: string, cookies: string[] = []) =>
   new Reply(302, undefined, { location, 'set-cookie': cookies });
 
+export type Body = Record<string, unknown>;
+
 export type Ctx = {
   req: IncomingMessage;
   res: ServerResponse;
@@ -51,7 +53,7 @@ export type Ctx = {
   cookies: Record<string, string>;
   ip: string;
   state: Record<string, unknown>;
-  body: () => Promise<any>;
+  body: () => Promise<Body>;
   setCookies: string[];
 };
 
@@ -141,20 +143,22 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
   return parts.join('; ');
 }
 
-async function readBody(req: IncomingMessage, limit = 1_000_000): Promise<any> {
+async function readBody(req: IncomingMessage, limit = 1_000_000): Promise<Body> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
-    size += chunk.length;
+    const buffer: Buffer = chunk;
+    size += buffer.length;
     if (size > limit) throw new ApiError(413, 'VALIDATION_FAILED', 'Request body too large');
-    chunks.push(chunk as Buffer);
+    chunks.push(buffer);
   }
   if (size === 0) return {};
   const text = Buffer.concat(chunks).toString('utf8');
   const type = req.headers['content-type'] ?? '';
   if (type.includes('application/x-www-form-urlencoded')) return Object.fromEntries(new URLSearchParams(text));
   try {
-    return JSON.parse(text);
+    const parsed: Body = JSON.parse(text);
+    return parsed;
   } catch {
     throw new ApiError(400, 'VALIDATION_FAILED', 'Body must be valid JSON');
   }
@@ -223,7 +227,7 @@ async function handle(router: Router, ctx: Ctx, route: ReturnType<Router['match'
     if (error instanceof ApiError) {
       const headers: Record<string, string> = {};
       if (error.status === 429 && typeof error.details === 'object' && error.details && 'retryAfter' in error.details) {
-        headers['retry-after'] = String((error.details as { retryAfter: number }).retryAfter);
+        headers['retry-after'] = String(error.details.retryAfter);
       }
       if (span && error.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR, message: error.code });
       if (span) span.setAttribute('ars.error_code', error.code);
@@ -245,68 +249,74 @@ async function handle(router: Router, ctx: Ctx, route: ReturnType<Router['match'
   }
 }
 
+async function respond(router: Router, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const started = performance.now();
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const method = req.method ?? 'GET';
+  let parsedBody: Promise<Body> | null = null;
+  const ctx: Ctx = {
+    req,
+    res,
+    method,
+    url,
+    params: {},
+    query: url.searchParams,
+    cookies: parseCookies(req.headers.cookie),
+    ip: String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '')
+      .split(',')[0]
+      .trim(),
+    state: {},
+    body: () => (parsedBody ??= readBody(req)),
+    setCookies: [],
+  };
+  const route = router.match(method === 'HEAD' ? 'GET' : method, url.pathname);
+  if (url.pathname === '/healthz') {
+    await handle(router, ctx, route, null);
+    return;
+  }
+  const template = route?.path ?? 'unmatched';
+  const flow = flowOf(method, template);
+  await withSpan(
+    `${method} ${template}`,
+    {
+      kind: SpanKind.SERVER,
+      parent: extractContext(req.headers),
+      attributes: {
+        'http.request.method': method,
+        'http.route': template,
+        'url.path': url.pathname,
+        ...(flow ? { 'ars.flow': flow } : {}),
+      },
+    },
+    async (span) => {
+      res.setHeader('x-trace-id', span.spanContext().traceId);
+      for (const [name, value] of Object.entries(route?.params ?? {})) {
+        if (/^\d{1,19}$/.test(value)) span.setAttribute(`ars.${name.replace(/Id$/, '_id').toLowerCase()}`, value);
+      }
+      await handle(router, ctx, route, span);
+      span.setAttribute('http.response.status_code', res.statusCode);
+      const seconds = (performance.now() - started) / 1000;
+      requestDuration().record(seconds, {
+        'http.route': template,
+        'http.request.method': method,
+        'http.response.status_code': res.statusCode,
+      });
+      log.info('http', {
+        method,
+        path: url.pathname,
+        route: template,
+        status: res.statusCode,
+        ms: Math.round(seconds * 1000),
+      });
+    },
+  );
+}
+
 export function serve(router: Router, port: number): Server {
-  const server = createServer(async (req, res) => {
-    const started = performance.now();
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    const method = req.method ?? 'GET';
-    let parsedBody: Promise<any> | null = null;
-    const ctx: Ctx = {
-      req,
-      res,
-      method,
-      url,
-      params: {},
-      query: url.searchParams,
-      cookies: parseCookies(req.headers.cookie),
-      ip: String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '')
-        .split(',')[0]
-        .trim(),
-      state: {},
-      body: () => (parsedBody ??= readBody(req)),
-      setCookies: [],
-    };
-    const route = router.match(method === 'HEAD' ? 'GET' : method, url.pathname);
-    if (url.pathname === '/healthz') {
-      await handle(router, ctx, route, null);
-      return;
-    }
-    const template = route?.path ?? 'unmatched';
-    const flow = flowOf(method, template);
-    await withSpan(
-      `${method} ${template}`,
-      {
-        kind: SpanKind.SERVER,
-        parent: extractContext(req.headers),
-        attributes: {
-          'http.request.method': method,
-          'http.route': template,
-          'url.path': url.pathname,
-          ...(flow ? { 'ars.flow': flow } : {}),
-        },
-      },
-      async (span) => {
-        res.setHeader('x-trace-id', span.spanContext().traceId);
-        for (const [name, value] of Object.entries(route?.params ?? {})) {
-          if (/^\d{1,19}$/.test(value)) span.setAttribute(`ars.${name.replace(/Id$/, '_id').toLowerCase()}`, value);
-        }
-        await handle(router, ctx, route, span);
-        span.setAttribute('http.response.status_code', res.statusCode);
-        const seconds = (performance.now() - started) / 1000;
-        requestDuration().record(seconds, {
-          'http.route': template,
-          'http.request.method': method,
-          'http.response.status_code': res.statusCode,
-        });
-        log.info('http', {
-          method,
-          path: url.pathname,
-          route: template,
-          status: res.statusCode,
-          ms: Math.round(seconds * 1000),
-        });
-      },
-    );
+  const server = createServer((req, res) => {
+    void respond(router, req, res).catch((error: unknown) => {
+      log.error('request handling failed', { method: req.method, path: req.url, ...errorFields(error) });
+    });
   });
   server.listen(port);
   return server;
@@ -322,6 +332,14 @@ export function healthServer(port: number, check: () => Promise<boolean> = async
 
 function invalid(field: string, message: string): never {
   throw new ApiError(422, 'VALIDATION_FAILED', `${field}: ${message}`, { field });
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
+  return typeof value === 'string' && allowed.some((entry) => entry === value);
 }
 
 export const v = {
@@ -348,9 +366,8 @@ export const v = {
     return parsed;
   },
   oneOf<T extends string>(value: unknown, field: string, allowed: readonly T[]): T {
-    if (typeof value !== 'string' || !allowed.includes(value as T))
-      invalid(field, `must be one of ${allowed.join(', ')}`);
-    return value as T;
+    if (!isOneOf(value, allowed)) invalid(field, `must be one of ${allowed.join(', ')}`);
+    return value;
   },
   id(value: unknown, field: string): string {
     if (typeof value !== 'string' || !/^\d{1,19}$/.test(value)) invalid(field, 'must be an id string');
@@ -365,8 +382,8 @@ export const v = {
     return value;
   },
   obj(value: unknown, field: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) invalid(field, 'must be an object');
-    return value as Record<string, unknown>;
+    if (!isRecord(value)) invalid(field, 'must be an object');
+    return value;
   },
   arr(value: unknown, field: string, options: { min?: number; max?: number } = {}): unknown[] {
     if (!Array.isArray(value)) invalid(field, 'must be an array');

@@ -223,10 +223,12 @@ async function onRaceFinished(runtime: Runtime, eventId: string, finished: Paylo
     const programme = await one(client, 'SELECT recovery_minutes FROM racing.programme ORDER BY version DESC LIMIT 1');
     const recovery = Number(programme?.recovery_minutes?.[race.race_class] ?? 90);
     const finishedAt = finished.finishedAt ? new Date(finished.finishedAt) : new Date();
-    const entrants = await many(client, 'SELECT entrant_id, animal_id FROM racing.race_entrants WHERE race_id = $1', [
-      finished.raceId,
-    ]);
-    const animalOf = new Map(entrants.map((row) => [row.entrant_id as number, row.animal_id as string]));
+    const entrants = await many<{ entrant_id: number; animal_id: string }>(
+      client,
+      'SELECT entrant_id, animal_id FROM racing.race_entrants WHERE race_id = $1',
+      [finished.raceId],
+    );
+    const animalOf = new Map(entrants.map((row) => [row.entrant_id, row.animal_id]));
     for (const result of finished.results) {
       const animalId = animalOf.get(entrantNumber(result.entrantId));
       if (!animalId) continue;

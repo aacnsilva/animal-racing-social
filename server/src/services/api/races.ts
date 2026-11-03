@@ -167,9 +167,9 @@ export function raceRoutes(router: Router, deps: Deps): void {
     const raceRow = await finishedRace(deps, raceId);
     const race = (await loadRace(deps.pool, deps.redis, raceId))!;
     const entrants = race.entrants;
-    const asRun = [...entrants]
+    const asRun = entrants
       .filter((e) => e.result)
-      .sort((a, b) => a.result!.asRunPosition - b.result!.asRunPosition)
+      .toSorted((a, b) => a.result!.asRunPosition - b.result!.asRunPosition)
       .map((e) => e.entrantId);
     const lapLeaders = await many(
       deps.pool,
@@ -216,6 +216,7 @@ export function raceRoutes(router: Router, deps: Deps): void {
   router.get('/v1/races/:raceId/ticks', async (ctx) => {
     const fromTick = ctx.query.get('fromTick') ? v.int(ctx.query.get('fromTick'), 'fromTick', { min: 0 }) : 0;
     const script = JSON.parse((await scriptBytes(deps, pathId(ctx, 'raceId'))).toString('utf8'));
-    return (script.ticks as { tick: number }[]).filter((tick) => tick.tick >= fromTick);
+    const ticks: { tick: number }[] = script.ticks;
+    return ticks.filter((tick) => tick.tick >= fromTick);
   });
 }

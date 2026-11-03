@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import pg from 'pg';
+import { Client } from 'pg';
 import { env, envInt } from '../lib/config.ts';
 import { allTopics, createKafka } from '../lib/kafka.ts';
 import { log } from '../lib/log.ts';
@@ -26,11 +26,43 @@ export const SERVICE_ROLES = [
   'ars_monitor',
 ];
 
-function readJson<T>(file: string): T {
-  return JSON.parse(readFileSync(join(sharedDir, file), 'utf8')) as T;
+type VenueSeed = {
+  id: string;
+  version: number;
+  name: string;
+  class: string;
+  surface: string;
+  lanes: number;
+  lapLength: number;
+  lapsRange: [number, number];
+  segments: unknown;
+  assets: unknown;
+  description: string;
+};
+
+type SpeciesSeed = {
+  species: string;
+  maxCareerDays: number;
+  lifeStages: unknown;
+  ageCurve: unknown;
+  retireThreshold: number;
+  targetPoolSize: number;
+  baseRanges: unknown;
+};
+
+type ProgrammeSeed = {
+  racesPerHour: number;
+  classMix: unknown;
+  speciesRotation: string[];
+  horizonHours: number;
+  recoveryMinutes: unknown;
+};
+
+function readShared(file: string): string {
+  return readFileSync(join(sharedDir, file), 'utf8');
 }
 
-async function migrateSchema(client: pg.Client): Promise<void> {
+async function migrateSchema(client: Client): Promise<void> {
   await client.query(
     'CREATE TABLE IF NOT EXISTS public.schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
   );
@@ -41,7 +73,7 @@ async function migrateSchema(client: pg.Client): Promise<void> {
     );
     const files = readdirSync(join(dbDir, 'migrations'))
       .filter((file) => file.endsWith('.sql'))
-      .sort();
+      .toSorted();
     for (const file of files) {
       if (applied.has(file)) continue;
       log.info('applying migration', { file });
@@ -71,8 +103,8 @@ async function migrateSchema(client: pg.Client): Promise<void> {
   }
 }
 
-async function seed(client: pg.Client): Promise<void> {
-  const venues = readJson<any[]>('venues.json');
+async function seed(client: Client): Promise<void> {
+  const venues: VenueSeed[] = JSON.parse(readShared('venues.json'));
   for (const venue of venues) {
     await client.query(
       `INSERT INTO racing.venues (venue_id, version, name, race_class, surface, lanes, lap_length, laps_min, laps_max, segments, assets, description)
@@ -95,7 +127,8 @@ async function seed(client: pg.Client): Promise<void> {
   }
   const paramsPath = join(sharedDir, 'engine-params.json');
   const params = existsSync(paramsPath) ? JSON.parse(readFileSync(paramsPath, 'utf8')) : { species: {} };
-  for (const species of readJson<any[]>('species.json')) {
+  const speciesSeeds: SpeciesSeed[] = JSON.parse(readShared('species.json'));
+  for (const species of speciesSeeds) {
     const affinity = params.species?.[species.species] ?? {};
     await client.query(
       `INSERT INTO stable.species (species, max_career_days, life_stages, age_curve, surface_affinity, segment_affinity, retire_threshold, target_pool_size, base_ranges)
@@ -116,7 +149,7 @@ async function seed(client: pg.Client): Promise<void> {
       ],
     );
   }
-  const templates = readJson<Record<string, { markets: unknown[] }>>('market-templates.json');
+  const templates: Record<string, { markets: unknown[] }> = JSON.parse(readShared('market-templates.json'));
   for (const [raceClass, definition] of Object.entries(templates)) {
     await client.query(
       `INSERT INTO market.market_templates (race_class, version, definition, is_active, created_by)
@@ -124,7 +157,7 @@ async function seed(client: pg.Client): Promise<void> {
       [raceClass, JSON.stringify(definition)],
     );
   }
-  const programme = readJson<any>('programme.json');
+  const programme: ProgrammeSeed = JSON.parse(readShared('programme.json'));
   await client.query(
     `INSERT INTO racing.programme (version, races_per_hour, class_mix, species_rotation, horizon_hours, recovery_minutes, effective_from, created_by)
      SELECT 1, $1, $2, $3, $4, $5, now(), 0 WHERE NOT EXISTS (SELECT 1 FROM racing.programme)`,
@@ -163,7 +196,7 @@ async function createTopics(): Promise<void> {
 }
 
 export async function start(): Promise<void> {
-  const client = new pg.Client({
+  const client = new Client({
     connectionString: env(
       'MIGRATE_DATABASE_URL',
       env('DATABASE_URL', 'postgres://postgres:postgres@localhost:5432/ars'),

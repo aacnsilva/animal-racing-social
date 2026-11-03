@@ -1,6 +1,7 @@
+import type { Row } from '../lib/db.ts';
 import { iso } from '../lib/time.ts';
 
-export function statsOf(row: Record<string, any>, prefix: 'cur' | 'base') {
+export function statsOf(row: Row, prefix: 'cur' | 'base') {
   return {
     velocity: Number(row[`${prefix}_velocity`]),
     stamina: Number(row[`${prefix}_stamina`]),
@@ -9,7 +10,7 @@ export function statsOf(row: Record<string, any>, prefix: 'cur' | 'base') {
   };
 }
 
-export function animalSummary(row: Record<string, any>) {
+export function animalSummary(row: Row) {
   return {
     id: row.animal_id,
     name: row.name,
@@ -25,7 +26,7 @@ export function animalSummary(row: Record<string, any>) {
   };
 }
 
-export function animalDetail(row: Record<string, any>, venueForm: Record<string, any>[], aging: Record<string, any>[]) {
+export function animalDetail(row: Row, venueForm: Row[], aging: Row[]) {
   return {
     ...animalSummary(row),
     base: statsOf(row, 'base'),

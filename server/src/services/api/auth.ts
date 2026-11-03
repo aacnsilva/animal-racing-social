@@ -1,7 +1,7 @@
 import { env } from '../../lib/config.ts';
 import { pkceChallenge, randomToken, seal, sha256, signJwt, unseal } from '../../lib/crypto.ts';
 import { many, one, tx, type Queryable } from '../../lib/db.ts';
-import { ApiError, noContent, redirect, serializeCookie, v, type Router } from '../../lib/http.ts';
+import { ApiError, isRecord, noContent, redirect, serializeCookie, v, type Router } from '../../lib/http.ts';
 import { newId, newUserId, shardOf } from '../../lib/ids.ts';
 import { walletApi } from '../../lib/internal.ts';
 import { errorFields, log } from '../../lib/log.ts';
@@ -117,6 +117,37 @@ export async function userWithProviders(db: Queryable, userId: string) {
 
 type Profile = { subject: string; name: string; email: string | null; avatarUrl: string | null };
 
+type OauthState = {
+  state: string;
+  verifier: string;
+  provider: string;
+  redirect: string;
+  linkUserId: string | null;
+};
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isOauthState(value: unknown): value is OauthState {
+  return (
+    isRecord(value) &&
+    isString(value.state) &&
+    isString(value.verifier) &&
+    isString(value.provider) &&
+    isString(value.redirect) &&
+    (value.linkUserId === null || isString(value.linkUserId))
+  );
+}
+
+function fieldsOf(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 async function fetchProfile(p: Provider, code: string, verifier: string): Promise<Profile> {
   const tokenResponse = await fetch(p.tokenUrl, {
     method: 'POST',
@@ -131,32 +162,35 @@ async function fetchProfile(p: Provider, code: string, verifier: string): Promis
     }),
     signal: AbortSignal.timeout(10_000),
   });
-  const token = (await tokenResponse.json()) as { access_token?: string; error?: string };
-  if (!tokenResponse.ok || !token.access_token)
-    throw new Error(`token exchange failed: ${token.error ?? tokenResponse.status}`);
+  const token = fieldsOf(await tokenResponse.json());
+  const accessToken = text(token.access_token);
+  if (!tokenResponse.ok || !accessToken)
+    throw new Error(`token exchange failed: ${text(token.error) ?? tokenResponse.status}`);
   const profileResponse = await fetch(p.userinfoUrl, {
     headers: {
-      authorization: `Bearer ${token.access_token}`,
+      authorization: `Bearer ${accessToken}`,
       accept: 'application/json',
       'user-agent': 'animal-racing-social',
     },
     signal: AbortSignal.timeout(10_000),
   });
   if (!profileResponse.ok) throw new Error(`userinfo failed: ${profileResponse.status}`);
-  const profile = (await profileResponse.json()) as Record<string, any>;
+  const profile = fieldsOf(await profileResponse.json());
+  const name = text(profile.name);
+  const email = text(profile.email);
   if (p.id === 'google') {
     return {
       subject: String(profile.sub),
-      name: profile.name || profile.email || 'Racer',
-      email: profile.email ?? null,
-      avatarUrl: profile.picture ?? null,
+      name: name || email || 'Racer',
+      email: email ?? null,
+      avatarUrl: text(profile.picture) ?? null,
     };
   }
   return {
     subject: String(profile.id),
-    name: profile.name || profile.login || 'Racer',
-    email: profile.email ?? null,
-    avatarUrl: profile.avatar_url ?? null,
+    name: name || text(profile.login) || 'Racer',
+    email: email ?? null,
+    avatarUrl: text(profile.avatar_url) ?? null,
   };
 }
 
@@ -173,7 +207,7 @@ export function authRoutes(router: Router, deps: Deps): void {
 
   router.get('/v1/auth/:provider/start', async (ctx) => {
     const p = provider(ctx.params.provider);
-    const linkUserId = ctx.query.get('linkToken') ? unseal<string>(ctx.query.get('linkToken')!, jwtSecret()) : null;
+    const linkUserId = ctx.query.get('linkToken') ? unseal(ctx.query.get('linkToken')!, jwtSecret(), isString) : null;
     const state = randomToken(16);
     const verifier = randomToken(32);
     const stored = { state, verifier, provider: p.id, redirect: safeRedirect(ctx.query.get('redirect')), linkUserId };
@@ -198,13 +232,7 @@ export function authRoutes(router: Router, deps: Deps): void {
 
   router.get('/v1/auth/:provider/callback', async (ctx) => {
     const p = provider(ctx.params.provider);
-    const stored = unseal<{
-      state: string;
-      verifier: string;
-      provider: string;
-      redirect: string;
-      linkUserId: string | null;
-    }>(ctx.cookies[OAUTH_COOKIE], jwtSecret());
+    const stored = unseal(ctx.cookies[OAUTH_COOKIE], jwtSecret(), isOauthState);
     const clearOauth = serializeCookie(OAUTH_COOKIE, '', { path: '/v1/auth', maxAge: 0, secure: secureCookies() });
     const fail = (code: string, target = '/') => {
       instruments.authLogins().add(1, { provider: p.id, outcome: code.toLowerCase() });
@@ -276,10 +304,11 @@ export function authRoutes(router: Router, deps: Deps): void {
         instruments.authRefresh().add(1, { outcome: 'expired' });
         return { error: 'UNAUTHORIZED' as const };
       }
+      const userId: string = row.user_id;
       if (row.revoked_at) {
         if (Date.now() - row.revoked_at.getTime() < 30_000) {
           instruments.authRefresh().add(1, { outcome: 'grace' });
-          return { userId: row.user_id as string, cookie: null };
+          return { userId, cookie: null };
         }
         await client.query(
           'UPDATE identity.refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL',
@@ -295,7 +324,7 @@ export function authRoutes(router: Router, deps: Deps): void {
         row.token_id,
       ]);
       return {
-        userId: row.user_id as string,
+        userId,
         cookie: refreshCookie(await issueRefresh(client, row.user_id, row.family_id)),
       };
     });

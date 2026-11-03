@@ -1,5 +1,5 @@
 import { decodeCursor, page, pageLimit } from '../../lib/cursor.ts';
-import { many, one } from '../../lib/db.ts';
+import { many, one, type Row } from '../../lib/db.ts';
 import { ApiError, v, type Router } from '../../lib/http.ts';
 import { walletApi } from '../../lib/internal.ts';
 import { activeSeason } from '../../lib/seasons.ts';
@@ -20,7 +20,7 @@ const BET_STATUSES = [
   'SETTLED',
 ] as const;
 
-function notificationJson(row: Record<string, any>) {
+function notificationJson(row: Row) {
   return {
     id: row.notification_id,
     type: row.type,

@@ -35,8 +35,8 @@ function captureStdout(fn: () => void): string {
   return output;
 }
 
-describe('telemetry without a collector', () => {
-  it('is disabled and still creates valid, propagatable spans', async () => {
+void describe('telemetry without a collector', () => {
+  void it('is disabled and still creates valid, propagatable spans', async () => {
     assert.equal(telemetryEnabled(), false);
     await withSpan('unit', {}, async (span) => {
       assert.match(span.spanContext().traceId, /^[0-9a-f]{32}$/);
@@ -46,8 +46,8 @@ describe('telemetry without a collector', () => {
   });
 });
 
-describe('W3C propagation', () => {
-  it('round-trips through HTTP-style headers', async () => {
+void describe('W3C propagation', () => {
+  void it('round-trips through HTTP-style headers', async () => {
     await withSpan('producer', {}, async (span) => {
       const headers = injectHeaders();
       assert.match(
@@ -62,7 +62,7 @@ describe('W3C propagation', () => {
     });
   });
 
-  it('extracts Kafka Buffer headers and ignores missing context', () => {
+  void it('extracts Kafka Buffer headers and ignores missing context', () => {
     const span = startSpan('kafka');
     const headers = injectHeaders(spanContext(span));
     const kafkaHeaders = { traceparent: Buffer.from(headers.traceparent), other: Buffer.from('x') };
@@ -72,7 +72,7 @@ describe('W3C propagation', () => {
     span.end();
   });
 
-  it('starts a fresh trace for root spans even inside another span', async () => {
+  void it('starts a fresh trace for root spans even inside another span', async () => {
     await withSpan('outer', {}, async (outer) => {
       await withSpan('root', { root: true }, async (root) => {
         assert.notEqual(root.spanContext().traceId, outer.spanContext().traceId);
@@ -81,8 +81,8 @@ describe('W3C propagation', () => {
   });
 });
 
-describe('log correlation', () => {
-  it('adds trace and span ids to log lines inside a span only', async () => {
+void describe('log correlation', () => {
+  void it('adds trace and span ids to log lines inside a span only', async () => {
     const outside = JSON.parse(captureStdout(() => log.info('outside')));
     assert.equal(outside.trace_id, undefined);
     await withSpan('logged', {}, async (span) => {
@@ -95,8 +95,8 @@ describe('log correlation', () => {
   });
 });
 
-describe('SQL span names', () => {
-  it('summarizes operation and table without parameters', () => {
+void describe('SQL span names', () => {
+  void it('summarizes operation and table without parameters', () => {
     assert.deepEqual(summarizeSql('SELECT * FROM betting.bets WHERE user_id = $1'), {
       operation: 'SELECT',
       table: 'betting.bets',

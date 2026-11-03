@@ -12,6 +12,7 @@ import {
   type Counter,
   type Histogram,
   type Link,
+  type ObservableGauge,
   type Span,
 } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
@@ -154,7 +155,6 @@ export function hasRemoteParent(ctx: Context): boolean {
 
 export function setIdAttributes(span: Span, value: unknown): void {
   if (!value || typeof value !== 'object') return;
-  const record = value as Record<string, unknown>;
   for (const [field, attribute] of [
     ['raceId', 'ars.race_id'],
     ['betId', 'ars.bet_id'],
@@ -162,16 +162,18 @@ export function setIdAttributes(span: Span, value: unknown): void {
     ['userId', 'ars.user_id'],
     ['seasonId', 'ars.season_id'],
   ] as const) {
-    const id = record[field];
+    const id: unknown = Reflect.get(value, field);
     if (typeof id === 'string' && id !== '' && id !== '0') span.setAttribute(attribute, id);
   }
 }
 
 const meter = () => metrics.getMeter('ars');
-const instruments = new Map<string, unknown>();
+const histograms = new Map<string, Histogram>();
+const counters = new Map<string, Counter>();
+const gauges = new Map<string, ObservableGauge>();
 
-function lazy<T>(key: string, create: () => T): T {
-  let instrument = instruments.get(key) as T | undefined;
+function lazy<T>(instruments: Map<string, T>, key: string, create: () => T): T {
+  let instrument = instruments.get(key);
   if (!instrument) {
     instrument = create();
     instruments.set(key, instrument);
@@ -180,13 +182,13 @@ function lazy<T>(key: string, create: () => T): T {
 }
 
 export function histogram(name: string, unit: string, description: string, buckets: number[]): Histogram {
-  return lazy(name, () =>
+  return lazy(histograms, name, () =>
     meter().createHistogram(name, { unit, description, advice: { explicitBucketBoundaries: buckets } }),
   );
 }
 
 export function counter(name: string, description: string): Counter {
-  return lazy(name, () => meter().createCounter(name, { description }));
+  return lazy(counters, name, () => meter().createCounter(name, { description }));
 }
 
 export function gauge(
@@ -195,7 +197,7 @@ export function gauge(
   unit: string,
   read: () => Promise<{ value: number; attributes?: Attributes }[]>,
 ): void {
-  lazy(name, () => {
+  lazy(gauges, name, () => {
     const instrument = meter().createObservableGauge(name, { description, unit });
     instrument.addCallback(async (result) => {
       try {

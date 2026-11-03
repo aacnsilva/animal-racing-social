@@ -5,7 +5,7 @@ import { envInt } from '../../lib/config.ts';
 import { sha256 } from '../../lib/crypto.ts';
 import { many, one, type Pool } from '../../lib/db.ts';
 import { ApiError, pathId, Router, serve } from '../../lib/http.ts';
-import { runConsumer, Topics } from '../../lib/kafka.ts';
+import { payloadIn, runConsumer, Topics, type Payload } from '../../lib/kafka.ts';
 import { errorFields, log } from '../../lib/log.ts';
 import type { Redis } from '../../lib/redis.ts';
 import { instruments } from '../../lib/instruments.ts';
@@ -26,6 +26,31 @@ const LIFECYCLE_STATUS: Record<string, string> = {
   raceSettled: 'SETTLED',
   raceCancelled: 'CANCELLED',
 };
+
+const GATEWAY_EVENTS = [
+  'raceOpened',
+  'raceLocked',
+  'raceStarted',
+  'raceSettled',
+  'raceFinished',
+  'raceCancelled',
+  'raceTick',
+  'lapCompleted',
+  'marketOpened',
+  'priceUpdated',
+  'marketSuspended',
+  'marketResumed',
+  'marketClosed',
+  'marketResulted',
+  'marketVoided',
+  'betAccepted',
+  'betRejected',
+  'betSettled',
+  'betCashedOut',
+  'cashOutRejected',
+  'legSettled',
+  'notificationCreated',
+] as const;
 
 export class Gateway {
   pool: Pool;
@@ -133,83 +158,99 @@ export class Gateway {
     }
   }
 
-  async onEvent(envelope: { occurredAt: string; payload?: { $case: string; value: any } | undefined }): Promise<void> {
+  lifecycle(raceId: string, kind: string, at: string, extra: Record<string, unknown>): void {
+    if (!this.watching(raceId)) return;
+    this.broadcast(raceId, 'race.lifecycle', { status: LIFECYCLE_STATUS[kind], at, ...extra });
+  }
+
+  async onEvent(envelope: { occurredAt: string; payload?: Payload | undefined }): Promise<void> {
     const event = envelope.payload;
-    if (!event) return;
-    const value = event.value;
-    if (event.$case in LIFECYCLE_STATUS) {
-      if (!this.watching(value.raceId)) return;
-      this.broadcast(value.raceId, 'race.lifecycle', {
-        status: LIFECYCLE_STATUS[event.$case],
-        at: envelope.occurredAt,
-        ...(event.$case === 'raceFinished' ? { order: value.order } : {}),
-        ...(event.$case === 'raceCancelled' ? { reason: value.reason } : {}),
-      });
-      return;
-    }
+    if (!payloadIn(event, GATEWAY_EVENTS)) return;
     switch (event.$case) {
+      case 'raceOpened':
+      case 'raceLocked':
+      case 'raceStarted':
+      case 'raceSettled':
+        this.lifecycle(event.value.raceId, event.$case, envelope.occurredAt, {});
+        return;
+      case 'raceFinished':
+        this.lifecycle(event.value.raceId, event.$case, envelope.occurredAt, { order: event.value.order });
+        return;
+      case 'raceCancelled':
+        this.lifecycle(event.value.raceId, event.$case, envelope.occurredAt, { reason: event.value.reason });
+        return;
       case 'raceTick':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'race.tick', {
-            tick: value.tick,
-            lap: value.lap,
-            entrants: value.entrants,
-            events: value.events,
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'race.tick', {
+            tick: event.value.tick,
+            lap: event.value.lap,
+            entrants: event.value.entrants,
+            events: event.value.events,
           });
         return;
       case 'lapCompleted':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'race.lap', {
-            lap: value.lap,
-            leaderEntrantId: value.leaderEntrantId,
-            standings: value.standings,
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'race.lap', {
+            lap: event.value.lap,
+            leaderEntrantId: event.value.leaderEntrantId,
+            standings: event.value.standings,
           });
         return;
       case 'marketOpened':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'market.opened', await loadMarket(this.pool, this.redis, value.marketId));
+        if (this.watching(event.value.raceId))
+          this.broadcast(
+            event.value.raceId,
+            'market.opened',
+            await loadMarket(this.pool, this.redis, event.value.marketId),
+          );
         return;
       case 'priceUpdated':
-        if (!this.watching(value.raceId)) return;
-        this.broadcast(value.raceId, 'market.price', {
-          marketId: value.marketId,
-          priceVersion: value.priceVersion,
-          tick: value.tick,
-          selections: value.selections,
+        if (!this.watching(event.value.raceId)) return;
+        this.broadcast(event.value.raceId, 'market.price', {
+          marketId: event.value.marketId,
+          priceVersion: event.value.priceVersion,
+          tick: event.value.tick,
+          selections: event.value.selections,
         });
-        await this.pushCashouts(value.raceId);
+        await this.pushCashouts(event.value.raceId);
         return;
       case 'marketSuspended':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'market.suspended', {
-            marketId: value.marketId,
-            tick: value.tick,
-            reason: value.reason,
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'market.suspended', {
+            marketId: event.value.marketId,
+            tick: event.value.tick,
+            reason: event.value.reason,
           });
         return;
       case 'marketResumed':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'market.resumed', {
-            marketId: value.marketId,
-            tick: value.tick,
-            priceVersion: value.priceVersion,
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'market.resumed', {
+            marketId: event.value.marketId,
+            tick: event.value.tick,
+            priceVersion: event.value.priceVersion,
           });
         return;
       case 'marketClosed':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'market.closed', { marketId: value.marketId, tick: value.tick });
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'market.closed', {
+            marketId: event.value.marketId,
+            tick: event.value.tick,
+          });
         return;
       case 'marketResulted':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'market.resulted', {
-            marketId: value.marketId,
-            winning: value.winning,
-            order: value.order,
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'market.resulted', {
+            marketId: event.value.marketId,
+            winning: event.value.winning,
+            order: event.value.order,
           });
         return;
       case 'marketVoided':
-        if (this.watching(value.raceId))
-          this.broadcast(value.raceId, 'market.voided', { marketId: value.marketId, reason: value.reason });
+        if (this.watching(event.value.raceId))
+          this.broadcast(event.value.raceId, 'market.voided', {
+            marketId: event.value.marketId,
+            reason: event.value.reason,
+          });
         return;
       case 'betAccepted':
       case 'betRejected':
@@ -217,21 +258,21 @@ export class Gateway {
       case 'betCashedOut':
       case 'cashOutRejected':
       case 'legSettled':
-        await this.pushBet(value.userId, value.betId);
+        await this.pushBet(event.value.userId, event.value.betId);
         return;
       case 'notificationCreated': {
-        const connections = this.byUser.get(value.userId);
+        const connections = this.byUser.get(event.value.userId);
         if (!connections?.size) return;
         const unread = await one(
           this.pool,
           'SELECT count(*)::int AS n FROM notification.notifications WHERE user_id = $1 AND read_at IS NULL',
-          [value.userId],
+          [event.value.userId],
         ).catch(() => null);
         const notification = {
-          id: value.notificationId,
-          type: value.type,
-          payload: JSON.parse(value.payloadJson || '{}'),
-          createdAt: value.createdAt,
+          id: event.value.notificationId,
+          type: event.value.type,
+          payload: JSON.parse(event.value.payloadJson || '{}'),
+          createdAt: event.value.createdAt,
           readAt: null,
         };
         for (const connection of connections)
@@ -249,7 +290,10 @@ export async function start(): Promise<void> {
     let users = 0;
     let anonymous = 0;
     for (const connections of gateway.byRace.values())
-      for (const connection of connections) connection.userId ? users++ : anonymous++;
+      for (const connection of connections) {
+        if (connection.userId) users++;
+        else anonymous++;
+      }
     return [
       { value: users, attributes: { auth: 'user' } },
       { value: anonymous, attributes: { auth: 'anonymous' } },

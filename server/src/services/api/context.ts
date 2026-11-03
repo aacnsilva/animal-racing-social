@@ -1,7 +1,7 @@
 import { env } from '../../lib/config.ts';
 import { verifyJwt } from '../../lib/crypto.ts';
-import { one, type Pool } from '../../lib/db.ts';
-import { ApiError, type Ctx } from '../../lib/http.ts';
+import { one, type Pool, type Row } from '../../lib/db.ts';
+import { ApiError, isRecord, type Ctx } from '../../lib/http.ts';
 import type { Producer } from 'kafkajs';
 import type { Redis } from '../../lib/redis.ts';
 
@@ -16,13 +16,19 @@ export const secureCookies = () => publicUrl().startsWith('https://');
 export function authenticate(ctx: Ctx): void {
   const header = ctx.req.headers.authorization;
   if (!header?.startsWith('Bearer ')) return;
-  const claims = verifyJwt<{ sub: string; role: 'USER' | 'ADMIN' }>(header.slice(7), jwtSecret());
-  if (!claims) throw new ApiError(401, 'UNAUTHORIZED', 'Access token invalid or expired');
+  const claims = verifyJwt(header.slice(7), jwtSecret());
+  if (!claims || typeof claims.sub !== 'string' || (claims.role !== 'USER' && claims.role !== 'ADMIN'))
+    throw new ApiError(401, 'UNAUTHORIZED', 'Access token invalid or expired');
   ctx.state.user = { userId: claims.sub, role: claims.role } satisfies AuthUser;
 }
 
+function isAuthUser(value: unknown): value is AuthUser {
+  return isRecord(value) && typeof value.userId === 'string' && (value.role === 'USER' || value.role === 'ADMIN');
+}
+
 export function optionalUser(ctx: Ctx): AuthUser | null {
-  return (ctx.state.user as AuthUser | undefined) ?? null;
+  const user = ctx.state.user;
+  return isAuthUser(user) ? user : null;
 }
 
 export function requireUser(ctx: Ctx): AuthUser {
@@ -72,7 +78,7 @@ export async function rateLimit(ctx: Ctx, deps: Deps, bucket: 'bet' | 'read'): P
   if (wait > 0) throw new ApiError(429, 'RATE_LIMITED', 'Too many requests', { retryAfter: Math.ceil(wait / 1000) });
 }
 
-export function userJson(row: Record<string, any>, providers: string[]) {
+export function userJson(row: Row, providers: string[]) {
   return {
     userId: row.user_id,
     displayName: row.display_name,

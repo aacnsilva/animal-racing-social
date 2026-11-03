@@ -135,10 +135,11 @@ export async function start(): Promise<void> {
           );
           if (!market) return;
           const winning: string[] = market.result?.winningEntrants ?? [];
+          const marketType: MarketType = market.type;
           const order: string[] = event.value.order.length ? event.value.order : winning;
           await settleMarket(runtime, event.value.marketId, (leg) =>
             legWins(
-              market.type as MarketType,
+              marketType,
               {
                 entrantId: leg.entrant_id === null ? null : entrantKey(leg.entrant_id),
                 order: (leg.tricast_order ?? []).map(entrantKey),

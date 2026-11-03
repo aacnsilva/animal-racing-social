@@ -1,4 +1,4 @@
-import pg from 'pg';
+import { Client } from 'pg';
 import type { Producer } from 'kafkajs';
 import { env } from './config.ts';
 import type { Pool, Queryable } from './db.ts';
@@ -140,21 +140,22 @@ export async function startOutboxRelay(
   schemas: OutboxSchema[],
   producer: Producer,
 ): Promise<() => Promise<void>> {
-  let stopped = false;
+  const stopping = new AbortController();
   const wake = new Map<OutboxSchema, () => void>();
   const dirty = new Set<OutboxSchema>();
-  const listener = new pg.Client({ connectionString: env('DATABASE_URL') });
+  const listener = new Client({ connectionString: env('DATABASE_URL') });
   listener.on('error', (error) => log.error('outbox listener error', errorFields(error)));
   await listener.connect();
   listener.on('notification', (message) => {
-    const schema = message.channel.replace(/^outbox_/, '') as OutboxSchema;
+    const schema = schemas.find((entry) => `outbox_${entry}` === message.channel);
+    if (!schema) return;
     dirty.add(schema);
     wake.get(schema)?.();
   });
   for (const schema of schemas) await listener.query(`LISTEN outbox_${schema}`);
 
   const loops = schemas.map(async (schema) => {
-    while (!stopped) {
+    while (!stopping.signal.aborted) {
       dirty.delete(schema);
       let published = 0;
       try {
@@ -190,7 +191,7 @@ export async function startOutboxRelay(
   );
 
   return async () => {
-    stopped = true;
+    stopping.abort();
     clearInterval(cleanup);
     for (const resolve of wake.values()) resolve();
     await Promise.all(loops);

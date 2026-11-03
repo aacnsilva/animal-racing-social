@@ -3,7 +3,7 @@ import { envInt } from '../../lib/config.ts';
 import { many, one, tx, type Client, type Queryable } from '../../lib/db.ts';
 import { entrantKey, newId } from '../../lib/ids.ts';
 import { raceEngine, type EntrantInput } from '../../lib/internal.ts';
-import { payload, runConsumer, Topics, type PayloadOf } from '../../lib/kafka.ts';
+import { payload, payloadIn, runConsumer, Topics, type PayloadOf } from '../../lib/kafka.ts';
 import { errorFields, log } from '../../lib/log.ts';
 import { enqueue } from '../../lib/outbox.ts';
 import { instruments } from '../../lib/instruments.ts';
@@ -12,6 +12,8 @@ import { activeSpan, gauge, withSpan } from '../../lib/telemetry.ts';
 import { HOUR_MS, MINUTE_MS } from '../../lib/time.ts';
 import {
   isAvailable,
+  isRaceClass,
+  isSpecies,
   shuffle,
   slotPlan,
   slotsBetween,
@@ -137,7 +139,8 @@ export async function scheduleRace(
     instruments.schedulerSkipped().add(1, { reason: 'not_enough_animals' });
     return null;
   }
-  const lanes = shuffle(Array.from({ length: venue.lanes as number }, (_, i) => i + 1));
+  const laneCount: number = venue.lanes;
+  const lanes = shuffle(Array.from({ length: laneCount }, (_, i) => i + 1));
   const entrants = animals.map((animal, index) => ({
     number: index + 1,
     animal,
@@ -213,7 +216,14 @@ export async function scheduleRace(
       venueVersion: venue.version,
       laps: plan.laps,
       species: request.species,
-      entrants: inputs.map((input, index) => ({ ...input, name: entrants[index].animal.name })),
+      entrants: inputs.map((input, index) => ({
+        entrantId: input.entrantId,
+        animalId: input.animalId,
+        lane: input.lane,
+        temperament: input.temperament,
+        stats: input.stats,
+        name: entrants[index].animal.name,
+      })),
     }),
   );
   log.info('race scheduled', {
@@ -242,12 +252,12 @@ async function fillHorizon(runtime: Runtime): Promise<void> {
   const slots = slotsBetween(from, to, programme);
   const taken = new Set(
     (
-      await many(
+      await many<{ start_at: Date }>(
         runtime.pool,
         `SELECT start_at FROM racing.races WHERE start_at BETWEEN $1 AND $2 AND status <> 'CANCELLED'`,
         [from, to],
       )
-    ).map((row) => (row.start_at as Date).getTime()),
+    ).map((row) => row.start_at.getTime()),
   );
   let scheduled = 0;
   for (const slot of slots) {
@@ -460,7 +470,8 @@ export async function start(): Promise<void> {
       concurrency: 6,
       handler: async (envelope) => {
         const event = envelope.payload;
-        switch (event?.$case) {
+        if (!payloadIn(event, ['scriptSealed', 'scriptFailed', 'raceSettled', 'scheduleRace', 'cancelRace'])) return;
+        switch (event.$case) {
           case 'scriptSealed':
             await onSealed(runtime, event.value);
             break;
@@ -475,6 +486,11 @@ export async function start(): Promise<void> {
             break;
           case 'scheduleRace': {
             const command = event.value;
+            const { species, raceClass } = command;
+            if (!isSpecies(species) || !isRaceClass(raceClass)) {
+              log.warn('invalid schedule command', { raceId: command.raceId, species, raceClass });
+              break;
+            }
             const programme = await loadProgramme(runtime.pool);
             await withSchedulingLock(runtime, (client) =>
               scheduleRace(
@@ -482,8 +498,8 @@ export async function start(): Promise<void> {
                 {
                   raceId: command.raceId,
                   startAt: new Date(command.startAt),
-                  species: command.species as Species,
-                  raceClass: command.raceClass as RaceClass,
+                  species,
+                  raceClass,
                   ...(command.venueId ? { venueId: command.venueId } : {}),
                   ...(command.fieldSize ? { fieldSize: command.fieldSize } : {}),
                 },

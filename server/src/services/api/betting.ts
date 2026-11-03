@@ -42,9 +42,14 @@ function parseSelection(raw: unknown, field = 'selection'): Selection {
     const order = value.order.map((entrant, index) => v.str(entrant, `${field}.order[${index}]`));
     if (order.length !== 3 || new Set(order).size !== 3)
       throw new ApiError(422, 'INVALID_SELECTION', 'A tricast needs three different entrants');
-    return { order: order as [string, string, string] };
+    const [first, second, third] = order;
+    return { order: [first, second, third] };
   }
   return { entrantId: v.str(value.entrantId, `${field}.entrantId`) };
+}
+
+function selectionOf(leg: ValidLeg) {
+  return 'order' in leg.selection ? { order: leg.selection.order } : { entrantId: leg.selection.entrantId, order: [] };
 }
 
 async function validateLeg(deps: Deps, marketId: string, selection: Selection): Promise<ValidLeg> {
@@ -190,8 +195,6 @@ async function insertBet(
           ],
         );
       }
-      const selectionOf = (leg: ValidLeg) =>
-        'order' in leg.selection ? { order: leg.selection.order } : { entrantId: leg.selection.entrantId, order: [] };
       if (type === 'SINGLE') {
         const leg = legs[0];
         const acceptAtTick = leg.live && leg.tick !== null ? leg.tick + settings.acceptDelayTicks : undefined;

@@ -24,9 +24,15 @@ export function emptyStats(): SeasonStats {
   };
 }
 
+export type SettledOutcome = 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT';
+
+export function settledOutcome(outcome: string): SettledOutcome {
+  return outcome === 'WON' || outcome === 'LOST' || outcome === 'CASHED_OUT' ? outcome : 'VOID';
+}
+
 export function applySettled(
   stats: SeasonStats,
-  event: { betId: string; outcome: 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT'; stake: number; returned: number },
+  event: { betId: string; outcome: SettledOutcome; stake: number; returned: number },
 ): SeasonStats {
   const next = {
     ...stats,
@@ -62,15 +68,23 @@ export function boardScore(board: Board, stats: SeasonStats, rankScore: number):
     case 'win-streak':
       return stats.settledBets >= MIN_SETTLED_FOR_RANKING && stats.bestStreak > 0 ? stats.bestStreak : null;
   }
+  return unknownBoard(board);
+}
+
+function unknownBoard(board: never): never {
+  throw new Error(`unknown board ${String(board)}`);
 }
 
 export const RANK_THRESHOLDS = [10, 100] as const;
+
+function inside(rank: number | null, threshold: number): boolean {
+  return rank !== null && rank <= threshold;
+}
 
 export function thresholdCrossings(
   fromRank: number | null,
   toRank: number | null,
 ): { threshold: number; entered: boolean }[] {
-  const inside = (rank: number | null, threshold: number) => rank !== null && rank <= threshold;
   const crossings: { threshold: number; entered: boolean }[] = [];
   for (const threshold of RANK_THRESHOLDS) {
     const was = inside(fromRank, threshold);

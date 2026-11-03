@@ -1,11 +1,11 @@
-import { many, one, type Queryable } from '../lib/db.ts';
+import { many, one, type Queryable, type Row } from '../lib/db.ts';
 import { entrantKey } from '../lib/ids.ts';
 import type { Redis } from '../lib/redis.ts';
 import { readPrice } from './prices.ts';
 
 const LIVE_STATUSES = new Set(['PENDING', 'OPEN', 'SUSPENDED', 'CLOSED']);
 
-async function marketJson(db: Queryable, redis: Redis, row: Record<string, any>) {
+async function marketJson(db: Queryable, redis: Redis, row: Row) {
   let selections: { selectionId: string; entrantId: string; price: number; probability: number }[];
   let priceVersion: number = row.price_version;
   if (LIVE_STATUSES.has(row.status)) {

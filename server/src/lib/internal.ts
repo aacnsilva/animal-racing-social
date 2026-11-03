@@ -64,7 +64,8 @@ async function call<T>(base: string, path: string, body?: unknown, timeoutMs = 1
       parsed?.details,
     );
   }
-  return parsed as T;
+  const result: T = parsed;
+  return result;
 }
 
 export const raceEngine = {

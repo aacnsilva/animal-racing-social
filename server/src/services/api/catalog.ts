@@ -1,5 +1,5 @@
 import { decodeCursor, page, pageLimit } from '../../lib/cursor.ts';
-import { many, one } from '../../lib/db.ts';
+import { many, one, type Row } from '../../lib/db.ts';
 import { ApiError, pathId, v, type Router } from '../../lib/http.ts';
 import { iso } from '../../lib/time.ts';
 import { activeSeason, seasonJson, type SeasonRow } from '../../lib/seasons.ts';
@@ -9,7 +9,7 @@ import { framesFor } from '../../read/podium.ts';
 import { RACE_SELECT, raceJson } from '../../read/races.ts';
 import { optionalUser, type Deps } from './context.ts';
 
-export function venueJson(row: Record<string, any>) {
+export function venueJson(row: Row) {
   return {
     id: row.venue_id,
     version: row.version,
@@ -76,7 +76,7 @@ async function leaderboard(
       }
     }
     const rows = await deps.redis.zRangeWithScores(key, start, start + limit - 1, { REV: true });
-    entries = rows.map((row, index) => ({ rank: start + index + 1, userId: String(row.value), score: row.score }));
+    entries = rows.map((row, index) => ({ rank: start + index + 1, userId: row.value, score: row.score }));
   }
   const userIds = [...entries.map((entry) => entry.userId), ...(mine ? [mine.userId] : [])];
   const [names, frames] = await Promise.all([namesFor(deps, userIds), framesFor(deps.pool, userIds)]);
@@ -118,7 +118,7 @@ export function catalogRoutes(router: Router, deps: Deps): void {
       [ctx.query.get('class')],
     );
     const order = { SPRINT: 0, STANDARD: 1, ENDURANCE: 2 } as Record<string, number>;
-    return rows.map(venueJson).sort((a, b) => order[a.class] - order[b.class] || a.name.localeCompare(b.name));
+    return rows.map(venueJson).toSorted((a, b) => order[a.class] - order[b.class] || a.name.localeCompare(b.name));
   });
 
   router.get('/v1/venues/:venueId', async (ctx) => {

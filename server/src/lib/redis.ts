@@ -17,7 +17,9 @@ export async function connectRedis(url = env('REDIS_URL', 'redis://localhost:637
 
 export async function getJson<T>(redis: Redis, key: string): Promise<T | null> {
   const value = await redis.get(key);
-  return value === null ? null : (JSON.parse(value) as T);
+  if (value === null) return null;
+  const parsed: T = JSON.parse(value);
+  return parsed;
 }
 
 export async function setJson(redis: Redis, key: string, value: unknown, ttlSeconds: number): Promise<void> {

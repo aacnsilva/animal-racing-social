@@ -1,8 +1,8 @@
-import { many, one, type Queryable } from '../lib/db.ts';
+import { many, one, type Queryable, type Row } from '../lib/db.ts';
 import { entrantKey } from '../lib/ids.ts';
 import { iso } from '../lib/time.ts';
 
-export type BetRow = Record<string, any>;
+export type BetRow = Row;
 
 export async function betsJson(db: Queryable, bets: BetRow[]) {
   if (bets.length === 0) return [];
