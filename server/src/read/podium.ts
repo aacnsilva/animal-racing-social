@@ -2,10 +2,8 @@ import { many, type Queryable } from '../lib/db.ts';
 import { iso } from '../lib/time.ts';
 import { PODIUM_BOARD, PODIUM_TIERS, podiumTier, type PodiumTier } from '../domain/leaderboard.ts';
 
-/** The avatar frame a racer wears: their placing in the most recently ended season. Held until the next season ends. */
 export type Frame = { tier: PodiumTier; rank: number; seasonId: string; seasonName: string };
 
-/** One podium finish, kept forever as a trophy on the racer's profile. */
 export type Podium = Frame & { score: number; endedAt: string | null };
 
 export async function framesFor(db: Queryable, userIds: string[]): Promise<Map<string, Frame>> {

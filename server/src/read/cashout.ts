@@ -140,9 +140,6 @@ export async function issueQuote(
   };
 }
 
-// Live prices bump their version every tick, so requiring an unchanged version
-// expired nearly every in-running quote. The bet worker re-values the cash-out at
-// acceptance and enforces the user's minAmount, which is the real price guard.
 export async function quoteStillValid(
   redis: Redis,
   quoteId: string,

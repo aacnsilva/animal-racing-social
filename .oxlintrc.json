@@ -31,7 +31,8 @@
     "typescript/switch-exhaustiveness-check": "error",
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
-    "promise/no-return-wrap": "error"
+    "promise/no-return-wrap": "error",
+    "ars/no-comments": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",
@@ -63,5 +64,6 @@
         "node": true
       }
     }
-  ]
+  ],
+  "jsPlugins": ["./lint/oxlint-plugin.ts"]
 }

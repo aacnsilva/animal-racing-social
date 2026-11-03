@@ -17,4 +17,5 @@ We work trunk-based (TBD). `main` is the trunk:
   - `npm run fmt` / `npm run fmt:check` — oxfmt (`.oxfmtrc.json`).
 - Rust (`engine/`): lints live in `[workspace.lints]` in `engine/Cargo.toml`; every crate opts in with `[lints] workspace = true`.
   - `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D warnings`.
-- CI runs all four checks; keep them green before merging to `main`.
+- No code comments: `ars/no-comments` (custom oxlint plugin in `lint/oxlint-plugin.ts`) covers TS/TSX, and `lint/check-no-comments.ts` covers Rust and CSS. Both run as part of `npm run lint`. Only tool directives (`oxlint-disable`, `@ts-expect-error`) are allowed.
+- CI runs all of these checks; keep them green before merging to `main`.

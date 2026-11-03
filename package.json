@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "oxlint --type-aware",
+    "lint": "oxlint --type-aware && node lint/check-no-comments.ts",
     "lint:fix": "oxlint --type-aware --fix",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"

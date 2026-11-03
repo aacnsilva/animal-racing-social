@@ -2,9 +2,6 @@ export type PricePolicy = 'NONE' | 'BETTER' | 'ANY';
 
 export type PriceDecision = { ok: true; lockedPrice: number } | { ok: false; reason: 'PRICE_CHANGED' };
 
-// Live prices reprice every tick and in-running bets wait acceptDelayTicks, so an
-// exact match almost never survives. `tolerance` is the relative drift accepted
-// (0.1 = ±10%); the bet always locks the price current at acceptance.
 export function decidePrice(
   policy: PricePolicy,
   acceptedPrice: number,

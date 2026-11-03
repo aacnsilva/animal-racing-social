@@ -14,10 +14,8 @@ export type Stats = { velocity: number; stamina: number; acceleration: number; c
 
 export type PodiumTier = 'gold' | 'silver' | 'bronze';
 
-/** Avatar frame for a top-3 finish in the most recently ended season. */
 export type Frame = { tier: PodiumTier; rank: number; seasonId: string; seasonName: string };
 
-/** A podium finish, kept as a trophy on the profile. */
 export type Podium = Frame & { score: number; endedAt: string | null };
 
 export type User = {

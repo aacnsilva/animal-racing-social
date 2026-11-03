@@ -168,9 +168,6 @@ async fn write_price(
         .context("redis price write")
 }
 
-/// Fixed Monte Carlo seed per race (common random numbers): consecutive ticks
-/// reuse the same random draws, so prices move with the revealed race state
-/// instead of jittering with sampling noise, and live bets can be matched.
 fn race_seed(race_id: i64) -> [u8; 32] {
     let mut seed = *b"ars-odds-engine-live-pricing-crn";
     for (byte, id) in seed.iter_mut().zip(race_id.to_le_bytes()) {
