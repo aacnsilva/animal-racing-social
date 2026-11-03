@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 120,
+  "singleQuote": true,
+  "semi": true,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    "**/package-lock.json",
+    "**/dist/**",
+    "server/src/gen/**",
+    "e2e/playwright-report/**",
+    "e2e/test-results/**",
+    "engine/target/**"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "es2024": true
+  },
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "no-console": "off",
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-explicit-any": "warn",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "import/no-cycle": "error",
+    "import/no-duplicates": "error",
+    "promise/no-return-wrap": "error"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "server/src/gen/**",
+    "e2e/playwright-report/**",
+    "e2e/test-results/**",
+    "engine/target/**"
+  ],
+  "overrides": [
+    {
+      "files": ["web/**/*.{ts,tsx}"],
+      "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "react", "jsx-a11y"],
+      "env": {
+        "browser": true
+      },
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "react/jsx-key": "error",
+        "react/no-array-index-key": "warn",
+        "react/self-closing-comp": "error",
+        "react/react-in-jsx-scope": "off"
+      }
+    },
+    {
+      "files": ["server/**/*.ts", "mock-oauth/**/*.ts", "e2e/**/*.ts"],
+      "env": {
+        "node": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "ars-tooling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "oxlint --type-aware",
+    "lint:fix": "oxlint --type-aware --fix",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check"
+  },
+  "devDependencies": {
+    "oxfmt": "0.76.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005"
+  }
+}

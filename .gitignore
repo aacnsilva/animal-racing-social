@@ -34,3 +34,6 @@ service-account*.json
 .htpasswd
 *.tfvars
 !*.tfvars.example
+
+# Root tooling (oxlint / oxfmt)
+/node_modules

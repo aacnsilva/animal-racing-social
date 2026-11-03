@@ -1,12 +1,12 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/race-engine-core",
-    "crates/ars-proto",
-    "crates/ars-infra",
-    "services/race-engine",
-    "services/race-broadcaster",
-    "services/odds-engine",
+  "crates/race-engine-core",
+  "crates/ars-proto",
+  "crates/ars-infra",
+  "services/race-engine",
+  "services/race-broadcaster",
+  "services/odds-engine",
 ]
 
 [workspace.package]
@@ -38,11 +38,43 @@ aes-gcm = "0.11"
 zstd = { version = "0.14", default-features = false }
 getrandom = "0.4"
 opentelemetry = { version = "0.33.1", default-features = false, features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.33.1", default-features = false, features = ["trace", "metrics", "rt-tokio", "experimental_trace_batch_span_processor_with_async_runtime", "experimental_metrics_periodicreader_with_async_runtime"] }
-opentelemetry-otlp = { version = "0.33.1", default-features = false, features = ["http-proto", "hyper-client", "trace", "metrics"] }
+opentelemetry_sdk = { version = "0.33.1", default-features = false, features = [
+  "trace",
+  "metrics",
+  "rt-tokio",
+  "experimental_trace_batch_span_processor_with_async_runtime",
+  "experimental_metrics_periodicreader_with_async_runtime",
+] }
+opentelemetry-otlp = { version = "0.33.1", default-features = false, features = [
+  "http-proto",
+  "hyper-client",
+  "trace",
+  "metrics",
+] }
 tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "registry", "env-filter"] }
 tracing-opentelemetry = { version = "0.34.0", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_qualifications = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Too noisy for this codebase; revisit individually.
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+# Selected restriction lints.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
 
 [profile.dev]
 opt-level = 1

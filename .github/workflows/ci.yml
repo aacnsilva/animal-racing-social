@@ -53,21 +53,51 @@ jobs:
           npm ci
           npm run typecheck
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            web/package-lock.json
+            e2e/package-lock.json
+      - name: Install tooling and package types
+        run: |
+          npm ci
+          for dir in server web e2e; do npm ci --prefix "$dir"; done
+      - name: oxfmt
+        run: npm run fmt:check
+      - name: oxlint
+        run: npm run lint
+
   engine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -q && sudo apt-get install -yq protobuf-compiler cmake
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+      - name: rustfmt
+        working-directory: engine
+        run: cargo fmt --all --check
+      - name: Clippy
+        working-directory: engine
+        run: cargo clippy --workspace --all-targets --release -- -D warnings
       - name: Engine tests
         working-directory: engine
         run: cargo test --workspace --release
 
   e2e:
-    needs: [unit, engine]
+    needs: [lint, unit, engine]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -77,7 +107,7 @@ jobs:
       ARS_ALLOY_IMAGE: ghcr.io/${{ github.repository }}/alloy:sha-${{ github.sha }}
       ARS_JAEGER_IMAGE: ghcr.io/${{ github.repository }}/jaeger:sha-${{ github.sha }}
       ARS_GRAFANA_IMAGE: ghcr.io/${{ github.repository }}/grafana:sha-${{ github.sha }}
-      SCHEDULER_MAX_HORIZON_HOURS: "1"
+      SCHEDULER_MAX_HORIZON_HOURS: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Build images
@@ -92,7 +122,7 @@ jobs:
       - name: Playwright UI tests
         working-directory: e2e
         env:
-          CI: "true"
+          CI: 'true'
         run: |
           npm ci
           npx playwright install --with-deps chromium
