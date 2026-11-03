@@ -73,16 +73,19 @@ export function notificationText(n: Notification): string {
     case 'SEASON_ENDING':
       return 'The season ends in 24 hours. Last chance to climb the boards.';
     case 'SEASON_RESULT':
-      return `${str(p.seasonName) || 'The season'} is over: you finished #${str(p.rank)} of ${str(p.participants)} with ${fmtPoints(Number(p.score ?? 0))} pts.`;
+      return `${str(p.seasonName) || 'The season'} is over: you finished #${str(p.rank)} of ${str(p.participants)} with ${fmtPoints(Number(p.score ?? 0))} pts.${PODIUM_FRAME[Number(p.rank)] ? ` You earned the ${PODIUM_FRAME[Number(p.rank)]} avatar frame!` : ''}`;
     default:
       return titleCase(n.type);
   }
 }
 
+const PODIUM_FRAME: Record<number, string> = { 1: 'gold', 2: 'silver', 3: 'bronze' };
+
 export function notificationLink(n: Notification): string | null {
   const p = n.payload ?? {};
   if (p.raceId) return `/races/${str(p.raceId)}`;
   if (n.type === 'DAILY_REWARD_READY') return '/wallet';
+  if (n.type === 'SEASON_RESULT' && PODIUM_FRAME[Number(p.rank)]) return '/me';
   if (n.type === 'LEADERBOARD_MOVE' || n.type === 'SEASON_RESULT') return '/leaderboards';
   return null;
 }

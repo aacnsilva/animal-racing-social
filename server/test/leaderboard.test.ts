@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { applySettled, boardScore, emptyStats, roi, thresholdCrossings } from '../src/domain/leaderboard.ts';
+import { applySettled, boardScore, emptyStats, podiumTier, roi, thresholdCrossings } from '../src/domain/leaderboard.ts';
 
 describe('season stats', () => {
   it('tracks streaks, biggest payout and returns', () => {
@@ -34,5 +34,14 @@ describe('season stats', () => {
     assert.deepEqual(thresholdCrossings(5, 120), [{ threshold: 10, entered: false }, { threshold: 100, entered: false }]);
     assert.deepEqual(thresholdCrossings(null, 1), [{ threshold: 10, entered: true }, { threshold: 100, entered: true }]);
     assert.deepEqual(thresholdCrossings(40, 60), []);
+  });
+
+  it('maps the final top 3 to gold, silver and bronze podium tiers', () => {
+    assert.equal(podiumTier(1), 'gold');
+    assert.equal(podiumTier(2), 'silver');
+    assert.equal(podiumTier(3), 'bronze');
+    assert.equal(podiumTier(4), null);
+    assert.equal(podiumTier(0), null);
+    assert.equal(podiumTier(1.5), null);
   });
 });

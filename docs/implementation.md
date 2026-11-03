@@ -184,7 +184,11 @@ which reads the httpOnly `ars_refresh` cookie.
 ```ts
 type Stats = { velocity: number; stamina: number; acceleration: number; consistency: number };
 type User = { userId: string; displayName: string; avatarUrl: string | null; role: 'USER' | 'ADMIN';
-              providers: ('google' | 'github')[]; createdAt: string };
+              providers: ('google' | 'github')[]; createdAt: string; frame: Frame | null; podiums: Podium[] };
+// Season podium: the final top 3 of the balance board. `frame` is the placing in the most recently
+// ended season (worn until the next season ends); `podiums` is every podium finish, newest first.
+type Frame = { tier: 'gold' | 'silver' | 'bronze'; rank: 1 | 2 | 3; seasonId: string; seasonName: string };
+type Podium = Frame & { score: number; endedAt: string };
 type AnimalSummary = { id: string; name: string; species: 'HORSE' | 'GIRAFFE'; status: 'ACTIVE' | 'RETIRED';
   ageWeeks: number; careerDay: number; lifeStage: 'ROOKIE' | 'PRIME' | 'VETERAN';
   temperament: 'FRONT_RUNNER' | 'STALKER' | 'CLOSER' | 'STEADY'; current: Stats;
@@ -225,7 +229,8 @@ type LedgerEntry = { entryId: string; seasonId: string; type: string; amount: nu
 type DailyReward = { claimable: boolean; amount: number; nextClaimAt: string; streak: number; bestStreak: number };
 type Season = { id: string; name: string; status: 'UPCOMING' | 'ACTIVE' | 'ENDED'; startsAt: string; endsAt: string;
   lastRaceAt: string; startingGrant: number; dailyGrant: number };
-type LeaderboardEntry = { rank: number; userId: string; displayName: string; avatarUrl: string | null; score: number };
+type LeaderboardEntry = { rank: number; userId: string; displayName: string; avatarUrl: string | null; score: number;
+  frame: Frame | null };
 type Venue = { id: string; version: number; name: string; class: string; surface: string; description: string;
   lanes: number; lapLength: number; lapsRange: [number, number]; segments: object[]; assets: object; status: string };
 type Notification = { id: string; type: string; payload: Record<string, unknown>; createdAt: string; readAt: string | null };
