@@ -12,6 +12,14 @@ export type ResultStatus = 'FINISHED' | 'DISQUALIFIED' | 'DNF' | 'NON_RUNNER';
 
 export type Stats = { velocity: number; stamina: number; acceleration: number; consistency: number };
 
+export type PodiumTier = 'gold' | 'silver' | 'bronze';
+
+/** Avatar frame for a top-3 finish in the most recently ended season. */
+export type Frame = { tier: PodiumTier; rank: number; seasonId: string; seasonName: string };
+
+/** A podium finish, kept as a trophy on the profile. */
+export type Podium = Frame & { score: number; endedAt: string | null };
+
 export type User = {
   userId: string;
   displayName: string;
@@ -19,6 +27,8 @@ export type User = {
   role: 'USER' | 'ADMIN';
   providers: ProviderId[];
   createdAt: string;
+  frame?: Frame | null;
+  podiums?: Podium[];
 };
 
 export type AnimalSummary = {
@@ -177,7 +187,7 @@ export type Season = {
   dailyGrant: number;
 };
 
-export type LeaderboardEntry = { rank: number; userId: string; displayName: string; avatarUrl: string | null; score: number };
+export type LeaderboardEntry = { rank: number; userId: string; displayName: string; avatarUrl: string | null; score: number; frame?: Frame | null };
 
 export type Segment = {
   type: 'STRAIGHT' | 'CURVE' | 'UPHILL' | 'DOWNHILL';

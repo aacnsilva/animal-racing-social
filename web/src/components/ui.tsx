@@ -3,7 +3,7 @@ import { ApiError, login, useSession } from '../lib/api';
 import { friendlyError } from '../lib/errors';
 import { fmtStat, formClass, STAT_LABEL, statPct } from '../lib/format';
 import { laneColor, laneText } from '../lib/track';
-import type { ProviderId, Stats } from '../lib/types';
+import type { Frame, PodiumTier, ProviderId, Stats } from '../lib/types';
 
 export function Lane({ lane, small }: { lane: number; small?: boolean }) {
   return (
@@ -151,8 +151,43 @@ export function SignInPrompt({ message = 'Sign in to continue.' }: { message?: s
   );
 }
 
-export function Avatar({ name, url }: { name: string; url?: string | null }) {
-  return <span className="avatar">{url ? <img src={url} alt="" referrerPolicy="no-referrer" /> : (name || '?').slice(0, 1).toUpperCase()}</span>;
+export const TIER_LABEL: Record<PodiumTier, string> = { gold: 'Champion', silver: 'Runner-up', bronze: 'Third place' };
+export const TIER_PLACE: Record<PodiumTier, string> = { gold: '1st', silver: '2nd', bronze: '3rd' };
+
+export function Avatar({ name, url, frame, size }: { name: string; url?: string | null; frame?: Frame | null; size?: 'lg' }) {
+  const face = (
+    <span className={`avatar${size ? ` ${size}` : ''}`}>
+      {url ? <img src={url} alt="" referrerPolicy="no-referrer" /> : (name || '?').slice(0, 1).toUpperCase()}
+    </span>
+  );
+  if (!frame) return face;
+  return (
+    <span
+      className={`avatar-frame tier-${frame.tier}${size ? ` ${size}` : ''}`}
+      title={`${TIER_LABEL[frame.tier]} · ${frame.seasonName}`}
+      data-testid="avatar-frame"
+      data-tier={frame.tier}
+    >
+      <i className="avatar-ring" aria-hidden />
+      {face}
+      <b className="avatar-medal" aria-label={`${TIER_PLACE[frame.tier]} place in ${frame.seasonName}`}>
+        {frame.rank}
+      </b>
+    </span>
+  );
+}
+
+export function Medal({ tier, size = 44 }: { tier: PodiumTier; size?: number }) {
+  return (
+    <svg className={`medal tier-${tier}`} viewBox="0 0 48 56" width={size} height={(size * 56) / 48} aria-hidden>
+      <path d="M12 0h9l5 18h-9zM36 0h-9l-5 18h9z" className="medal-ribbon" />
+      <circle cx="24" cy="34" r="18" className="medal-disc" />
+      <circle cx="24" cy="34" r="13.5" className="medal-inner" />
+      <text x="24" y="39.5" textAnchor="middle" className="medal-num">
+        {tier === 'gold' ? 1 : tier === 'silver' ? 2 : 3}
+      </text>
+    </svg>
+  );
 }
 
 export function Pager({ hasMore, loading, onMore }: { hasMore: boolean; loading: boolean; onMore: () => void }) {

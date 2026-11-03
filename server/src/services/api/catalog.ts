@@ -5,6 +5,7 @@ import { iso } from '../../lib/time.ts';
 import { activeSeason, seasonJson, type SeasonRow } from '../../lib/seasons.ts';
 import { BOARDS, type Board } from '../../domain/leaderboard.ts';
 import { animalDetail, animalSummary } from '../../read/animals.ts';
+import { framesFor } from '../../read/podium.ts';
 import { RACE_SELECT, raceJson } from '../../read/races.ts';
 import { optionalUser, type Deps } from './context.ts';
 
@@ -55,11 +56,13 @@ async function leaderboard(deps: Deps, season: SeasonRow, board: Board, limit: n
     const rows = await deps.redis.zRangeWithScores(key, start, start + limit - 1, { REV: true });
     entries = rows.map((row, index) => ({ rank: start + index + 1, userId: String(row.value), score: row.score }));
   }
-  const names = await namesFor(deps, [...entries.map((entry) => entry.userId), ...(mine ? [mine.userId] : [])]);
+  const userIds = [...entries.map((entry) => entry.userId), ...(mine ? [mine.userId] : [])];
+  const [names, frames] = await Promise.all([namesFor(deps, userIds), framesFor(deps.pool, userIds)]);
   const decorate = (entry: { rank: number; userId: string; score: number }) => ({
     ...entry,
     displayName: names.get(entry.userId)?.displayName ?? 'Unknown racer',
     avatarUrl: names.get(entry.userId)?.avatarUrl ?? null,
+    frame: frames.get(entry.userId) ?? null,
   });
   return { items: entries.map(decorate), me: mine ? decorate(mine) : null };
 }

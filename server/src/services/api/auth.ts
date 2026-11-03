@@ -8,6 +8,7 @@ import { errorFields, log } from '../../lib/log.ts';
 import { activeSeason } from '../../lib/seasons.ts';
 import { DAY_MS } from '../../lib/time.ts';
 import { instruments } from '../../lib/instruments.ts';
+import { frameFor, podiumsFor } from '../../read/podium.ts';
 import { jwtSecret, publicUrl, requireUser, secureCookies, userJson, type Deps } from './context.ts';
 
 type ProviderId = 'google' | 'github';
@@ -81,7 +82,8 @@ export async function userWithProviders(db: Queryable, userId: string) {
   const user = await one(db, 'SELECT * FROM identity.users WHERE user_id = $1', [userId]);
   if (!user) return null;
   const identities = await many(db, 'SELECT provider FROM identity.user_identities WHERE user_id = $1 ORDER BY provider', [userId]);
-  return userJson(user, identities.map((row) => row.provider));
+  const podiums = await podiumsFor(db, userId);
+  return { ...userJson(user, identities.map((row) => row.provider)), frame: await frameFor(db, userId), podiums };
 }
 
 type Profile = { subject: string; name: string; email: string | null; avatarUrl: string | null };

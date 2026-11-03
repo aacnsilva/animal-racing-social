@@ -335,7 +335,7 @@ h3 {
   font-size: 0.88rem;
 }
 
-.user-menu .who span:not(.avatar) {
+.user-menu .who > span:not(.avatar):not(.avatar-frame) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -544,7 +544,7 @@ h3 {
   .brand-text {
     display: none;
   }
-  .user-menu .who span:not(.avatar) {
+  .user-menu .who > span:not(.avatar):not(.avatar-frame) {
     display: none;
   }
   .user-menu .who {
@@ -2887,5 +2887,293 @@ details.json pre {
   }
   .replay-bar .speed button:nth-child(n + 3) {
     display: none;
+  }
+}
+
+/* ---------- Season podium: avatar frames, banner, trophy case ---------- */
+
+.tier-gold {
+  --t-hi: #fff4c2;
+  --t-mid: #f4c542;
+  --t-lo: #a86f0c;
+  --t-ink: #2a1c00;
+  --t-glow: rgba(255, 200, 60, 0.6);
+}
+
+.tier-silver {
+  --t-hi: #ffffff;
+  --t-mid: #c9d3d8;
+  --t-lo: #6f7d86;
+  --t-ink: #12181c;
+  --t-glow: rgba(214, 228, 240, 0.5);
+}
+
+.tier-bronze {
+  --t-hi: #ffd9b0;
+  --t-mid: #d0874a;
+  --t-lo: #7a3f17;
+  --t-ink: #200e02;
+  --t-glow: rgba(222, 132, 68, 0.5);
+}
+
+.avatar-frame {
+  --frame-w: 3px;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  padding: var(--frame-w);
+  border-radius: 50%;
+  isolation: isolate;
+  animation: frame-glow 2.6s ease-in-out infinite;
+}
+
+.avatar-frame.lg {
+  --frame-w: 5px;
+}
+
+.avatar-frame .avatar-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.avatar-frame .avatar-ring::before {
+  content: '';
+  position: absolute;
+  inset: -25%;
+  background: conic-gradient(var(--t-hi), var(--t-mid) 18%, var(--t-lo) 34%, var(--t-mid) 50%, var(--t-hi) 60%, var(--t-mid) 76%, var(--t-lo) 88%, var(--t-hi));
+  animation: frame-spin 3.2s linear infinite;
+}
+
+.avatar-frame .avatar {
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.avatar.lg {
+  width: 64px;
+  height: 64px;
+  font-size: 1.6rem;
+}
+
+.avatar-medal {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--t-ink);
+  background: radial-gradient(circle at 35% 30%, var(--t-hi), var(--t-mid) 55%, var(--t-lo));
+  border: 1.5px solid var(--bg);
+  overflow: hidden;
+}
+
+.avatar-frame.lg .avatar-medal {
+  width: 24px;
+  height: 24px;
+  font-size: 0.8rem;
+  right: -2px;
+  bottom: -2px;
+  border-width: 2px;
+}
+
+.avatar-medal::after,
+.podium-banner::after,
+.trophy::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: podium-shine 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.tier-gold.avatar-frame .avatar-ring::before {
+  animation-duration: 2.4s;
+}
+
+.tier-gold.avatar-frame::after {
+  content: '✦';
+  position: absolute;
+  top: -5px;
+  left: -2px;
+  font-size: 0.7rem;
+  color: var(--t-hi);
+  text-shadow: 0 0 6px var(--t-glow);
+  animation: frame-twinkle 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.podium-banner {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--t-mid);
+  background:
+    radial-gradient(500px 140px at 0% 0%, var(--t-glow), transparent 70%),
+    linear-gradient(120deg, color-mix(in srgb, var(--t-lo) 35%, var(--panel)), var(--panel));
+  box-shadow: 0 0 24px -6px var(--t-glow);
+}
+
+.podium-banner h2 {
+  margin: 0;
+  color: var(--t-hi);
+}
+
+.podium-banner p {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+
+.podium-banner .eyebrow {
+  color: var(--t-mid);
+  margin-bottom: 2px;
+}
+
+.podium-banner .medal {
+  flex: none;
+  transform-origin: 50% 0;
+  animation: medal-swing 3s ease-in-out infinite;
+}
+
+.podium-banner::after {
+  animation-duration: 4.2s;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.12) 50%, transparent 60%);
+}
+
+.medal .medal-ribbon {
+  fill: var(--t-lo);
+}
+
+.medal .medal-disc {
+  fill: var(--t-mid);
+  stroke: var(--t-hi);
+  stroke-width: 1.5;
+}
+
+.medal .medal-inner {
+  fill: none;
+  stroke: var(--t-lo);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.medal .medal-num {
+  fill: var(--t-ink);
+  font-weight: 900;
+  font-size: 15px;
+  font-family: var(--font);
+}
+
+.trophies {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.trophy {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--t-mid) 55%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--t-lo) 22%, var(--panel-2)), var(--panel-2));
+  min-width: 0;
+}
+
+.trophy b {
+  color: var(--t-hi);
+}
+
+.trophy .tiny {
+  color: var(--text-2);
+}
+
+.trophy::after {
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.14) 50%, transparent 60%);
+}
+
+.trophy:nth-child(2n)::after {
+  animation-delay: 1.2s;
+}
+
+.trophy:nth-child(3n)::after {
+  animation-delay: 2.4s;
+}
+
+@keyframes frame-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes frame-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 4px 0 var(--t-glow);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px var(--t-glow);
+  }
+}
+
+@keyframes frame-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4) rotate(0deg);
+  }
+  45%,
+  55% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
+}
+
+@keyframes podium-shine {
+  0%,
+  55% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes medal-swing {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-frame,
+  .avatar-frame .avatar-ring::before,
+  .tier-gold.avatar-frame::after,
+  .podium-banner .medal,
+  .avatar-medal::after,
+  .podium-banner::after,
+  .trophy::after {
+    animation: none;
   }
 }

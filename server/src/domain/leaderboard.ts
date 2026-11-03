@@ -60,3 +60,12 @@ export function thresholdCrossings(fromRank: number | null, toRank: number | nul
   }
   return crossings;
 }
+
+/** The board whose final top 3 earn podium frames and trophies when a season ends. */
+export const PODIUM_BOARD: Board = 'balance';
+export const PODIUM_TIERS = ['gold', 'silver', 'bronze'] as const;
+export type PodiumTier = (typeof PODIUM_TIERS)[number];
+
+export function podiumTier(rank: number): PodiumTier | null {
+  return Number.isInteger(rank) && rank >= 1 && rank <= PODIUM_TIERS.length ? PODIUM_TIERS[rank - 1]! : null;
+}

@@ -77,7 +77,7 @@ export function LeaderboardsPage() {
       </div>
       {me && (
         <div className="card row wrap">
-          <Avatar name={me.displayName} url={me.avatarUrl} />
+          <Avatar name={me.displayName} url={me.avatarUrl} frame={me.frame} />
           <b>You</b>
           <span className="muted">rank</span>
           <b className="num">#{me.rank}</b>
@@ -110,7 +110,7 @@ export function LeaderboardsPage() {
                     </td>
                     <td>
                       <span className="row">
-                        <Avatar name={entry.displayName} url={entry.avatarUrl} />
+                        <Avatar name={entry.displayName} url={entry.avatarUrl} frame={entry.frame} />
                         <b>{entry.displayName}</b>
                         {entry.userId === session.user?.userId && <span className="chip gold">you</span>}
                       </span>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Avatar, Loading, ProviderIcon, SignInPrompt } from '../components/ui';
+import { Avatar, Loading, Medal, ProviderIcon, SignInPrompt, TIER_LABEL, TIER_PLACE } from '../components/ui';
 import { api, ApiError, setSessionUser, useSession } from '../lib/api';
 import { toast } from '../lib/app';
 import { friendlyError } from '../lib/errors';
-import { fmtDateTime } from '../lib/format';
-import type { ProviderId, User } from '../lib/types';
+import { fmtDateTime, fmtPoints } from '../lib/format';
+import type { Frame, Podium, ProviderId, User } from '../lib/types';
 
 const PROVIDERS: { id: ProviderId; label: string }[] = [
   { id: 'google', label: 'Google' },
@@ -70,13 +70,15 @@ export function ProfilePage() {
         <div>
           <div className="eyebrow">Account</div>
           <h1 className="row">
-            <Avatar name={user.displayName} url={user.avatarUrl} /> {user.displayName}
+            <Avatar name={user.displayName} url={user.avatarUrl} frame={user.frame} size="lg" /> {user.displayName}
           </h1>
           <p>
             Racer since {fmtDateTime(user.createdAt)} · {user.role === 'ADMIN' ? 'Administrator' : 'Player'}
           </p>
         </div>
       </div>
+      {user.frame && <PodiumBanner frame={user.frame} />}
+      {user.podiums && user.podiums.length > 0 && <TrophyCase podiums={user.podiums} />}
       <section className="card stack">
         <h2>Profile</h2>
         <label className="field">
@@ -136,5 +138,48 @@ export function ProfilePage() {
         </dl>
       </section>
     </div>
+  );
+}
+
+function PodiumBanner({ frame }: { frame: Frame }) {
+  return (
+    <section className={`podium-banner tier-${frame.tier}`} data-testid="podium-banner" data-tier={frame.tier}>
+      <Medal tier={frame.tier} size={52} />
+      <div>
+        <div className="eyebrow">{frame.seasonName}</div>
+        <h2>
+          {TIER_LABEL[frame.tier]} · {TIER_PLACE[frame.tier]} place
+        </h2>
+        <p className="small">You wear the {frame.tier} frame until the next season ends.</p>
+      </div>
+    </section>
+  );
+}
+
+function TrophyCase({ podiums }: { podiums: Podium[] }) {
+  const count = (tier: Podium['tier']) => podiums.filter((p) => p.tier === tier).length;
+  return (
+    <section className="card stack" data-testid="trophy-case">
+      <div className="row wrap">
+        <h2>Trophy case</h2>
+        <span className="spacer" />
+        <span className="small muted">
+          {count('gold')} gold · {count('silver')} silver · {count('bronze')} bronze
+        </span>
+      </div>
+      <div className="trophies">
+        {podiums.map((podium) => (
+          <div key={podium.seasonId} className={`trophy tier-${podium.tier}`} data-testid="trophy" data-tier={podium.tier}>
+            <Medal tier={podium.tier} />
+            <div>
+              <b>{podium.seasonName}</b>
+              <div className="tiny">
+                {TIER_PLACE[podium.tier]} · {fmtPoints(podium.score)} pts
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

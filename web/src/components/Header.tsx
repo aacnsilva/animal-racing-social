@@ -177,7 +177,7 @@ export function Header() {
               </Link>
               <div className="user-menu" data-testid="user-menu">
                 <Link to="/me" className="who" title="Profile">
-                  <Avatar name={user.displayName} url={user.avatarUrl} />
+                  <Avatar name={user.displayName} url={user.avatarUrl} frame={user.frame} />
                   <span>{user.displayName}</span>
                 </Link>
                 <button className="btn ghost small icon user-logout" data-testid="logout" onClick={() => void logout()} title="Sign out" aria-label="Sign out" style={{ width: 30, height: 30 }}>
