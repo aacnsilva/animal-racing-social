@@ -8,6 +8,7 @@ import { enqueue } from '../../lib/outbox.ts';
 export type LedgerType =
   | 'SEASON_GRANT'
   | 'DAILY_GRANT'
+  | 'LIFESAVER'
   | 'BET_STAKE'
   | 'BET_PAYOUT'
   | 'BET_REFUND'

@@ -1,3 +1,4 @@
+import type { LifesaverStatus } from '../domain/lifesaver.ts';
 import { env } from './config.ts';
 import { ApiError } from './http.ts';
 import { BUCKETS, histogram, injectHeaders, SpanKind, SpanStatusCode, withSpan } from './telemetry.ts';
@@ -115,6 +116,12 @@ export const walletApi = {
     call<{ balance: number }>(walletApi.base(), '/internal/debit', { userId, seasonId, betId, amount }),
   dailyClaim: (userId: string) =>
     call<{ amount: number; balance: number; streak: number }>(walletApi.base(), '/internal/daily-claim', { userId }),
+  lifesaverStatus: (userId: string) =>
+    call<LifesaverStatus>(walletApi.base(), '/internal/lifesaver/status', { userId }),
+  lifesaverClaim: (userId: string) =>
+    call<{ amount: number; balance: number; balanceBefore: number }>(walletApi.base(), '/internal/lifesaver/claim', {
+      userId,
+    }),
   adjust: (userId: string, seasonId: string, amount: number, refId: string, reason: string) =>
     call<{ balance: number }>(walletApi.base(), '/internal/adjust', { userId, seasonId, amount, refId, reason }),
 };

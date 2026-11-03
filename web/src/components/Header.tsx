@@ -6,6 +6,7 @@ import { fmtCountdown, fmtPoints } from '../lib/format';
 import { useNow, useStore } from '../lib/hooks';
 import { Link, useLocation } from '../lib/router';
 import { Avatar, Logo, ProviderIcon } from './ui';
+import { LifesaverBuoyButton } from './Lifesaver';
 
 type TabIconName = 'races' | 'bets' | 'wallet' | 'ranks' | 'more';
 
@@ -254,6 +255,7 @@ export function Header() {
                   <span className="unit">pts</span>
                 </Link>
               )}
+              <LifesaverBuoyButton />
               <DailyRewardButton />
               <Link
                 to="/notifications"

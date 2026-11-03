@@ -9,6 +9,7 @@ export type SeasonRow = {
   last_race_at: Date;
   starting_grant: string;
   daily_grant: string;
+  lifesaver_grant: string;
   ending_notified_at: Date | null;
 };
 
@@ -26,5 +27,6 @@ export function seasonJson(row: SeasonRow) {
     lastRaceAt: row.last_race_at.toISOString(),
     startingGrant: Number(row.starting_grant),
     dailyGrant: Number(row.daily_grant),
+    lifesaverGrant: Number(row.lifesaver_grant),
   };
 }

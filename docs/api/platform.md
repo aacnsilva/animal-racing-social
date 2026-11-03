@@ -49,6 +49,27 @@ POST /v1/me/rewards/daily   → 200 { amount, balance } | 409 ALREADY_CLAIMED
   so double-clicks and retries are harmless without an idempotency key.
 - Streak is tracked for display only; the amount stays 50 until we decide otherwise.
 
+## 3a. Lifesaver (free rescue when busted)
+
+```
+GET  /v1/me/rewards/lifesaver → { state, claimable, amount: 5000, freePerSeason: 1, freeRemaining, seasonId, usedAt }
+POST /v1/me/rewards/lifesaver → 200 { amount, balance, balanceBefore }
+                                | 409 NOT_BUSTED | BETS_STILL_OPEN | LIFESAVER_USED
+```
+
+- A racer who has lost every point (balance 0 and no open bets) gets **one free
+  lifesaver per season** worth `season.lifesaverGrant` (default 5 000 points).
+- `state`: `AFLOAT` (still has points), `WAITING_ON_BETS` (balance 0 but bets may
+  still pay out), `READY`, `USED`, `NO_SEASON`.
+- Ledger `LIFESAVER` with `refId = free:<seasonId>`. The `(user, type, refId)`
+  unique key makes it once per season even under retries; the wallet row lock
+  serialises concurrent claims.
+- The web client pops an animated rescue (racer overboard, lifebuoy throw, haul
+  out of the water, balance counting up) the first time it sees `READY`, and keeps
+  an SOS button in the header until it is used.
+- Roadmap: paid lifesavers. They will reuse the `LIFESAVER` entry type with
+  `refId = paid:<purchaseId>`, so the free one and paid ones never collide.
+
 ## 4. Admin API
 
 `/v1/admin/*`, role `ADMIN` (granted manually to specific userIds). Every

@@ -401,7 +401,7 @@ CREATE TABLE wallet.ledger_entries (                            -- [U] append-on
   entry_id       BIGINT NOT NULL,
   season_id      BIGINT NOT NULL,
   type           TEXT NOT NULL CHECK (type IN
-                   ('SEASON_GRANT','DAILY_GRANT','BET_STAKE','BET_PAYOUT','BET_REFUND','CASHOUT','ADMIN_ADJUST')),
+                   ('SEASON_GRANT','DAILY_GRANT','LIFESAVER','BET_STAKE','BET_PAYOUT','BET_REFUND','BET_LOST','CASHOUT','ADMIN_ADJUST')),
   amount         BIGINT NOT NULL,          -- signed
   ref_id         TEXT   NOT NULL,          -- betId | "userId:YYYY-MM-DD" | seasonId | adminActionId
   balance_after  BIGINT NOT NULL,
@@ -429,6 +429,7 @@ CREATE TABLE season.seasons (                                   -- [G]
   last_race_at    TIMESTAMPTZ NOT NULL,         -- ends_at − 1 h (last race start)
   starting_grant  BIGINT NOT NULL DEFAULT 10000,
   daily_grant     BIGINT NOT NULL DEFAULT 50,
+  lifesaver_grant BIGINT NOT NULL DEFAULT 5000 CHECK (lifesaver_grant > 0),
   CHECK (ends_at > starts_at),
   CHECK (last_race_at = ends_at - interval '1 hour'),
   EXCLUDE USING gist (tstzrange(starts_at, ends_at) WITH &&)

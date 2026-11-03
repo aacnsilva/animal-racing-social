@@ -476,7 +476,14 @@ function Templates() {
 
 function Seasons() {
   const seasons = useAsync(() => api<Season[]>('/v1/admin/seasons'), []);
-  const [form, setForm] = useState({ name: '', startsAt: '', endsAt: '', startingGrant: '10000', dailyGrant: '50' });
+  const [form, setForm] = useState({
+    name: '',
+    startsAt: '',
+    endsAt: '',
+    startingGrant: '10000',
+    dailyGrant: '50',
+    lifesaverGrant: '5000',
+  });
   const [result, setResult] = useState<Result>(null);
   const create = async () => {
     setResult(null);
@@ -489,6 +496,7 @@ function Seasons() {
           endsAt: new Date(form.endsAt).toISOString(),
           startingGrant: Number(form.startingGrant),
           dailyGrant: Number(form.dailyGrant),
+          lifesaverGrant: Number(form.lifesaverGrant),
         },
       });
       setResult({ kind: 'success', text: 'Season created.' });
@@ -528,7 +536,8 @@ function Seasons() {
                       {fmtDateTime(season.startsAt)} → {fmtDateTime(season.endsAt)}
                     </td>
                     <td className="right num small">
-                      {fmtPoints(season.startingGrant)} / {fmtPoints(season.dailyGrant)}
+                      {fmtPoints(season.startingGrant)} / {fmtPoints(season.dailyGrant)} /{' '}
+                      {fmtPoints(season.lifesaverGrant)}
                     </td>
                   </tr>
                 ))}
@@ -577,6 +586,15 @@ function Seasons() {
               type="number"
               value={form.dailyGrant}
               onChange={(e) => setForm({ ...form, dailyGrant: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span>Lifesaver grant</span>
+            <input
+              className="input"
+              type="number"
+              value={form.lifesaverGrant}
+              onChange={(e) => setForm({ ...form, lifesaverGrant: e.target.value })}
             />
           </label>
         </div>

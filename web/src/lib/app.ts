@@ -1,11 +1,21 @@
 import { api, sessionStore } from './api';
 import { createStore } from './hooks';
-import type { Bet, DailyReward, Notification, Page, Season, Wallet } from './types';
+import type { Bet, DailyReward, Lifesaver, Notification, Page, Season, Wallet } from './types';
 
 export const walletStore = createStore<Wallet | null>(null);
 export const unreadStore = createStore<number>(0);
 export const seasonStore = createStore<Season | null>(null);
 export const dailyStore = createStore<DailyReward | null>(null);
+export const lifesaverStore = createStore<Lifesaver | null>(null);
+export const rescueStore = createStore<{ open: boolean; rescues: number }>({ open: false, rescues: 0 });
+
+export function openRescue(): void {
+  rescueStore.set((state) => (state.open ? state : { ...state, open: true }));
+}
+
+export function closeRescue(saved: boolean): void {
+  rescueStore.set((state) => ({ open: false, rescues: state.rescues + (saved ? 1 : 0) }));
+}
 
 export type Toast = { id: number; message: string; kind: 'info' | 'success' | 'error' };
 export const toastStore = createStore<Toast[]>([]);
@@ -26,7 +36,12 @@ export function refreshWallet(delay = 150): void {
   walletTimer = setTimeout(async () => {
     if (!authed()) return;
     try {
-      walletStore.set(await api<Wallet>('/v1/me/wallet'));
+      const wallet = await api<Wallet>('/v1/me/wallet');
+      const previous = walletStore.get();
+      walletStore.set(wallet);
+      const lifesaver = lifesaverStore.get();
+      if (!lifesaver || previous?.balance !== wallet.balance || previous.inOpenBets !== wallet.inOpenBets)
+        void refreshLifesaver();
     } catch {
       return;
     }
@@ -52,6 +67,15 @@ export async function refreshDaily(): Promise<void> {
   }
 }
 
+export async function refreshLifesaver(): Promise<void> {
+  if (!authed()) return;
+  try {
+    lifesaverStore.set(await api<Lifesaver>('/v1/me/rewards/lifesaver'));
+  } catch {
+    return;
+  }
+}
+
 export async function loadSeason(): Promise<void> {
   try {
     seasonStore.set(await api<Season>('/v1/seasons/current'));
@@ -64,6 +88,8 @@ export function resetUserStores(): void {
   walletStore.set(null);
   unreadStore.set(0);
   dailyStore.set(null);
+  lifesaverStore.set(null);
+  rescueStore.set((state) => ({ ...state, open: false }));
 }
 
 const betListeners = new Set<(bet: Bet) => void>();

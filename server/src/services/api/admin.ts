@@ -8,6 +8,7 @@ import { payload, Topics } from '../../lib/kafka.ts';
 import { enqueue, enqueueRaw } from '../../lib/outbox.ts';
 import { activeSeason, seasonJson, type SeasonRow } from '../../lib/seasons.ts';
 import { iso } from '../../lib/time.ts';
+import { DEFAULT_LIFESAVER_GRANT } from '../../domain/lifesaver.ts';
 import { validateTemplate } from '../../domain/markets.ts';
 import { validateProgramme } from '../../domain/scheduler.ts';
 import { animalSummary } from '../../read/animals.ts';
@@ -150,6 +151,10 @@ function seasonInput(body: Record<string, unknown>) {
     endsAt,
     startingGrant: body.startingGrant === undefined ? 10000 : v.int(body.startingGrant, 'startingGrant', { min: 1 }),
     dailyGrant: body.dailyGrant === undefined ? 50 : v.int(body.dailyGrant, 'dailyGrant', { min: 0 }),
+    lifesaverGrant:
+      body.lifesaverGrant === undefined
+        ? DEFAULT_LIFESAVER_GRANT
+        : v.int(body.lifesaverGrant, 'lifesaverGrant', { min: 1 }),
   };
 }
 
@@ -586,9 +591,17 @@ export function adminRoutes(router: Router, deps: Deps): void {
     return tx(deps.pool, async (client) => {
       const row = await one<SeasonRow>(
         client,
-        `INSERT INTO season.seasons (season_id, name, status, starts_at, ends_at, last_race_at, starting_grant, daily_grant)
-         VALUES ($1, $2, 'UPCOMING', $3, $4, $4::timestamptz - interval '1 hour', $5, $6) RETURNING *`,
-        [newId(0), input.name, input.startsAt, input.endsAt, input.startingGrant, input.dailyGrant],
+        `INSERT INTO season.seasons (season_id, name, status, starts_at, ends_at, last_race_at, starting_grant, daily_grant, lifesaver_grant)
+         VALUES ($1, $2, 'UPCOMING', $3, $4, $4::timestamptz - interval '1 hour', $5, $6, $7) RETURNING *`,
+        [
+          newId(0),
+          input.name,
+          input.startsAt,
+          input.endsAt,
+          input.startingGrant,
+          input.dailyGrant,
+          input.lifesaverGrant,
+        ],
       ).catch((error) => {
         if (error.code === '23P01') throw new ApiError(409, 'CONFLICT', 'Seasons cannot overlap');
         throw error;
@@ -610,9 +623,17 @@ export function adminRoutes(router: Router, deps: Deps): void {
       if (before.status !== 'UPCOMING') throw new ApiError(409, 'CONFLICT', 'Only upcoming seasons can be edited');
       const row = await one<SeasonRow>(
         client,
-        `UPDATE season.seasons SET name = $2, starts_at = $3, ends_at = $4, last_race_at = $4::timestamptz - interval '1 hour', starting_grant = $5, daily_grant = $6
+        `UPDATE season.seasons SET name = $2, starts_at = $3, ends_at = $4, last_race_at = $4::timestamptz - interval '1 hour', starting_grant = $5, daily_grant = $6, lifesaver_grant = $7
          WHERE season_id = $1 RETURNING *`,
-        [seasonId, input.name, input.startsAt, input.endsAt, input.startingGrant, input.dailyGrant],
+        [
+          seasonId,
+          input.name,
+          input.startsAt,
+          input.endsAt,
+          input.startingGrant,
+          input.dailyGrant,
+          input.lifesaverGrant,
+        ],
       ).catch((error) => {
         if (error.code === '23P01') throw new ApiError(409, 'CONFLICT', 'Seasons cannot overlap');
         throw error;

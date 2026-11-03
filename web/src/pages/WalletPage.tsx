@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
+import { LifesaverTile } from '../components/Lifesaver';
 import { Empty, ErrorNotice, Loading, Pager, SignInPrompt } from '../components/ui';
 import { api, qs, useSession } from '../lib/api';
-import { dailyStore, refreshDaily, refreshWallet, seasonStore, toast, walletStore } from '../lib/app';
+import {
+  dailyStore,
+  refreshDaily,
+  refreshLifesaver,
+  refreshWallet,
+  rescueStore,
+  seasonStore,
+  toast,
+  walletStore,
+} from '../lib/app';
 import { friendlyError } from '../lib/errors';
 import { fmtCountdown, fmtDateTime, fmtPoints, fmtSigned } from '../lib/format';
 import { useNow, usePaged, useStore } from '../lib/hooks';
@@ -11,6 +21,7 @@ const LEDGER_LABEL: Record<string, string> = {
   SIGNUP_GRANT: 'Season grant',
   SEASON_GRANT: 'Season grant',
   DAILY_GRANT: 'Daily reward',
+  LIFESAVER: 'Lifesaver',
   BET_STAKE: 'Stake',
   BET_PAYOUT: 'Payout',
   BET_REFUND: 'Refund',
@@ -25,19 +36,21 @@ export function WalletPage() {
   const season = useStore(seasonStore);
   const now = useNow(1000);
   const [claiming, setClaiming] = useState(false);
+  const { rescues } = useStore(rescueStore);
   const authed = session.status === 'authed';
   const ledger = usePaged(
     (cursor) =>
       authed
         ? api<Page<LedgerEntry>>(`/v1/me/wallet/ledger${qs({ cursor, limit: 25 })}`)
         : Promise.resolve({ items: [], nextCursor: null }),
-    [authed],
+    [authed, rescues],
   );
 
   useEffect(() => {
     if (!authed) return;
     refreshWallet(0);
     void refreshDaily();
+    void refreshLifesaver();
   }, [authed]);
 
   if (session.status === 'loading') return <Loading />;
@@ -105,6 +118,7 @@ export function WalletPage() {
             </div>
           )}
         </div>
+        <LifesaverTile />
       </div>
       <section className="card flush">
         <div className="card-head" style={{ padding: '14px 16px 0' }}>

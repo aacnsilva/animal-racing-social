@@ -44,6 +44,15 @@ paths:
       responses:
         '200': { description: Claimed }
         '409': { $ref: '#/components/responses/Error' }
+  /me/rewards/lifesaver:
+    get:
+      summary: Lifesaver status (state READY when the racer has lost every point and has a free one left)
+      responses: { '200': { description: OK } }
+    post:
+      summary: Use the season's free lifesaver (5000 points, once per season, only with zero balance and no open bets)
+      responses:
+        '200': { description: Rescued }
+        '409': { $ref: '#/components/responses/Error' }
   /races/{raceId}:
     get:
       summary: Race detail with entrants

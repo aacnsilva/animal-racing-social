@@ -185,6 +185,8 @@ failure and resumes from wall-clock time.
 
 - `POST /internal/debit` `{ userId, seasonId, betId, amount }` → `{ balance }` | 409 `INSUFFICIENT_FUNDS`
 - `POST /internal/daily-claim` `{ userId }` → `{ amount, balance, streak }` | 409 `ALREADY_CLAIMED`
+- `POST /internal/lifesaver/status` `{ userId }` → `Lifesaver` (active season)
+- `POST /internal/lifesaver/claim` `{ userId }` → `{ amount, balance, balanceBefore }` | 409 `NOT_BUSTED` / `BETS_STILL_OPEN` / `LIFESAVER_USED`
 - `POST /internal/adjust` `{ userId, seasonId, amount, refId, reason }` → `{ balance }`
 - `POST /internal/ensure` `{ userId, seasonId }` → wallet
 
@@ -353,6 +355,15 @@ type LedgerEntry = {
   createdAt: string;
 };
 type DailyReward = { claimable: boolean; amount: number; nextClaimAt: string; streak: number; bestStreak: number };
+type Lifesaver = {
+  state: 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY' | 'USED';
+  claimable: boolean;
+  amount: number;
+  freePerSeason: number;
+  freeRemaining: number;
+  seasonId: string | null;
+  usedAt: string | null;
+};
 type Season = {
   id: string;
   name: string;
@@ -362,6 +373,7 @@ type Season = {
   lastRaceAt: string;
   startingGrant: number;
   dailyGrant: number;
+  lifesaverGrant: number;
 };
 type LeaderboardEntry = {
   rank: number;
@@ -423,6 +435,7 @@ type Notification = {
 | `GET /me/wallet`                         |                                                                                                                         | `Wallet`                                                                                                                                                                                                                           |
 | `GET /me/wallet/ledger`                  | `cursor,limit`                                                                                                          | `{ items: LedgerEntry[], nextCursor }`                                                                                                                                                                                             |
 | `GET /me/rewards/daily` · `POST`         |                                                                                                                         | `DailyReward` · `{ amount, balance }` (409 `ALREADY_CLAIMED`)                                                                                                                                                                      |
+| `GET /me/rewards/lifesaver` · `POST`     |                                                                                                                         | `Lifesaver` · `{ amount, balance, balanceBefore }` (409 `NOT_BUSTED`, `BETS_STILL_OPEN`, `LIFESAVER_USED`)                                                                                                                         |
 | `GET /me/notifications`                  | `unread=true,cursor,limit`                                                                                              | `{ items: Notification[], nextCursor, unreadCount }`                                                                                                                                                                               |
 | `POST /me/notifications/read`            | `{ ids }` or `{ all: true }`                                                                                            | `{ unreadCount }`                                                                                                                                                                                                                  |
 | `GET /me/notification-settings` · `PUT`  | `{ enabled, types }`                                                                                                    | `{ enabled, types }`                                                                                                                                                                                                               |
@@ -447,7 +460,7 @@ Admin (`/v1/admin`, role ADMIN, every write audited):
 | `GET /admin/venues` · `POST` · `PUT /admin/venues/{id}` · `POST /admin/venues/{id}/retire`                                | `Venue` fields                                                               | `Venue`                                  |
 | `GET /admin/engine/versions` · `PUT /admin/engine/active` · `GET/PUT /admin/engine/params/{version}`                      | `{ engineVersion }` · `{ params }`                                           | versions                                 |
 | `GET /admin/animals` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                  | `{ species, size }`                                                          |                                          |
-| `GET /admin/seasons` · `POST` · `PUT /admin/seasons/{id}`                                                                 | `{ name, startsAt, endsAt, startingGrant, dailyGrant }`                      | `Season`                                 |
+| `GET /admin/seasons` · `POST` · `PUT /admin/seasons/{id}`                                                                 | `{ name, startsAt, endsAt, startingGrant, dailyGrant, lifesaverGrant }`      | `Season`                                 |
 | `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` · `POST /admin/users/{id}/ban` | `{ amount, reason }` · `{ reason, banned }`                                  |                                          |
 | `GET /admin/users`                                                                                                        | `q`                                                                          | `{ items }`                              |
 | `GET /admin/dlq` · `POST /admin/dlq/{id}/replay`                                                                          |                                                                              |                                          |

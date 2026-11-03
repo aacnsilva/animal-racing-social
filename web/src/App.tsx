@@ -1,8 +1,18 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ComboSlip } from './components/ComboSlip';
 import { Header } from './components/Header';
+import { LifesaverRescue } from './components/Lifesaver';
 import { useSession, setSessionError } from './lib/api';
-import { loadSeason, refreshDaily, refreshUnread, refreshWallet, resetUserStores, toastStore } from './lib/app';
+import {
+  lifesaverStore,
+  loadSeason,
+  openRescue,
+  refreshDaily,
+  refreshUnread,
+  refreshWallet,
+  resetUserStores,
+  toastStore,
+} from './lib/app';
 import { friendlyCode } from './lib/errors';
 import { useStore } from './lib/hooks';
 import { Link, matchPath, useLocation } from './lib/router';
@@ -91,6 +101,23 @@ export function App({ authError }: { authError: string | null }) {
     };
   }, [authedUserId]);
 
+  const lifesaver = useStore(lifesaverStore);
+  const rescueKey =
+    authedUserId !== null && lifesaver?.claimable && lifesaver.seasonId
+      ? `ars.lifesaver.prompted:${authedUserId}:${lifesaver.seasonId}`
+      : null;
+  useEffect(() => {
+    if (!rescueKey) return undefined;
+    try {
+      if (localStorage.getItem(rescueKey)) return undefined;
+      localStorage.setItem(rescueKey, '1');
+    } catch {
+      return undefined;
+    }
+    const timer = setTimeout(openRescue, 1200);
+    return () => clearTimeout(timer);
+  }, [rescueKey]);
+
   const [seenSessionError, setSeenSessionError] = useState<string | null>(null);
   if (seenSessionError !== session.error) {
     setSeenSessionError(session.error);
@@ -138,6 +165,7 @@ export function App({ authError }: { authError: string | null }) {
         wagering of any kind.
       </footer>
       {!matchPath('/races/:id', path) && <ComboSlip />}
+      <LifesaverRescue />
       <Toasts />
     </div>
   );

@@ -8,6 +8,7 @@ import { gauge, withSpan } from '../../lib/telemetry.ts';
 import { activeSeason } from '../../lib/seasons.ts';
 import { addDays, utcDay } from '../../lib/time.ts';
 import { applyChange, ensureWallet, RECONCILIATION_SQL } from './ledger.ts';
+import { lifesaverClaim, lifesaverStatus } from './lifesaver.ts';
 
 export async function start(): Promise<void> {
   const runtime = await bootstrap('wallet', { outbox: ['wallet'], health: false });
@@ -55,6 +56,16 @@ export async function start(): Promise<void> {
       };
       const result = await tx(pool, (client) => applyChange(client, change));
       return { balance: result.state.balance };
+    })
+    .post('/internal/lifesaver/status', async (ctx) => {
+      const body = await ctx.body();
+      const userId = v.id(body.userId, 'userId');
+      return tx(pool, (client) => lifesaverStatus(client, userId));
+    })
+    .post('/internal/lifesaver/claim', async (ctx) => {
+      const body = await ctx.body();
+      const userId = v.id(body.userId, 'userId');
+      return tx(pool, (client) => lifesaverClaim(client, userId));
     })
     .post('/internal/daily-claim', async (ctx) => {
       const body = await ctx.body();

@@ -122,6 +122,16 @@ export function meRoutes(router: Router, deps: Deps): void {
     return { amount: claimed.amount, balance: claimed.balance, streak: claimed.streak };
   });
 
+  router.get('/v1/me/rewards/lifesaver', async (ctx) => {
+    const { userId } = requireUser(ctx);
+    return walletApi.lifesaverStatus(userId);
+  });
+
+  router.post('/v1/me/rewards/lifesaver', async (ctx) => {
+    const { userId } = await requireActiveUser(ctx, deps);
+    return walletApi.lifesaverClaim(userId);
+  });
+
   router.get('/v1/me/notifications', async (ctx) => {
     const { userId } = requireUser(ctx);
     const limit = pageLimit(ctx.query);

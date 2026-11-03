@@ -186,6 +186,20 @@ export type DailyReward = {
   bestStreak: number;
 };
 
+export type LifesaverState = 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY' | 'USED';
+
+export type Lifesaver = {
+  state: LifesaverState;
+  claimable: boolean;
+  amount: number;
+  freePerSeason: number;
+  freeRemaining: number;
+  seasonId: string | null;
+  usedAt: string | null;
+};
+
+export type LifesaverClaim = { amount: number; balance: number; balanceBefore: number };
+
 export type Season = {
   id: string;
   name: string;
@@ -195,6 +209,7 @@ export type Season = {
   lastRaceAt: string;
   startingGrant: number;
   dailyGrant: number;
+  lifesaverGrant: number;
 };
 
 export type LeaderboardEntry = {
