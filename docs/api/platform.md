@@ -93,7 +93,7 @@ POST /v1/admin/users/{id}/points { kind: 'BONUS' | 'PENALTY', amount, reason }
   → 200 { kind, requested, applied, balance, seasonId }
 ```
 
-- Applies to the user's wallet in the active season. `amount` is a positive integer (max 1 000 000); `reason` is required and is shown to the user.
+- Applies to the user's wallet in the active season. `amount` is a positive integer with no upper limit; `reason` is required and is shown to the user.
 - Ledger `ADMIN_BONUS` (+amount) or `ADMIN_PENALTY` (−applied) with the reason stored in the entry's `note`. `refId = admin:<auditId>`, so every action is idempotent and traceable to its `user.bonus` / `user.penalty` audit row.
 - A penalty is capped at the current balance (`applied ≤ requested`): balances never go negative and open stakes are left alone.
 - The user gets a `POINTS_BONUS` / `POINTS_PENALTY` notification and sees the entry with its reason in the wallet ledger. Leaderboards follow the new balance.

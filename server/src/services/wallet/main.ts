@@ -7,12 +7,7 @@ import { bootstrap, every } from '../../lib/runtime.ts';
 import { gauge, withSpan } from '../../lib/telemetry.ts';
 import { activeSeason } from '../../lib/seasons.ts';
 import { addDays, utcDay } from '../../lib/time.ts';
-import {
-  ADMIN_POINT_KINDS,
-  ADMIN_POINTS_MAX,
-  adminPointsDelta,
-  adminPointsLedgerType,
-} from '../../domain/adminPoints.ts';
+import { ADMIN_POINT_KINDS, adminPointsDelta, adminPointsLedgerType } from '../../domain/adminPoints.ts';
 import { applyChange, ensureWallet, RECONCILIATION_SQL } from './ledger.ts';
 import { lifesaverClaim, lifesaverStatus } from './lifesaver.ts';
 
@@ -69,7 +64,7 @@ export async function start(): Promise<void> {
       const userId = v.id(body.userId, 'userId');
       const seasonId = v.id(body.seasonId, 'seasonId');
       const kind = v.oneOf(body.kind, 'kind', ADMIN_POINT_KINDS);
-      const requested = v.int(body.amount, 'amount', { min: 1, max: ADMIN_POINTS_MAX });
+      const requested = v.int(body.amount, 'amount', { min: 1 });
       const refId = v.str(body.refId, 'refId');
       const reason = v.str(body.reason, 'reason', { max: 200 });
       return tx(pool, async (client) => {

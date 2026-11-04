@@ -1,8 +1,6 @@
 export const ADMIN_POINT_KINDS = ['BONUS', 'PENALTY'] as const;
 export type AdminPointKind = (typeof ADMIN_POINT_KINDS)[number];
 
-export const ADMIN_POINTS_MAX = 1_000_000;
-
 export function adminPointsLedgerType(kind: AdminPointKind): 'ADMIN_BONUS' | 'ADMIN_PENALTY' {
   return kind === 'BONUS' ? 'ADMIN_BONUS' : 'ADMIN_PENALTY';
 }

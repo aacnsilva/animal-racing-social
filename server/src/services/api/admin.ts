@@ -8,7 +8,7 @@ import { payload, Topics } from '../../lib/kafka.ts';
 import { enqueue, enqueueRaw } from '../../lib/outbox.ts';
 import { activeSeason, seasonJson, type SeasonRow } from '../../lib/seasons.ts';
 import { iso } from '../../lib/time.ts';
-import { ADMIN_POINT_KINDS, ADMIN_POINTS_MAX } from '../../domain/adminPoints.ts';
+import { ADMIN_POINT_KINDS } from '../../domain/adminPoints.ts';
 import { DEFAULT_LIFESAVER_GRANT } from '../../domain/lifesaver.ts';
 import { validateTemplate } from '../../domain/markets.ts';
 import { validateProgramme } from '../../domain/scheduler.ts';
@@ -744,7 +744,7 @@ export function adminRoutes(router: Router, deps: Deps): void {
     const userId = pathId(ctx, 'userId');
     const body = await ctx.body();
     const kind = v.oneOf(body.kind, 'kind', ADMIN_POINT_KINDS);
-    const amount = v.int(body.amount, 'amount', { min: 1, max: ADMIN_POINTS_MAX });
+    const amount = v.int(body.amount, 'amount', { min: 1 });
     const reason = v.str(body.reason, 'reason', { max: 200 });
     const user = await one(deps.pool, 'SELECT user_id FROM identity.users WHERE user_id = $1', [userId]);
     if (!user) throw new ApiError(404, 'NOT_FOUND', 'Unknown user');
