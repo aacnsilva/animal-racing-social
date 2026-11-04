@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Lane } from '../components/ui';
 import { readLocal, writeLocal } from '../lib/hooks';
 import { fmtClock, fmtRaceTime } from '../lib/format';
-import type { Entrant, Race, RaceTick } from '../lib/types';
+import type { Entrant, Market, Race, RaceTick } from '../lib/types';
 import { eventText, nameLookup } from './events';
 import type { FeedItem } from './stream';
 
@@ -14,7 +14,11 @@ type Row = {
   extra: string;
   stamina: number | null;
   state: string;
+  fading: boolean;
 };
+
+const FADE_MIN_CHASER_CHANCE = 0.1;
+const FADE_CHANCE_RATIO = 3;
 
 const STATE_SHORT: Record<string, string> = {
   SPRINTING: 'sprint',
@@ -28,11 +32,36 @@ const GAP_MODE_KEY = 'ars.standings.gapMode';
 
 const RESULT_SHORT: Record<string, string> = { DISQUALIFIED: 'DQ', DNF: 'DNF', NON_RUNNER: 'NR' };
 
-function rowsFor(race: Race, tick: RaceTick | null, gapMode: GapMode): Row[] {
+function liveWinChances(winMarket: Market | null | undefined): Map<string, number> | null {
+  if (!winMarket || winMarket.status !== 'OPEN' || !winMarket.selections.length) return null;
+  return new Map(winMarket.selections.map((selection) => [selection.entrantId, selection.probability]));
+}
+
+export function fadingRunners(
+  order: { id: string; state: string }[],
+  winChances: Map<string, number> | null,
+): Set<string> {
+  const fading = new Set<string>();
+  if (!winChances) return fading;
+  let bestBehind = 0;
+  for (const runner of order.toReversed()) {
+    const chance = winChances.get(runner.id);
+    if (chance === undefined) continue;
+    const running = runner.state !== 'FINISHED' && runner.state !== 'DNF';
+    if (running && bestBehind >= FADE_MIN_CHASER_CHANCE && bestBehind >= FADE_CHANCE_RATIO * chance) {
+      fading.add(runner.id);
+    }
+    if (running) bestBehind = Math.max(bestBehind, chance);
+  }
+  return fading;
+}
+
+function rowsFor(race: Race, tick: RaceTick | null, gapMode: GapMode, winMarket?: Market | null): Row[] {
   const entrants = race.entrants ?? [];
   const byId = new Map(entrants.map((e) => [e.entrantId, e]));
   if (tick && tick.entrants.length) {
     const sorted = tick.entrants.toSorted((a, b) => a.pos - b.pos);
+    const fading = fadingRunners(sorted, liveWinChances(winMarket));
     const leaderDist = Math.max(...sorted.filter((e) => e.state !== 'DNF').map((e) => e.dist), 0);
     return sorted.map((t, i) => {
       const entrant = byId.get(t.id);
@@ -57,6 +86,7 @@ function rowsFor(race: Race, tick: RaceTick | null, gapMode: GapMode): Row[] {
             : `${isLeader ? 'lead' : `+${Math.max(0, gap).toFixed(1)} m`}${STATE_SHORT[t.state] ? ` · ${STATE_SHORT[t.state]}` : ''}`,
         stamina: t.staminaPct,
         state: t.state,
+        fading: fading.has(t.id),
       };
     });
   }
@@ -77,6 +107,7 @@ function rowsFor(race: Race, tick: RaceTick | null, gapMode: GapMode): Row[] {
             : (RESULT_SHORT[e.result?.resultStatus ?? ''] ?? ''),
         stamina: null,
         state: e.result?.resultStatus ?? '',
+        fading: false,
       }));
   }
   return entrants
@@ -89,10 +120,21 @@ function rowsFor(race: Race, tick: RaceTick | null, gapMode: GapMode): Row[] {
       extra: e.temperament.replace('_', ' ').toLowerCase(),
       stamina: null,
       state: '',
+      fading: false,
     }));
 }
 
-export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | null; title: string }) {
+export function Standings({
+  race,
+  tick,
+  title,
+  winMarket,
+}: {
+  race: Race;
+  tick: RaceTick | null;
+  title: string;
+  winMarket?: Market | null;
+}) {
   const [gapMode, setGapMode] = useState<GapMode>(() =>
     readLocal<GapMode>(GAP_MODE_KEY, 'leader') === 'interval' ? 'interval' : 'leader',
   );
@@ -100,7 +142,7 @@ export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | 
     setGapMode(mode);
     writeLocal(GAP_MODE_KEY, mode);
   };
-  const rows = rowsFor(race, tick, gapMode);
+  const rows = rowsFor(race, tick, gapMode, winMarket);
   const showGapToggle = Boolean(tick?.entrants.length);
   return (
     <section className="card standings-panel">
@@ -149,17 +191,33 @@ export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | 
                 {row.name}
               </span>
               {row.stamina !== null && (
-                <span className="stamina" title={`Stamina ${Math.round(row.stamina)}%`}>
-                  <i
-                    style={{
-                      width: `${Math.max(0, Math.min(100, row.stamina))}%`,
-                      background: row.stamina < 25 ? 'var(--warn)' : undefined,
-                    }}
-                  />
+                <span className="standing-meta" title={`Stamina ${Math.round(row.stamina)}%`}>
+                  <span className="stamina" aria-hidden="true">
+                    <i
+                      style={{
+                        width: `${Math.max(0, Math.min(100, row.stamina))}%`,
+                        background: row.stamina < 25 ? 'var(--warn)' : undefined,
+                      }}
+                    />
+                  </span>
+                  <span className="stamina-pct" data-testid="standing-stamina">
+                    {Math.round(row.stamina)}%
+                  </span>
                 </span>
               )}
             </span>
-            <span className="extra">{row.extra}</span>
+            <span className="extra">
+              {row.extra}
+              {row.fading && (
+                <span
+                  className="fade-tag"
+                  data-testid="standing-fading"
+                  title="The live odds expect a runner behind to pass: it has less left to give than its lead suggests."
+                >
+                  ▼ fading
+                </span>
+              )}
+            </span>
           </div>
         ))}
       </div>

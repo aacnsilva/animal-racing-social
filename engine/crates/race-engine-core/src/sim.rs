@@ -835,7 +835,7 @@ impl<'a> Sim<'a> {
             self.movement(index, dist, (speed + delta).max(0.0), segment.radius);
         let runner = &mut self.runners[index];
         runner.lane = lane_next;
-        let relative = new_speed * runner.inverse_reference_speed;
+        let relative = new_speed * runner.inverse_reference_speed / (1.0 + runner.pace);
         let cost = relative * relative * relative;
         runner.stamina = (runner.stamina
             - entrant.drain_per_meter * cost * segment.drain_factor * advance)

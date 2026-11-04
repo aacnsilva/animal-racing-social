@@ -208,6 +208,7 @@ export function RacePage({ id }: { id: string }) {
           <Standings
             race={race}
             tick={displayTick}
+            winMarket={replay || race.status !== 'LIVE' ? null : winMarket}
             title={
               replay
                 ? 'Replay standings'

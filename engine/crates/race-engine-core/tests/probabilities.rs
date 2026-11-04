@@ -105,40 +105,62 @@ fn finished_entrants_are_certain() {
     reason = "a fraction of a positive finish tick truncates to a valid tick"
 )]
 #[test]
-fn live_favourites_are_priced_at_their_real_chance() {
+fn live_favourites_are_priced_at_their_real_chance_and_leads_count() {
     let params = support::params();
-    let venue = support::venue("v_riverside_oval");
     let mut predicted = 0.0;
     let mut won = 0.0;
     let mut races = 0.0;
-    for field_seed in 1..=6u8 {
-        let field = support::varied_field("HORSE", 8, field_seed);
-        let plan = plan_race(&params, &venue, "HORSE", "STANDARD", &field).expect("plan");
-        let race = PreparedRace::new(&params, &venue, "HORSE", plan.laps, &field).expect("race");
-        for race_seed in 0..6u64 {
-            let inputs = support::race_inputs("HORSE", plan.laps, field.clone());
-            let seed = support::seed(u64::from(field_seed) * 100 + race_seed);
-            let sealed = simulate(&params, &venue, &inputs, &seed).expect("simulate");
-            let script = &sealed.script;
-            let tick = (f64::from(script.result.finish_tick) * 0.5) as u32;
-            let revealed = RevealedState::from_script(script, tick).expect("tick");
-            let table =
-                estimate_probabilities(&race, Some(&revealed), 300, 2, [5; 32]).expect("estimate");
-            let favourite = (0..field.len())
-                .max_by(|a, b| table.win(*a).total_cmp(&table.win(*b)))
-                .expect("favourite");
-            predicted += table.win(favourite);
-            if race.entrant_index(&script.result.order[0]) == Some(favourite) {
-                won += 1.0;
+    let mut clear_leads = 0u32;
+    let mut written_off = 0u32;
+    for (venue_id, species) in [("v_riverside_oval", "HORSE"), ("v_olympic_pool", "SHARK")] {
+        let venue = support::venue(venue_id);
+        for field_seed in 1..=8u8 {
+            let field = support::varied_field(species, 8, field_seed);
+            let plan = plan_race(&params, &venue, species, &venue.class, &field).expect("plan");
+            let race =
+                PreparedRace::new(&params, &venue, species, plan.laps, &field).expect("race");
+            for race_seed in 0..8u64 {
+                let inputs = support::race_inputs(species, plan.laps, field.clone());
+                let seed = support::seed(u64::from(field_seed) * 100 + race_seed);
+                let sealed = simulate(&params, &venue, &inputs, &seed).expect("simulate");
+                let script = &sealed.script;
+                let tick = (f64::from(script.result.finish_tick) * 0.5) as u32;
+                let revealed = RevealedState::from_script(script, tick).expect("tick");
+                let table = estimate_probabilities(&race, Some(&revealed), 300, 2, [5; 32])
+                    .expect("estimate");
+                let favourite = (0..field.len())
+                    .max_by(|a, b| table.win(*a).total_cmp(&table.win(*b)))
+                    .expect("favourite");
+                predicted += table.win(favourite);
+                if race.entrant_index(&script.result.order[0]) == Some(favourite) {
+                    won += 1.0;
+                }
+                races += 1.0;
+                let mut order: Vec<_> = revealed.entrants.iter().collect();
+                order.sort_by(|a, b| b.dist.total_cmp(&a.dist));
+                if order[0].dist - order[1].dist >= 15.0 {
+                    clear_leads += 1;
+                    let leader = race.entrant_index(&order[0].id).expect("leader");
+                    if table.win(leader) < 0.05 {
+                        written_off += 1;
+                    }
+                }
             }
-            races += 1.0;
         }
     }
     let predicted = predicted / races;
     let won = won / races;
     assert!(
-        (predicted - won).abs() < 0.04,
+        (predicted - won).abs() < 0.08,
         "favourites priced at {predicted:.3} won {won:.3}"
     );
-    assert!(predicted > 0.85, "favourites priced at {predicted:.3}");
+    assert!(
+        (0.55..0.85).contains(&predicted),
+        "halfway favourites priced at {predicted:.3}; the race should still be open"
+    );
+    assert!(clear_leads > 20, "only {clear_leads} clear leads sampled");
+    assert!(
+        written_off * 50 <= clear_leads,
+        "{written_off} of {clear_leads} runners 15 m clear at halfway priced under 5% to win"
+    );
 }
