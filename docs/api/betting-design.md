@@ -284,7 +284,9 @@ quote: `POST /markets/{id}/quotes { order: [a,b,c] }`.
 
 ### Pricing
 
-- Probability `p` from 2k–5k Monte Carlo runs of the remaining race per tick.
+- Probability `p` from 2k–5k Monte Carlo runs of the remaining race per tick,
+  with hidden form, pace and pacing error conditioned on the revealed state
+  (`race-engine.md` §3), so `p` matches how often outcomes actually happen.
 - `price = 1 / (p × (1 + margin))`, `margin ≈ 5%`, clamped to [1.01, 1000].
 - Every price change bumps the market's `priceVersion`.
 
