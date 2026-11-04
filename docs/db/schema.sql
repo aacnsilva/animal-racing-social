@@ -401,10 +401,12 @@ CREATE TABLE wallet.ledger_entries (                            -- [U] append-on
   entry_id       BIGINT NOT NULL,
   season_id      BIGINT NOT NULL,
   type           TEXT NOT NULL CHECK (type IN
-                   ('SEASON_GRANT','DAILY_GRANT','LIFESAVER','BET_STAKE','BET_PAYOUT','BET_REFUND','BET_LOST','CASHOUT','ADMIN_ADJUST')),
+                   ('SEASON_GRANT','DAILY_GRANT','LIFESAVER','BET_STAKE','BET_PAYOUT','BET_REFUND','BET_LOST','CASHOUT',
+                    'ADMIN_ADJUST','ADMIN_BONUS','ADMIN_PENALTY')),
   amount         BIGINT NOT NULL,          -- signed
   ref_id         TEXT   NOT NULL,          -- betId | "userId:YYYY-MM-DD" | seasonId | adminActionId
   balance_after  BIGINT NOT NULL,
+  note           TEXT,                     -- admin reason, shown to the user for ADMIN_BONUS / ADMIN_PENALTY
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, entry_id),
   UNIQUE (user_id, type, ref_id)           -- idempotent consumers
@@ -469,7 +471,8 @@ CREATE TABLE notification.notifications (                       -- [U] 30-day re
   type             TEXT NOT NULL CHECK (type IN
                      ('RACE_STARTING','BET_WON','BET_LOST','BET_VOID','BET_REJECTED',
                       'CASHOUT_DONE','CASHOUT_REJECTED','DAILY_REWARD_READY',
-                      'LEADERBOARD_MOVE','SEASON_ENDING','SEASON_RESULT')),
+                      'LEADERBOARD_MOVE','SEASON_ENDING','SEASON_RESULT',
+                      'POINTS_BONUS','POINTS_PENALTY')),
   dedupe_key       TEXT NOT NULL,          -- e.g. "BET_WON:betId", "RACE_STARTING:raceId"
   payload          JSONB NOT NULL,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),

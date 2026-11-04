@@ -257,17 +257,21 @@ class, not code:
 {
   "class": "STANDARD",
   "markets": [
-    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
-    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
-    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
-    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 2 } },
     { "type": "TRICAST", "closes": { "at": "LOCK" } },
     { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } },
   ],
 }
 ```
 
-Default: all classes share the same template; SPRINT omits `LEADER_AT_LAP`.
+Default: all classes share the same markets; SPRINT omits `LEADER_AT_LAP`.
+Finish markets close `lapsBeforeEnd` laps before the finish, when the leader
+starts lap `laps − lapsBeforeEnd` (SPRINT 1, STANDARD 2, ENDURANCE 3), so
+nobody can back a near-certain result in the closing laps. `atLap: "last"`
+(close as the leader starts the final lap) is still accepted.
 Template changes apply to races scheduled afterwards.
 
 **Tricast** has N×(N−1)×(N−2) combinations, so it isn't listed; clients request a
@@ -405,7 +409,7 @@ Amounts: **`SEASON_GRANT` = 10 000** points at season start (and on signup
 mid-season); **`DAILY_GRANT` = 50** points per day after that.
 Because all-in is allowed, `DAILY_GRANT` is the safety net that gets busted
 players back in the game. On top of that, a busted player (balance 0, no open
-bets) gets one free **`LIFESAVER` = 5 000** points per season; paid lifesavers
+bets) gets a free **`LIFESAVER` = 5 000** points every time (unlimited); paid lifesavers
 are on the roadmap (see `platform.md` §3a).
 
 ## 8a. Seasons & leaderboards

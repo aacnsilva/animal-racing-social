@@ -12,7 +12,7 @@ async function bust(subject: string, amount: number) {
   expect(adjusted.body.balance).toBe(0);
 }
 
-test('rescues a busted racer with one free lifesaver per season', async ({ page }) => {
+test('rescues a busted racer every time they lose every point', async ({ page }) => {
   const subject = uniqueSubject('sinker');
   await signIn(page, { subject });
   await expect.poll(() => headerBalance(page)).toBe(10000);
@@ -33,13 +33,15 @@ test('rescues a busted racer with one free lifesaver per season', async ({ page 
 
   await expect.poll(() => headerBalance(page)).toBe(5000);
   await expect(page.locator('[data-testid="ledger-row"][data-type="LIFESAVER"]')).toHaveCount(1);
-  await expect(page.getByTestId('lifesaver-tile')).toContainText('Used');
+  await expect(page.getByTestId('lifesaver-tile')).toContainText('used 1×');
 
   await bust(subject, 5000);
   const { api, token } = await apiSession(subject);
   const status = await call(api, token, 'GET', '/v1/me/rewards/lifesaver');
-  expect(status.body).toMatchObject({ state: 'USED', claimable: false, freeRemaining: 0 });
+  expect(status.body).toMatchObject({ state: 'READY', claimable: true, usedCount: 1 });
   const again = await call(api, token, 'POST', '/v1/me/rewards/lifesaver');
-  expect(again.status).toBe(409);
-  expect(again.body.code).toBe('LIFESAVER_USED');
+  expect(again.status).toBe(200);
+  expect(again.body).toMatchObject({ amount: 5000, balance: 5000, balanceBefore: 0 });
+  const afterAgain = await call(api, token, 'GET', '/v1/me/rewards/lifesaver');
+  expect(afterAgain.body).toMatchObject({ state: 'AFLOAT', claimable: false, usedCount: 2 });
 });

@@ -161,14 +161,14 @@ function RescueDialog() {
 
   const text =
     phase === 'saved'
-      ? `+${fmtPoints(amount)} points and back on dry land. That was your free lifesaver for this season, so race wisely!`
+      ? `+${fmtPoints(amount)} points and back on dry land. Race wisely!`
       : phase === 'missed'
         ? (error ?? 'Something went wrong.')
         : phase === 'pulling'
           ? 'Hold on tight, we are hauling you back to the track…'
           : phase === 'throwing'
             ? 'Grab on!'
-            : `You are out of points and sinking fast. Every racer gets one free lifesaver per season worth ${fmtPoints(amount)} points.`;
+            : `You are out of points and sinking fast. Grab a free lifesaver worth ${fmtPoints(amount)} points.`;
 
   return (
     <div className="rescue-backdrop" data-testid="lifesaver-dialog" data-phase={phase}>
@@ -305,13 +305,13 @@ export function LifesaverTile() {
     ? '…'
     : lifesaver.state === 'READY'
       ? 'You are out of points!'
-      : lifesaver.state === 'USED' || lifesaver.freeRemaining === 0
-        ? `Used${lifesaver.usedAt ? ` on ${new Date(lifesaver.usedAt).toLocaleDateString()}` : ''} · next one next season`
-        : lifesaver.state === 'WAITING_ON_BETS'
-          ? 'Out of points, but bets are still running. Wait for them to settle.'
+      : lifesaver.state === 'WAITING_ON_BETS'
+        ? 'Out of points, but bets are still running. Wait for them to settle.'
+        : lifesaver.state === 'PENALIZED'
+          ? 'Your points were removed as a penalty, so no lifesaver this time.'
           : lifesaver.state === 'NO_SEASON'
             ? 'No active season'
-            : `${lifesaver.freeRemaining} free this season · kicks in if you lose every point`;
+            : `Unlimited · kicks in if you lose every point${lifesaver.usedCount > 0 ? ` · used ${lifesaver.usedCount}× this season` : ''}`;
   return (
     <div className="stat-tile lifesaver-tile" data-testid="lifesaver-tile" data-state={lifesaver?.state ?? ''}>
       <div className="label">Lifesaver</div>

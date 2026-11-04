@@ -189,8 +189,9 @@ failure and resumes from wall-clock time.
 - `POST /internal/debit` `{ userId, seasonId, betId, amount }` → `{ balance }` | 409 `INSUFFICIENT_FUNDS`
 - `POST /internal/daily-claim` `{ userId }` → `{ amount, balance, streak }` | 409 `ALREADY_CLAIMED`
 - `POST /internal/lifesaver/status` `{ userId }` → `Lifesaver` (active season)
-- `POST /internal/lifesaver/claim` `{ userId }` → `{ amount, balance, balanceBefore }` | 409 `NOT_BUSTED` / `BETS_STILL_OPEN` / `LIFESAVER_USED`
+- `POST /internal/lifesaver/claim` `{ userId }` → `{ amount, balance, balanceBefore }` | 409 `NOT_BUSTED` / `BETS_STILL_OPEN` / `PENALIZED`
 - `POST /internal/adjust` `{ userId, seasonId, amount, refId, reason }` → `{ balance }`
+- `POST /internal/admin-points` `{ userId, seasonId, kind: 'BONUS' | 'PENALTY', amount, refId, reason }` → `{ kind, requested, applied, balance, duplicate }`. Ledger `ADMIN_BONUS` / `ADMIN_PENALTY` with the reason in `note`; a penalty is capped at the current balance (never negative, open stakes untouched).
 - `POST /internal/ensure` `{ userId, seasonId }` → wallet
 
 ## 7. Pricing
@@ -359,11 +360,10 @@ type LedgerEntry = {
 };
 type DailyReward = { claimable: boolean; amount: number; nextClaimAt: string; streak: number; bestStreak: number };
 type Lifesaver = {
-  state: 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY' | 'USED';
+  state: 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'PENALIZED' | 'READY';
   claimable: boolean;
   amount: number;
-  freePerSeason: number;
-  freeRemaining: number;
+  usedCount: number;
   seasonId: string | null;
   usedAt: string | null;
 };
@@ -438,7 +438,7 @@ type Notification = {
 | `GET /me/wallet`                         |                                                                                                                         | `Wallet`                                                                                                                                                                                                                           |
 | `GET /me/wallet/ledger`                  | `cursor,limit`                                                                                                          | `{ items: LedgerEntry[], nextCursor }`                                                                                                                                                                                             |
 | `GET /me/rewards/daily` · `POST`         |                                                                                                                         | `DailyReward` · `{ amount, balance }` (409 `ALREADY_CLAIMED`)                                                                                                                                                                      |
-| `GET /me/rewards/lifesaver` · `POST`     |                                                                                                                         | `Lifesaver` · `{ amount, balance, balanceBefore }` (409 `NOT_BUSTED`, `BETS_STILL_OPEN`, `LIFESAVER_USED`)                                                                                                                         |
+| `GET /me/rewards/lifesaver` · `POST`     |                                                                                                                         | `Lifesaver` · `{ amount, balance, balanceBefore }` (409 `NOT_BUSTED`, `BETS_STILL_OPEN`)                                                                                                                                           |
 | `GET /me/notifications`                  | `unread=true,cursor,limit`                                                                                              | `{ items: Notification[], nextCursor, unreadCount }`                                                                                                                                                                               |
 | `POST /me/notifications/read`            | `{ ids }` or `{ all: true }`                                                                                            | `{ unreadCount }`                                                                                                                                                                                                                  |
 | `GET /me/notification-settings` · `PUT`  | `{ enabled, types }`                                                                                                    | `{ enabled, types }`                                                                                                                                                                                                               |
@@ -452,22 +452,23 @@ type Notification = {
 
 Admin (`/v1/admin`, role ADMIN, every write audited):
 
-| Method & path                                                                                                             | Body                                                                         | Response                                 |
-| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------- |
-| `GET /admin/programme` · `PUT`                                                                                            | `{ racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes }` | programme (new version)                  |
-| `POST /admin/races`                                                                                                       | `{ startAt, species, class, venueId?, fieldSize? }`                          | 202 `{ raceId }`                         |
-| `POST /admin/races/{id}/cancel`                                                                                           | `{ reason }`                                                                 | 202                                      |
-| `GET /admin/races/{id}/debug`                                                                                             |                                                                              | `{ race, script }` (409 before FINISHED) |
-| `GET /admin/market-templates/{class}` · `PUT`                                                                             | `{ markets: [...] }`                                                         | template (new version)                   |
-| `POST /admin/markets/{id}/suspend` · `/resume` · `/void`                                                                  | `{ reason? }`                                                                | 202                                      |
-| `GET /admin/venues` · `POST` · `PUT /admin/venues/{id}` · `POST /admin/venues/{id}/retire`                                | `Venue` fields                                                               | `Venue`                                  |
-| `GET /admin/engine/versions` · `PUT /admin/engine/active` · `GET/PUT /admin/engine/params/{version}`                      | `{ engineVersion }` · `{ params }`                                           | versions                                 |
-| `GET /admin/animals` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                  | `{ species, size }`                                                          |                                          |
-| `GET /admin/seasons` · `POST` · `PUT /admin/seasons/{id}`                                                                 | `{ name, startsAt, endsAt, startingGrant, dailyGrant, lifesaverGrant }`      | `Season`                                 |
-| `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` · `POST /admin/users/{id}/ban` | `{ amount, reason }` · `{ reason, banned }`                                  |                                          |
-| `GET /admin/users`                                                                                                        | `q`                                                                          | `{ items }`                              |
-| `GET /admin/dlq` · `POST /admin/dlq/{id}/replay`                                                                          |                                                                              |                                          |
-| `GET /admin/audit`                                                                                                        | `cursor`                                                                     | `{ items, nextCursor }`                  |
+| Method & path                                                                                                             | Body                                                                         | Response                                          |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| `GET /admin/programme` · `PUT`                                                                                            | `{ racesPerHour, classMix, speciesRotation, horizonHours, recoveryMinutes }` | programme (new version)                           |
+| `POST /admin/races`                                                                                                       | `{ startAt, species, class, venueId?, fieldSize? }`                          | 202 `{ raceId }`                                  |
+| `POST /admin/races/{id}/cancel`                                                                                           | `{ reason }`                                                                 | 202                                               |
+| `GET /admin/races/{id}/debug`                                                                                             |                                                                              | `{ race, script }` (409 before FINISHED)          |
+| `GET /admin/market-templates/{class}` · `PUT`                                                                             | `{ markets: [...] }`                                                         | template (new version)                            |
+| `POST /admin/markets/{id}/suspend` · `/resume` · `/void`                                                                  | `{ reason? }`                                                                | 202                                               |
+| `GET /admin/venues` · `POST` · `PUT /admin/venues/{id}` · `POST /admin/venues/{id}/retire`                                | `Venue` fields                                                               | `Venue`                                           |
+| `GET /admin/engine/versions` · `PUT /admin/engine/active` · `GET/PUT /admin/engine/params/{version}`                      | `{ engineVersion }` · `{ params }`                                           | versions                                          |
+| `GET /admin/animals` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                  | `{ species, size }`                                                          |                                                   |
+| `GET /admin/seasons` · `POST` · `PUT /admin/seasons/{id}`                                                                 | `{ name, startsAt, endsAt, startingGrant, dailyGrant, lifesaverGrant }`      | `Season`                                          |
+| `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` · `POST /admin/users/{id}/ban` | `{ amount, reason }` · `{ reason, banned }`                                  |                                                   |
+| `POST /admin/users/{id}/points`                                                                                           | `{ kind: 'BONUS' \| 'PENALTY', amount ≥ 1, reason }`                         | `{ kind, requested, applied, balance, seasonId }` |
+| `GET /admin/users`                                                                                                        | `q`                                                                          | `{ items }`                                       |
+| `GET /admin/dlq` · `POST /admin/dlq/{id}/replay`                                                                          |                                                                              |                                                   |
+| `GET /admin/audit`                                                                                                        | `cursor`                                                                     | `{ items, nextCursor }`                           |
 
 Error codes add to the OpenAPI enum: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`,
 `VALIDATION_FAILED`, `BANNED`, `IDEMPOTENCY_KEY_REQUIRED`,

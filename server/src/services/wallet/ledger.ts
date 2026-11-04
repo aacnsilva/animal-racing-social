@@ -14,7 +14,9 @@ export type LedgerType =
   | 'BET_REFUND'
   | 'BET_LOST'
   | 'CASHOUT'
-  | 'ADMIN_ADJUST';
+  | 'ADMIN_ADJUST'
+  | 'ADMIN_BONUS'
+  | 'ADMIN_PENALTY';
 export type WalletState = { balance: number; openStake: number };
 
 async function lockWallet(client: Client, userId: string, seasonId: string): Promise<WalletState | null> {
@@ -34,12 +36,13 @@ async function appendEntry(
   amount: number,
   refId: string,
   after: WalletState,
+  note: string | null = null,
 ): Promise<boolean> {
   const entryId = newId(shardOf(userId));
   const inserted = await client.query(
-    `INSERT INTO wallet.ledger_entries (user_id, entry_id, season_id, type, amount, ref_id, balance_after)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (user_id, type, ref_id) DO NOTHING`,
-    [userId, entryId, seasonId, type, amount, refId, after.balance],
+    `INSERT INTO wallet.ledger_entries (user_id, entry_id, season_id, type, amount, ref_id, balance_after, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (user_id, type, ref_id) DO NOTHING`,
+    [userId, entryId, seasonId, type, amount, refId, after.balance, note],
   );
   if (inserted.rowCount === 0) return false;
   instruments.ledgerEntries().add(1, { type });
@@ -87,6 +90,7 @@ export async function applyChange(
     refId: string;
     balanceDelta: number;
     openStakeDelta: number;
+    note?: string;
   },
 ): Promise<{ applied: boolean; state: WalletState }> {
   const current = await ensureWallet(client, change.userId, change.seasonId);
@@ -103,7 +107,16 @@ export async function applyChange(
     'UPDATE wallet.wallets SET balance = $3, open_stake = $4, updated_at = now() WHERE user_id = $1 AND season_id = $2',
     [change.userId, change.seasonId, next.balance, next.openStake],
   );
-  await appendEntry(client, change.userId, change.seasonId, change.type, change.balanceDelta, change.refId, next);
+  await appendEntry(
+    client,
+    change.userId,
+    change.seasonId,
+    change.type,
+    change.balanceDelta,
+    change.refId,
+    next,
+    change.note ?? null,
+  );
   return { applied: true, state: next };
 }
 

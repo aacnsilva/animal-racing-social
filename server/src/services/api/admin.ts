@@ -8,6 +8,7 @@ import { payload, Topics } from '../../lib/kafka.ts';
 import { enqueue, enqueueRaw } from '../../lib/outbox.ts';
 import { activeSeason, seasonJson, type SeasonRow } from '../../lib/seasons.ts';
 import { iso } from '../../lib/time.ts';
+import { ADMIN_POINT_KINDS, ADMIN_POINTS_MAX } from '../../domain/adminPoints.ts';
 import { DEFAULT_LIFESAVER_GRANT } from '../../domain/lifesaver.ts';
 import { validateTemplate } from '../../domain/markets.ts';
 import { validateProgramme } from '../../domain/scheduler.ts';
@@ -716,6 +717,7 @@ export function adminRoutes(router: Router, deps: Deps): void {
         amount: Number(row.amount),
         refId: row.ref_id,
         balanceAfter: Number(row.balance_after),
+        note: row.note ?? null,
         createdAt: iso(row.created_at),
       })),
     };
@@ -735,6 +737,46 @@ export function adminRoutes(router: Router, deps: Deps): void {
     );
     const result = await walletApi.adjust(userId, season.season_id, amount, `admin:${auditId}`, reason);
     return { balance: result.balance };
+  });
+
+  router.post('/v1/admin/users/:userId/points', async (ctx) => {
+    const { userId: adminId } = await admin(ctx);
+    const userId = pathId(ctx, 'userId');
+    const body = await ctx.body();
+    const kind = v.oneOf(body.kind, 'kind', ADMIN_POINT_KINDS);
+    const amount = v.int(body.amount, 'amount', { min: 1, max: ADMIN_POINTS_MAX });
+    const reason = v.str(body.reason, 'reason', { max: 200 });
+    const user = await one(deps.pool, 'SELECT user_id FROM identity.users WHERE user_id = $1', [userId]);
+    if (!user) throw new ApiError(404, 'NOT_FOUND', 'Unknown user');
+    const season = await activeSeason(deps.pool);
+    if (!season) throw new ApiError(409, 'CONFLICT', 'No active season');
+    const auditId = await tx(deps.pool, (client) =>
+      audit(
+        client,
+        adminId,
+        kind === 'BONUS' ? 'user.bonus' : 'user.penalty',
+        'user',
+        userId,
+        null,
+        { kind, amount, seasonId: season.season_id },
+        reason,
+      ),
+    );
+    const result = await walletApi.adminPoints({
+      userId,
+      seasonId: season.season_id,
+      kind,
+      amount,
+      refId: `admin:${auditId}`,
+      reason,
+    });
+    return {
+      kind: result.kind,
+      requested: result.requested,
+      applied: result.applied,
+      balance: result.balance,
+      seasonId: season.season_id,
+    };
   });
 
   router.post('/v1/admin/users/:userId/ban', async (ctx) => {

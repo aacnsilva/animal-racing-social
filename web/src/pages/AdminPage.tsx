@@ -620,6 +620,22 @@ function Seasons() {
   );
 }
 
+const POINT_KINDS = ['PENALTY', 'BONUS'] as const;
+type PointKind = (typeof POINT_KINDS)[number];
+const POINT_KIND_LABEL: Record<PointKind, string> = { PENALTY: 'Cheating penalty', BONUS: 'Bonus' };
+
+type PointsResponse = { kind: PointKind; requested: number; applied: number; balance: number };
+
+function pointsMessage(response: PointsResponse): string {
+  const balance = `New balance ${fmtPoints(response.balance)} pts.`;
+  if (response.kind === 'BONUS') return `Bonus of ${fmtPoints(response.applied)} pts granted. ${balance}`;
+  const capped =
+    response.applied < response.requested
+      ? ` (${fmtPoints(response.requested)} requested, capped at the available balance)`
+      : '';
+  return `Penalty of ${fmtPoints(response.applied)} pts applied${capped}. ${balance}`;
+}
+
 type AdminUser = User & {
   bannedAt: string | null;
   banReason: string | null;
@@ -629,6 +645,7 @@ type AdminUser = User & {
 function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => void }) {
   const detail = useAsync(() => api<AdminUser>(`/v1/admin/users/${userId}`), [userId]);
   const ledger = useAsync(() => api<{ items: LedgerEntry[] }>(`/v1/admin/users/${userId}/ledger`), [userId]);
+  const [kind, setKind] = useState<PointKind>('PENALTY');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [banReason, setBanReason] = useState('');
@@ -639,12 +656,13 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
   const adjust = async () => {
     setResult(null);
     try {
-      const response = await api<{ balance: number }>(`/v1/admin/users/${userId}/adjust`, {
+      const response = await api<PointsResponse>(`/v1/admin/users/${userId}/points`, {
         method: 'POST',
-        body: { amount: Number(amount), reason },
+        body: { kind, amount: Number(amount), reason },
       });
-      setResult({ kind: 'success', text: `Adjusted. New balance ${fmtPoints(response.balance)} pts.` });
+      setResult({ kind: 'success', text: pointsMessage(response) });
       setAmount('');
+      setReason('');
       detail.reload();
       ledger.reload();
     } catch (error) {
@@ -696,23 +714,51 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
           </span>
         ))}
       </dl>
-      <div className="form-grid" style={{ gridTemplateColumns: '110px 1fr auto' }}>
+      <div className="form-grid" style={{ gridTemplateColumns: '160px 110px 1fr auto' }}>
         <label className="field">
-          <span>Amount</span>
+          <span>Action</span>
+          <select
+            className="select"
+            data-testid="admin-points-kind"
+            value={kind}
+            onChange={(e) => setKind(pickOption(POINT_KINDS, e.target.value, 'PENALTY'))}
+          >
+            {POINT_KINDS.map((option) => (
+              <option key={option} value={option}>
+                {POINT_KIND_LABEL[option]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Points</span>
           <input
             className="input"
             type="number"
+            min={1}
+            step={1}
+            data-testid="admin-points-amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="+/-"
           />
         </label>
         <label className="field">
-          <span>Reason</span>
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <span>Reason (shown to the user)</span>
+          <input
+            className="input"
+            data-testid="admin-points-reason"
+            maxLength={200}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
         </label>
-        <button className="btn" onClick={() => void adjust()} disabled={!amount || Number(amount) === 0 || !reason}>
-          Adjust points
+        <button
+          className={`btn${kind === 'PENALTY' ? ' danger' : ''}`}
+          data-testid="admin-points-submit"
+          onClick={() => void adjust()}
+          disabled={!Number.isInteger(Number(amount)) || Number(amount) < 1 || !reason.trim()}
+        >
+          {kind === 'PENALTY' ? 'Apply penalty' : 'Grant bonus'}
         </button>
       </div>
       <div className="form-grid" style={{ gridTemplateColumns: '1fr auto' }}>
@@ -730,7 +776,7 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
           </button>
         )}
       </div>
-      <ResultNotice result={result} />
+      <ResultNotice result={result} testId="admin-user-result" />
       <h3>Ledger</h3>
       {!ledger.data ? (
         <Loading />
@@ -743,7 +789,10 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
               {ledger.data.items.slice(0, 60).map((entry) => (
                 <tr key={entry.entryId}>
                   <td className="small">{fmtDateTime(entry.createdAt)}</td>
-                  <td className="small">{entry.type}</td>
+                  <td className="small">
+                    {entry.type}
+                    {entry.note && <div className="tiny muted">{entry.note}</div>}
+                  </td>
                   <td className="right num">{fmtSigned(entry.amount)}</td>
                   <td className="right num muted">{fmtPoints(entry.balanceAfter)}</td>
                 </tr>

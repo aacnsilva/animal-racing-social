@@ -338,7 +338,7 @@ export class MarketManager {
               change.to === 'CLOSED'
                 ? market.type === 'LEADER_AT_LAP'
                   ? 'checkpoint'
-                  : 'final_lap'
+                  : 'lap_cutoff'
                 : change.to === 'SUSPENDED'
                   ? 'incident'
                   : 'incident_cleared';

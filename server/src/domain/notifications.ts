@@ -10,6 +10,8 @@ export const NOTIFICATION_TYPES = [
   'LEADERBOARD_MOVE',
   'SEASON_ENDING',
   'SEASON_RESULT',
+  'POINTS_BONUS',
+  'POINTS_PENALTY',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

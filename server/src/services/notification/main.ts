@@ -6,6 +6,7 @@ import { enqueue } from '../../lib/outbox.ts';
 import { instruments } from '../../lib/instruments.ts';
 import { bootstrap, every, type Runtime } from '../../lib/runtime.ts';
 import { HOUR_MS, MINUTE_MS, utcDay } from '../../lib/time.ts';
+import { adminPointsNotification } from '../../domain/adminPoints.ts';
 import {
   isEnabled,
   settledType,
@@ -103,6 +104,7 @@ async function onEvent(runtime: Runtime, envelope: { eventId: string; payload?: 
       'seasonEnding',
       'seasonEnded',
       'leaderboardMoved',
+      'ledgerEntryAppended',
     ])
   )
     return;
@@ -178,6 +180,22 @@ async function onEvent(runtime: Runtime, envelope: { eventId: string; payload?: 
           participants: ranks.length,
         });
       }
+      break;
+    }
+    case 'ledgerEntryAppended': {
+      const entry = event.value;
+      const type = adminPointsNotification(entry.type);
+      if (!type) break;
+      const row = await one(
+        runtime.pool,
+        'SELECT note FROM wallet.ledger_entries WHERE user_id = $1 AND entry_id = $2',
+        [entry.userId, entry.entryId],
+      );
+      await notifyOne(runtime, entry.userId, type, `${type}:${entry.refId}`, {
+        amount: Math.abs(Number(entry.amount)),
+        balance: Number(entry.balanceAfter),
+        reason: row?.note ?? null,
+      });
       break;
     }
     case 'leaderboardMoved': {
@@ -258,7 +276,7 @@ export async function start(): Promise<void> {
     await runConsumer({
       kafka: runtime.kafka,
       groupId: 'notification',
-      topics: [Topics.betEvents, Topics.seasonEvents],
+      topics: [Topics.betEvents, Topics.seasonEvents, Topics.walletEvents],
       pool: runtime.pool,
       concurrency: 6,
       handler: (envelope) => onEvent(runtime, envelope),

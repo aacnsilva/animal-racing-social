@@ -104,7 +104,7 @@ export function App({ authError }: { authError: string | null }) {
   const lifesaver = useStore(lifesaverStore);
   const rescueKey =
     authedUserId !== null && lifesaver?.claimable && lifesaver.seasonId
-      ? `ars.lifesaver.prompted:${authedUserId}:${lifesaver.seasonId}`
+      ? `ars.lifesaver.prompted:${authedUserId}:${lifesaver.seasonId}:${lifesaver.usedCount}`
       : null;
   useEffect(() => {
     if (!rescueKey) return undefined;
