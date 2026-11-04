@@ -245,17 +245,21 @@ class, not code:
 {
   "class": "STANDARD",
   "markets": [
-    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
-    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
-    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
-    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 2 } },
     { "type": "TRICAST", "closes": { "at": "LOCK" } },
     { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } },
   ],
 }
 ```
 
-Default: all classes share the same template; SPRINT omits `LEADER_AT_LAP`.
+Default: all classes share the same markets; SPRINT omits `LEADER_AT_LAP`.
+Finish markets close `lapsBeforeEnd` laps before the finish, when the leader
+starts lap `laps − lapsBeforeEnd` (SPRINT 1, STANDARD 2, ENDURANCE 3), so
+nobody can back a near-certain result in the closing laps. `atLap: "last"`
+(close as the leader starts the final lap) is still accepted.
 Template changes apply to races scheduled afterwards.
 
 **Tricast** has N×(N−1)×(N−2) combinations, so it isn't listed; clients request a

@@ -11,7 +11,7 @@ export type TemplateEntry = {
   params?: Record<string, number>;
   every?: number;
   opens?: { at: 'OPEN' | 'START' };
-  closes?: { atLap?: 'last' | number; at?: 'LOCK'; ticksBeforeCheckpoint?: number };
+  closes?: { atLap?: 'last' | number; lapsBeforeEnd?: number; at?: 'LOCK'; ticksBeforeCheckpoint?: number };
 };
 
 export type MarketSpec = {
@@ -61,8 +61,7 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
       }
       continue;
     }
-    const atLap = entry.closes?.atLap;
-    const closesAtLap = atLap === 'last' ? laps : typeof atLap === 'number' ? Math.min(atLap, laps) : null;
+    const closesAtLap = closingLap(entry.closes, laps);
     specs.push({
       type: entry.type,
       params: { ...entry.params },
@@ -75,6 +74,13 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
     });
   }
   return specs;
+}
+
+function closingLap(closes: TemplateEntry['closes'], laps: number): number | null {
+  if (closes?.lapsBeforeEnd !== undefined) return Math.max(1, laps - closes.lapsBeforeEnd);
+  if (closes?.atLap === 'last') return laps;
+  if (typeof closes?.atLap === 'number') return Math.min(closes.atLap, laps);
+  return null;
 }
 
 export function validateTemplate(entries: unknown): TemplateEntry[] {
@@ -92,6 +98,9 @@ export function validateTemplate(entries: unknown): TemplateEntry[] {
       !((entry.params?.n ?? 0) >= 2 && (entry.params?.n ?? 0) <= 5)
     )
       throw new Error(`markets[${index}].params.n must be 2..5`);
+    const lapsBeforeEnd = entry.closes?.lapsBeforeEnd;
+    if (lapsBeforeEnd !== undefined && !(Number.isInteger(lapsBeforeEnd) && lapsBeforeEnd >= 0))
+      throw new Error(`markets[${index}].closes.lapsBeforeEnd must be an integer ≥ 0`);
     if (entry.type === 'LEADER_AT_LAP' && !((entry.every ?? 0) >= 1))
       throw new Error(`markets[${index}].every must be ≥ 1`);
     return entry;

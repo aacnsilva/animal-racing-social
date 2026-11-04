@@ -16,6 +16,12 @@ const templates: Record<string, { markets: TemplateEntry[] }> = JSON.parse(
   readFileSync(new URL('../../shared/market-templates.json', import.meta.url), 'utf8'),
 );
 
+function closing(raceClass: string, laps: number) {
+  return expandTemplate(templates[raceClass].markets, laps)
+    .filter((s) => s.type !== 'TRICAST' && s.type !== 'LEADER_AT_LAP')
+    .map((s) => s.closesAtLap);
+}
+
 void describe('market templates', () => {
   void it('never offers a leader market on the final lap', () => {
     assert.deepEqual(leaderLaps(7, 2), [2, 4, 6]);
@@ -31,9 +37,21 @@ void describe('market templates', () => {
       [2, 4, 6],
     );
     const win = specs.find((s) => s.type === 'FINISH_POSITION' && s.params.position === 1)!;
-    assert.equal(win.closesAtLap, 7);
+    assert.equal(win.closesAtLap, 5);
     assert.equal(win.opensAt, 'OPEN');
     assert.ok(specs.find((s) => s.type === 'TRICAST')!.closesAtLock);
+  });
+
+  void it('closes finish markets laps before the end, scaled by race class', () => {
+    assert.deepEqual(new Set(closing('SPRINT', 3)), new Set([2]));
+    assert.deepEqual(new Set(closing('STANDARD', 8)), new Set([6]));
+    assert.deepEqual(new Set(closing('ENDURANCE', 12)), new Set([9]));
+    assert.equal(
+      expandTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { lapsBeforeEnd: 9 } }], 3)[0].closesAtLap,
+      1,
+    );
+    assert.equal(expandTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { atLap: 'last' } }], 4)[0].closesAtLap, 4);
+    assert.throws(() => validateTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { lapsBeforeEnd: -1 } }]));
   });
 
   void it('omits leader markets for sprints', () => {
