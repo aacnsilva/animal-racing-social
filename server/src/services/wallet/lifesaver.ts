@@ -11,14 +11,14 @@ import {
 } from '../../domain/lifesaver.ts';
 import { applyChange, ensureWallet, type WalletState } from './ledger.ts';
 
-type Usage = { count: number; lastAt: Date | null };
+type Usage = { count: number; lastAt: Date | null; emptiedByPenalty: boolean };
 
 async function current(
   client: Client,
   userId: string,
 ): Promise<{ season: SeasonRow | undefined; wallet: WalletState | null; usage: Usage }> {
   const season = await activeSeason(client);
-  if (!season) return { season, wallet: null, usage: { count: 0, lastAt: null } };
+  if (!season) return { season, wallet: null, usage: { count: 0, lastAt: null, emptiedByPenalty: false } };
   const wallet = await ensureWallet(client, userId, season.season_id);
   const used = await one(
     client,
@@ -26,7 +26,21 @@ async function current(
        FROM wallet.ledger_entries WHERE user_id = $1 AND type = 'LIFESAVER' AND season_id = $2`,
     [userId, season.season_id],
   );
-  return { season, wallet, usage: { count: Number(used?.count ?? 0), lastAt: used?.last_at ?? null } };
+  const lastMove = await one(
+    client,
+    `SELECT type FROM wallet.ledger_entries WHERE user_id = $1 AND season_id = $2 AND amount <> 0
+      ORDER BY created_at DESC, entry_id DESC LIMIT 1`,
+    [userId, season.season_id],
+  );
+  return {
+    season,
+    wallet,
+    usage: {
+      count: Number(used?.count ?? 0),
+      lastAt: used?.last_at ?? null,
+      emptiedByPenalty: lastMove?.type === 'ADMIN_PENALTY',
+    },
+  };
 }
 
 function statusOf(season: SeasonRow | undefined, wallet: WalletState | null, usage: Usage): LifesaverStatus {
@@ -34,6 +48,7 @@ function statusOf(season: SeasonRow | undefined, wallet: WalletState | null, usa
     hasSeason: Boolean(season),
     balance: wallet?.balance ?? 0,
     openStake: wallet?.openStake ?? 0,
+    emptiedByPenalty: usage.emptiedByPenalty,
   });
   return {
     state,

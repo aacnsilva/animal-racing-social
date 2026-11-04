@@ -307,9 +307,11 @@ export function LifesaverTile() {
       ? 'You are out of points!'
       : lifesaver.state === 'WAITING_ON_BETS'
         ? 'Out of points, but bets are still running. Wait for them to settle.'
-        : lifesaver.state === 'NO_SEASON'
-          ? 'No active season'
-          : `Unlimited · kicks in if you lose every point${lifesaver.usedCount > 0 ? ` · used ${lifesaver.usedCount}× this season` : ''}`;
+        : lifesaver.state === 'PENALIZED'
+          ? 'Your points were removed as a penalty, so no lifesaver this time.'
+          : lifesaver.state === 'NO_SEASON'
+            ? 'No active season'
+            : `Unlimited · kicks in if you lose every point${lifesaver.usedCount > 0 ? ` · used ${lifesaver.usedCount}× this season` : ''}`;
   return (
     <div className="stat-tile lifesaver-tile" data-testid="lifesaver-tile" data-state={lifesaver?.state ?? ''}>
       <div className="label">Lifesaver</div>

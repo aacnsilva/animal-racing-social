@@ -181,6 +181,7 @@ export type LedgerEntry = {
   amount: number;
   refId: string;
   balanceAfter: number;
+  note: string | null;
   createdAt: string;
 };
 
@@ -192,7 +193,7 @@ export type DailyReward = {
   bestStreak: number;
 };
 
-export type LifesaverState = 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY';
+export type LifesaverState = 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'PENALIZED' | 'READY';
 
 export type Lifesaver = {
   state: LifesaverState;

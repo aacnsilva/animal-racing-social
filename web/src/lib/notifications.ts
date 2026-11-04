@@ -14,6 +14,8 @@ export const NOTIFICATION_TYPES = [
   'LEADERBOARD_MOVE',
   'SEASON_ENDING',
   'SEASON_RESULT',
+  'POINTS_BONUS',
+  'POINTS_PENALTY',
 ] as const;
 
 export const NOTIFICATION_LABEL: Record<string, string> = {
@@ -28,6 +30,8 @@ export const NOTIFICATION_LABEL: Record<string, string> = {
   LEADERBOARD_MOVE: 'Leaderboard moves',
   SEASON_ENDING: 'Season ending',
   SEASON_RESULT: 'Season results',
+  POINTS_BONUS: 'Bonus points',
+  POINTS_PENALTY: 'Penalties',
 };
 
 export const NOTIFICATION_ICON: Record<string, string> = {
@@ -42,6 +46,8 @@ export const NOTIFICATION_ICON: Record<string, string> = {
   LEADERBOARD_MOVE: '↑',
   SEASON_ENDING: '⌛',
   SEASON_RESULT: '♛',
+  POINTS_BONUS: '+',
+  POINTS_PENALTY: '⚑',
 };
 
 export const str = (value: unknown): string => {
@@ -78,6 +84,10 @@ export function notificationText(n: Notification): string {
       return 'The season ends in 24 hours. Last chance to climb the boards.';
     case 'SEASON_RESULT':
       return `${str(p.seasonName) || 'The season'} is over: you finished #${str(p.rank)} of ${str(p.participants)} with ${fmtPoints(Number(p.score ?? 0))} pts.${PODIUM_FRAME[Number(p.rank)] ? ` You earned the ${PODIUM_FRAME[Number(p.rank)]} avatar frame!` : ''}`;
+    case 'POINTS_BONUS':
+      return `You received a bonus of ${fmtPoints(Number(p.amount ?? 0))} pts${p.reason ? `: ${str(p.reason)}` : '.'}`;
+    case 'POINTS_PENALTY':
+      return `A penalty of ${fmtPoints(Number(p.amount ?? 0))} pts was applied for breaking the rules${p.reason ? `: ${str(p.reason)}` : '.'}`;
     default:
       return titleCase(n.type);
   }
@@ -88,7 +98,7 @@ const PODIUM_FRAME: Record<number, string> = { 1: 'gold', 2: 'silver', 3: 'bronz
 export function notificationLink(n: Notification): string | null {
   const p = n.payload ?? {};
   if (p.raceId) return `/races/${str(p.raceId)}`;
-  if (n.type === 'DAILY_REWARD_READY') return '/wallet';
+  if (n.type === 'DAILY_REWARD_READY' || n.type === 'POINTS_BONUS' || n.type === 'POINTS_PENALTY') return '/wallet';
   if (n.type === 'SEASON_RESULT' && PODIUM_FRAME[Number(p.rank)]) return '/me';
   if (n.type === 'LEADERBOARD_MOVE' || n.type === 'SEASON_RESULT') return '/leaderboards';
   return null;

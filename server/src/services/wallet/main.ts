@@ -7,6 +7,12 @@ import { bootstrap, every } from '../../lib/runtime.ts';
 import { gauge, withSpan } from '../../lib/telemetry.ts';
 import { activeSeason } from '../../lib/seasons.ts';
 import { addDays, utcDay } from '../../lib/time.ts';
+import {
+  ADMIN_POINT_KINDS,
+  ADMIN_POINTS_MAX,
+  adminPointsDelta,
+  adminPointsLedgerType,
+} from '../../domain/adminPoints.ts';
 import { applyChange, ensureWallet, RECONCILIATION_SQL } from './ledger.ts';
 import { lifesaverClaim, lifesaverStatus } from './lifesaver.ts';
 
@@ -53,9 +59,47 @@ export async function start(): Promise<void> {
         refId: v.str(body.refId, 'refId'),
         balanceDelta: v.int(body.amount, 'amount'),
         openStakeDelta: 0,
+        note: v.str(body.reason, 'reason', { max: 200 }),
       };
       const result = await tx(pool, (client) => applyChange(client, change));
       return { balance: result.state.balance };
+    })
+    .post('/internal/admin-points', async (ctx) => {
+      const body = await ctx.body();
+      const userId = v.id(body.userId, 'userId');
+      const seasonId = v.id(body.seasonId, 'seasonId');
+      const kind = v.oneOf(body.kind, 'kind', ADMIN_POINT_KINDS);
+      const requested = v.int(body.amount, 'amount', { min: 1, max: ADMIN_POINTS_MAX });
+      const refId = v.str(body.refId, 'refId');
+      const reason = v.str(body.reason, 'reason', { max: 200 });
+      return tx(pool, async (client) => {
+        const type = adminPointsLedgerType(kind);
+        const before = await ensureWallet(client, userId, seasonId);
+        const existing = await one(
+          client,
+          'SELECT amount, balance_after FROM wallet.ledger_entries WHERE user_id = $1 AND type = $2 AND ref_id = $3',
+          [userId, type, refId],
+        );
+        if (existing)
+          return {
+            kind,
+            requested,
+            applied: Math.abs(Number(existing.amount)),
+            balance: Number(existing.balance_after),
+            duplicate: true,
+          };
+        const delta = adminPointsDelta(kind, requested, before.balance);
+        const result = await applyChange(client, {
+          userId,
+          seasonId,
+          type,
+          refId,
+          balanceDelta: delta,
+          openStakeDelta: 0,
+          note: reason,
+        });
+        return { kind, requested, applied: Math.abs(delta), balance: result.state.balance, duplicate: false };
+      });
     })
     .post('/internal/lifesaver/status', async (ctx) => {
       const body = await ctx.body();

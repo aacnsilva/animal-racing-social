@@ -27,6 +27,8 @@ const LEDGER_LABEL: Record<string, string> = {
   BET_REFUND: 'Refund',
   CASHOUT: 'Cash-out',
   ADMIN_ADJUST: 'Adjustment',
+  ADMIN_BONUS: 'Bonus',
+  ADMIN_PENALTY: 'Penalty',
 };
 
 export function WalletPage() {
@@ -149,6 +151,11 @@ export function WalletPage() {
                       <span className={`chip ${entry.amount > 0 ? 'green' : 'red'}`}>
                         {LEDGER_LABEL[entry.type] ?? entry.type}
                       </span>
+                      {entry.note && (
+                        <div className="tiny muted" data-testid="ledger-note">
+                          {entry.note}
+                        </div>
+                      )}
                     </td>
                     <td
                       className="right num"

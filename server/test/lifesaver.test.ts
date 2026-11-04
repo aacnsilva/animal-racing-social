@@ -10,6 +10,8 @@ void describe('lifesaver', () => {
     assert.equal(lifesaverState({ ...busted, balance: 1 }), 'AFLOAT');
     assert.equal(lifesaverState({ ...busted, openStake: 200 }), 'WAITING_ON_BETS');
     assert.equal(lifesaverState({ ...busted, hasSeason: false }), 'NO_SEASON');
+    assert.equal(lifesaverState({ ...busted, emptiedByPenalty: true }), 'PENALIZED');
+    assert.equal(lifesaverState({ ...busted, balance: 1, emptiedByPenalty: true }), 'AFLOAT');
   });
 
   void it('gives every claim its own ledger ref', () => {
@@ -23,5 +25,6 @@ void describe('lifesaver', () => {
     assert.equal(lifesaverRejection('AFLOAT')?.code, 'NOT_BUSTED');
     assert.equal(lifesaverRejection('WAITING_ON_BETS')?.code, 'BETS_STILL_OPEN');
     assert.equal(lifesaverRejection('NO_SEASON')?.code, 'CONFLICT');
+    assert.equal(lifesaverRejection('PENALIZED')?.code, 'PENALIZED');
   });
 });

@@ -60,7 +60,7 @@ POST /v1/me/rewards/lifesaver → 200 { amount, balance, balanceBefore }
 - A racer who has lost every point (balance 0 and no open bets) gets a **free
   lifesaver every time it happens** (unlimited) worth `season.lifesaverGrant` (default 5 000 points).
 - `state`: `AFLOAT` (still has points), `WAITING_ON_BETS` (balance 0 but bets may
-  still pay out), `READY`, `NO_SEASON`. `usedCount` and `usedAt` (latest) cover this season.
+  still pay out), `PENALIZED` (an admin penalty emptied the wallet), `READY`, `NO_SEASON`. `usedCount` and `usedAt` (latest) cover this season.
 - Ledger `LIFESAVER` with `refId = free:<seasonId>:<usedCount>`. The
   `(user, type, refId)` unique key makes each claim idempotent under retries and
   double clicks; the wallet row lock serialises concurrent claims.
@@ -75,16 +75,29 @@ POST /v1/me/rewards/lifesaver → 200 { amount, balance, balanceBefore }
 `/v1/admin/*`, role `ADMIN` (granted manually to specific userIds). Every
 call writes an audit log entry (`admin.audit` topic: who, what, before/after).
 
-| Area      | Endpoints                                                                                                                                                       |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Programme | `GET/PUT /admin/programme` (races/hour, class mix, species rotation) · `POST /admin/races` (schedule one-off) · `POST /admin/races/{id}/cancel` (all bets VOID) |
-| Markets   | `GET/PUT /admin/market-templates/{class}` · `POST /admin/markets/{id}/suspend` · `/resume` · `/void`                                                            |
-| Venues    | `GET/POST /admin/venues` · `PUT /admin/venues/{id}` (creates a new version) · `POST /admin/venues/{id}/retire`                                                  |
-| Engine    | `GET /admin/engine/versions` · `PUT /admin/engine/active` (version for new races) · `GET/PUT /admin/engine/params/{version}` (draft params → new version)       |
-| Stable    | `GET /admin/animals?status=` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                                                |
-| Seasons   | `GET/POST /admin/seasons` · `PUT /admin/seasons/{id}` (only while UPCOMING)                                                                                     |
-| Users     | `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` (ledger `ADMIN_ADJUST` with reason) · `POST /admin/users/{id}/ban`   |
-| Ops       | `GET /admin/dlq` · `POST /admin/dlq/{id}/replay` · `GET /admin/races/{id}/debug` (script access **only after FINISHED**)                                        |
+| Area      | Endpoints                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Programme | `GET/PUT /admin/programme` (races/hour, class mix, species rotation) · `POST /admin/races` (schedule one-off) · `POST /admin/races/{id}/cancel` (all bets VOID)                                                                       |
+| Markets   | `GET/PUT /admin/market-templates/{class}` · `POST /admin/markets/{id}/suspend` · `/resume` · `/void`                                                                                                                                  |
+| Venues    | `GET/POST /admin/venues` · `PUT /admin/venues/{id}` (creates a new version) · `POST /admin/venues/{id}/retire`                                                                                                                        |
+| Engine    | `GET /admin/engine/versions` · `PUT /admin/engine/active` (version for new races) · `GET/PUT /admin/engine/params/{version}` (draft params → new version)                                                                             |
+| Stable    | `GET /admin/animals?status=` · `POST /admin/animals/{id}/retire` · `PUT /admin/stable/pool-size`                                                                                                                                      |
+| Seasons   | `GET/POST /admin/seasons` · `PUT /admin/seasons/{id}` (only while UPCOMING)                                                                                                                                                           |
+| Users     | `GET /admin/users/{id}` · `GET /admin/users/{id}/ledger` · `POST /admin/users/{id}/adjust` (ledger `ADMIN_ADJUST` with reason) · `POST /admin/users/{id}/points` (bonus / cheating penalty, see below) · `POST /admin/users/{id}/ban` |
+| Ops       | `GET /admin/dlq` · `POST /admin/dlq/{id}/replay` · `GET /admin/races/{id}/debug` (script access **only after FINISHED**)                                                                                                              |
+
+### Bonus points and cheating penalties
+
+```
+POST /v1/admin/users/{id}/points { kind: 'BONUS' | 'PENALTY', amount, reason }
+  → 200 { kind, requested, applied, balance, seasonId }
+```
+
+- Applies to the user's wallet in the active season. `amount` is a positive integer (max 1 000 000); `reason` is required and is shown to the user.
+- Ledger `ADMIN_BONUS` (+amount) or `ADMIN_PENALTY` (−applied) with the reason stored in the entry's `note`. `refId = admin:<auditId>`, so every action is idempotent and traceable to its `user.bonus` / `user.penalty` audit row.
+- A penalty is capped at the current balance (`applied ≤ requested`): balances never go negative and open stakes are left alone.
+- The user gets a `POINTS_BONUS` / `POINTS_PENALTY` notification and sees the entry with its reason in the wallet ledger. Leaderboards follow the new balance.
+- A wallet emptied by a penalty does not qualify for a lifesaver (state `PENALIZED`, 409 `PENALIZED`) until the user earns and loses points again.
 
 Rules: admins can't read a sealed script before `FINISHED`, the same
 fairness rule as everyone else. Engine params and venues are versioned, never
@@ -174,3 +187,4 @@ PUT  /v1/me/notification-settings              { enabled: bool, types: { [type]:
 | `BET_WON` / `BET_LOST` / `BET_VOID` | `BetSettled`                      |
 | `BET_REJECTED`                      | live bet not accepted             |
 | `CASHOUT_DONE` / `CASHOUT_REJECTED` | cash-out result                   |
+| `POINTS_BONUS` / `POINTS_PENALTY`   | admin bonus or cheating penalty   |

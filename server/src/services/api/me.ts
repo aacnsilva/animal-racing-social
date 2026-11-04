@@ -93,6 +93,7 @@ export function meRoutes(router: Router, deps: Deps): void {
         amount: Number(row.amount),
         refId: row.ref_id,
         balanceAfter: Number(row.balance_after),
+        note: row.type === 'ADMIN_BONUS' || row.type === 'ADMIN_PENALTY' ? (row.note ?? null) : null,
         createdAt: iso(row.created_at),
       })),
       nextCursor: result.nextCursor,

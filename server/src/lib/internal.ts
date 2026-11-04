@@ -124,4 +124,17 @@ export const walletApi = {
     }),
   adjust: (userId: string, seasonId: string, amount: number, refId: string, reason: string) =>
     call<{ balance: number }>(walletApi.base(), '/internal/adjust', { userId, seasonId, amount, refId, reason }),
+  adminPoints: (body: {
+    userId: string;
+    seasonId: string;
+    kind: 'BONUS' | 'PENALTY';
+    amount: number;
+    refId: string;
+    reason: string;
+  }) =>
+    call<{ kind: 'BONUS' | 'PENALTY'; requested: number; applied: number; balance: number; duplicate: boolean }>(
+      walletApi.base(),
+      '/internal/admin-points',
+      body,
+    ),
 };

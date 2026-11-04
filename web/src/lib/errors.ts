@@ -25,6 +25,7 @@ const MESSAGES: Record<string, string> = {
   ALREADY_CLAIMED: 'You already claimed today’s reward.',
   NOT_BUSTED: 'Lifesavers are for racers who have lost every point. You are still afloat!',
   BETS_STILL_OPEN: 'You still have open bets. Wait for them to settle before using a lifesaver.',
+  PENALIZED: 'Lifesavers do not cover points taken away as a penalty.',
   CONFLICT: 'That conflicts with the current state.',
   RACE_NOT_FINISHED: 'The race has not finished yet.',
   REPLAY_EXPIRED: 'The replay for this race is no longer available.',

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   ADMIN_SUBJECT,
+  adminSession,
   apiSession,
   call,
   headerBalance,
@@ -59,4 +60,66 @@ test('admin API rejects regular users', async () => {
   const result = await call(user.api, user.token, 'GET', '/v1/admin/programme');
   expect(result.status).toBe(403);
   await user.api.dispose();
+});
+
+test('admin grants a bonus and applies a cheating penalty the user can see', async ({ page }) => {
+  const subject = uniqueSubject('cheater');
+  const user = await apiSession(subject);
+  const admin = await adminSession();
+
+  const bonus = await call(admin.api, admin.token, 'POST', `/v1/admin/users/${user.userId}/points`, {
+    kind: 'BONUS',
+    amount: 250,
+    reason: 'Community race host',
+  });
+  expect(bonus.status).toBe(200);
+  expect(bonus.body).toMatchObject({ kind: 'BONUS', requested: 250, applied: 250, balance: 10250 });
+
+  const invalid = await call(admin.api, admin.token, 'POST', `/v1/admin/users/${user.userId}/points`, {
+    kind: 'PENALTY',
+    amount: -5,
+    reason: 'nope',
+  });
+  expect(invalid.status).toBe(422);
+
+  const forbidden = await call(user.api, user.token, 'POST', `/v1/admin/users/${user.userId}/points`, {
+    kind: 'BONUS',
+    amount: 1000,
+    reason: 'self-service',
+  });
+  expect(forbidden.status).toBe(403);
+
+  await signIn(page, { subject: ADMIN_SUBJECT, name: 'Admin' });
+  await page.goto('/admin?tab=users');
+  await page.getByTestId('admin-user-search').fill(user.userId);
+  await page.getByTestId('admin-user-search').press('Enter');
+  await page.getByTestId('admin-user-row').filter({ hasText: user.userId }).click();
+  await page.getByTestId('admin-points-kind').selectOption('PENALTY');
+  await page.getByTestId('admin-points-amount').fill('20000');
+  await page.getByTestId('admin-points-reason').fill('Multi-accounting');
+  await page.getByTestId('admin-points-submit').click();
+  await expect(page.getByTestId('admin-user-result')).toContainText('Penalty of 10,250 pts applied');
+
+  const wallet = await call(user.api, user.token, 'GET', '/v1/me/wallet');
+  expect(wallet.body.balance).toBe(0);
+  const ledger = await call(user.api, user.token, 'GET', '/v1/me/wallet/ledger');
+  expect(ledger.body.items[0]).toMatchObject({ type: 'ADMIN_PENALTY', amount: -10250, note: 'Multi-accounting' });
+  expect(ledger.body.items[1]).toMatchObject({ type: 'ADMIN_BONUS', amount: 250, note: 'Community race host' });
+
+  const lifesaver = await call(user.api, user.token, 'GET', '/v1/me/rewards/lifesaver');
+  expect(lifesaver.body).toMatchObject({ state: 'PENALIZED', claimable: false });
+  const claim = await call(user.api, user.token, 'POST', '/v1/me/rewards/lifesaver');
+  expect(claim.status).toBe(409);
+
+  await expect
+    .poll(async () => {
+      const result = await call(user.api, user.token, 'GET', '/v1/me/notifications');
+      return JSON.stringify(result.body.items);
+    })
+    .toMatch(/POINTS_PENALTY[\s\S]*Multi-accounting/);
+  const notifications = await call(user.api, user.token, 'GET', '/v1/me/notifications');
+  expect(JSON.stringify(notifications.body.items)).toContain('POINTS_BONUS');
+
+  await user.api.dispose();
+  await admin.api.dispose();
 });
