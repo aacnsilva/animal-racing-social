@@ -402,17 +402,17 @@ export class MarketManager {
     order: readonly string[],
     lapLeaders: ReadonlyMap<number, string>,
   ): Promise<void> {
-    const winners = winningEntrants(market.type, market.params, order, lapLeaders);
-    if (winners.length === 0) {
-      await this.voidMarket(client, raceId, market.market_id, 'NO_RESULT');
-      return;
-    }
     const selections = await many<{ selection_id: string; entrant_id: number }>(
       client,
       'SELECT selection_id, entrant_id FROM market.selections WHERE market_id = $1',
       [market.market_id],
     );
     const byEntrant = new Map(selections.map((row) => [entrantKey(row.entrant_id), row.selection_id]));
+    const winners = winningEntrants(market.type, market.params, order, lapLeaders, [...byEntrant.keys()]);
+    if (winners.length === 0) {
+      await this.voidMarket(client, raceId, market.market_id, 'NO_RESULT');
+      return;
+    }
     const winning =
       market.type === 'TRICAST'
         ? []

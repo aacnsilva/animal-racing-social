@@ -117,6 +117,10 @@ export function marketLabel(type: string, params: Record<string, number> | undef
       return p.position === 1 ? 'Win' : `Finish ${ordinal(p.position ?? 1)}`;
     case 'TOP_N':
       return `Top ${p.n ?? 3}`;
+    case 'AGAINST_FINISH_POSITION':
+      return p.position === 1 ? 'Not to win' : `Not to finish ${ordinal(p.position ?? 1)}`;
+    case 'AGAINST_TOP_N':
+      return `Not top ${p.n ?? 3}`;
     case 'TRICAST':
       return 'Tricast';
     case 'LEADER_AT_LAP':

@@ -46,7 +46,12 @@ void describe('market templates', () => {
   void it('validates admin templates', () => {
     assert.throws(() => validateTemplate([{ type: 'FINISH_POSITION', params: { position: 4 } }]));
     assert.throws(() => validateTemplate([]));
-    assert.equal(validateTemplate(templates.ENDURANCE.markets).length, 6);
+    assert.equal(validateTemplate(templates.ENDURANCE.markets).length, 8);
+    for (const template of Object.values(templates))
+      assert.deepEqual(
+        template.markets.filter((entry) => entry.type.startsWith('AGAINST_')).map((entry) => entry.type),
+        ['AGAINST_FINISH_POSITION', 'AGAINST_TOP_N'],
+      );
   });
 });
 
@@ -93,6 +98,26 @@ void describe('resulting', () => {
     assert.deepEqual(winningEntrants('TOP_N', { n: 3 }, order, leaders), ['e3', 'e1', 'e5']);
     assert.deepEqual(winningEntrants('LEADER_AT_LAP', { lap: 2 }, order, leaders), ['e1']);
     assert.deepEqual(winningEntrants('LEADER_AT_LAP', { lap: 4 }, order, leaders), []);
+  });
+
+  void it('wins against markets for every entrant outside the target, including non-finishers', () => {
+    const field = ['e1', 'e2', 'e3', 'e4', 'e5'];
+    assert.deepEqual(winningEntrants('AGAINST_FINISH_POSITION', { position: 1 }, order, leaders, field), [
+      'e1',
+      'e2',
+      'e4',
+      'e5',
+    ]);
+    assert.deepEqual(winningEntrants('AGAINST_TOP_N', { n: 3 }, order, leaders, field), ['e2', 'e4']);
+    assert.deepEqual(winningEntrants('AGAINST_FINISH_POSITION', { position: 1 }, [], leaders, field), []);
+    assert.equal(legWins('AGAINST_TOP_N', { entrantId: 'e4' }, ['e2', 'e4'], order), true);
+    assert.equal(legWins('AGAINST_TOP_N', { entrantId: 'e3' }, ['e2', 'e4'], order), false);
+  });
+
+  void it('validates against market params like their underlying market', () => {
+    assert.doesNotThrow(() => validateTemplate([{ type: 'AGAINST_FINISH_POSITION', params: { position: 1 } }]));
+    assert.throws(() => validateTemplate([{ type: 'AGAINST_FINISH_POSITION', params: { position: 4 } }]));
+    assert.throws(() => validateTemplate([{ type: 'AGAINST_TOP_N', params: { n: 1 } }]));
   });
 
   void it('settles tricast legs on the exact official order', () => {

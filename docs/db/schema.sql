@@ -263,7 +263,7 @@ CREATE UNIQUE INDEX ON market.market_templates (race_class) WHERE is_active;
 CREATE TABLE market.markets (                                   -- [G]
   market_id        BIGINT PRIMARY KEY,
   race_id          BIGINT NOT NULL REFERENCES racing.races,
-  type             TEXT NOT NULL CHECK (type IN ('FINISH_POSITION','TOP_N','TRICAST','LEADER_AT_LAP')),
+  type             TEXT NOT NULL CHECK (type IN ('FINISH_POSITION','TOP_N','AGAINST_FINISH_POSITION','AGAINST_TOP_N','TRICAST','LEADER_AT_LAP')),
   params           JSONB NOT NULL DEFAULT '{}',   -- {"position":2} | {"n":3} | {"lap":5}
   status           TEXT NOT NULL CHECK (status IN ('PENDING','OPEN','SUSPENDED','CLOSED','RESULTED','VOID')),
   template_version INT NOT NULL,

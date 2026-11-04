@@ -49,7 +49,7 @@ export async function marketsForRace(
   const rows = await many(
     db,
     `SELECT * FROM market.markets WHERE race_id = $1 AND ($2::text IS NULL OR status = $2)
-     ORDER BY CASE type WHEN 'FINISH_POSITION' THEN 1 WHEN 'TOP_N' THEN 2 WHEN 'LEADER_AT_LAP' THEN 3 ELSE 4 END,
+     ORDER BY CASE type WHEN 'FINISH_POSITION' THEN 1 WHEN 'TOP_N' THEN 2 WHEN 'AGAINST_FINISH_POSITION' THEN 3 WHEN 'AGAINST_TOP_N' THEN 4 WHEN 'LEADER_AT_LAP' THEN 5 ELSE 6 END,
        coalesce((params->>'position')::int, (params->>'n')::int, (params->>'lap')::int, 0)`,
     [raceId, status ?? null],
   );

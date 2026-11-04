@@ -21,7 +21,14 @@ export type RaceStreamState = {
 
 type TickListener = (tick: RaceTick | null, kind: 'snapshot' | 'tick') => void;
 
-const TYPE_ORDER: Record<string, number> = { FINISH_POSITION: 1, TOP_N: 2, LEADER_AT_LAP: 3, TRICAST: 4 };
+const TYPE_ORDER: Record<string, number> = {
+  FINISH_POSITION: 1,
+  TOP_N: 2,
+  AGAINST_FINISH_POSITION: 3,
+  AGAINST_TOP_N: 4,
+  LEADER_AT_LAP: 5,
+  TRICAST: 6,
+};
 const paramKey = (market: Market) => market.params.position ?? market.params.n ?? market.params.lap ?? 0;
 
 type StreamEvents = {

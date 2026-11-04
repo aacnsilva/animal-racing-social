@@ -4,6 +4,8 @@ use race_engine_core::ProbabilityTable;
 pub enum MarketKind {
     FinishPosition(u32),
     TopN(u32),
+    AgainstFinishPosition(u32),
+    AgainstTopN(u32),
     Tricast,
     LeaderAtLap(u32),
 }
@@ -19,6 +21,10 @@ impl MarketKind {
         match kind {
             "FINISH_POSITION" => Ok(MarketKind::FinishPosition(positive("position")?)),
             "TOP_N" => Ok(MarketKind::TopN(positive("n")?)),
+            "AGAINST_FINISH_POSITION" => {
+                Ok(MarketKind::AgainstFinishPosition(positive("position")?))
+            }
+            "AGAINST_TOP_N" => Ok(MarketKind::AgainstTopN(positive("n")?)),
             "TRICAST" => Ok(MarketKind::Tricast),
             "LEADER_AT_LAP" => Ok(MarketKind::LeaderAtLap(positive("lap")?)),
             other => Err(format!("unknown market type {other}")),
@@ -41,10 +47,18 @@ impl MarketKind {
         match self {
             MarketKind::FinishPosition(position) => table.finish_position(entrant, position),
             MarketKind::TopN(n) => table.top_n(entrant, n),
+            MarketKind::AgainstFinishPosition(position) => {
+                against(table.finish_position(entrant, position))
+            }
+            MarketKind::AgainstTopN(n) => against(table.top_n(entrant, n)),
             MarketKind::Tricast => table.win(entrant),
             MarketKind::LeaderAtLap(lap) => table.leader_at_lap(entrant, lap),
         }
     }
+}
+
+fn against(probability: f64) -> f64 {
+    (1.0 - probability).clamp(0.0, 1.0)
 }
 
 pub fn floor_probability(probability: f64, runs: u32) -> f64 {
@@ -93,6 +107,22 @@ mod tests {
             MarketKind::from_json("TRICAST", &serde_json::json!({})),
             Ok(MarketKind::Tricast)
         );
+        assert_eq!(
+            MarketKind::from_json("AGAINST_FINISH_POSITION", &params),
+            Ok(MarketKind::AgainstFinishPosition(2))
+        );
+        assert_eq!(
+            MarketKind::from_json("AGAINST_TOP_N", &serde_json::json!({ "n": 3 })),
+            Ok(MarketKind::AgainstTopN(3))
+        );
+        assert!(MarketKind::from_json("AGAINST_TOP_N", &serde_json::json!({})).is_err());
         assert!(MarketKind::from_json("LEADER_AT_LAP", &serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn against_is_the_complement() {
+        assert_eq!(against(0.25).to_bits(), 0.75_f64.to_bits());
+        assert_eq!(against(1.000_000_1).to_bits(), 0.0_f64.to_bits());
+        assert_eq!(price(against(0.5), 0.05).to_bits(), 1.9_f64.to_bits());
     }
 }

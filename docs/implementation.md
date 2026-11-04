@@ -300,7 +300,7 @@ type Selection = { selectionId: string; entrantId: string; price: number; probab
 type Market = {
   id: string;
   raceId: string;
-  type: 'FINISH_POSITION' | 'TOP_N' | 'TRICAST' | 'LEADER_AT_LAP';
+  type: 'FINISH_POSITION' | 'TOP_N' | 'AGAINST_FINISH_POSITION' | 'AGAINST_TOP_N' | 'TRICAST' | 'LEADER_AT_LAP';
   params: Record<string, number>;
   status: 'PENDING' | 'OPEN' | 'SUSPENDED' | 'CLOSED' | 'RESULTED' | 'VOID';
   closesAtLap: number | null;

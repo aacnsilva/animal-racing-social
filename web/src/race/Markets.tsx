@@ -290,6 +290,7 @@ function TricastBuilder({
 
 const GROUPS: { title: string; types: Market['type'][] }[] = [
   { title: 'Win & place', types: ['FINISH_POSITION', 'TOP_N'] },
+  { title: 'Against · back them to miss', types: ['AGAINST_FINISH_POSITION', 'AGAINST_TOP_N'] },
   { title: 'In-running · leader at lap', types: ['LEADER_AT_LAP'] },
   { title: 'Tricast', types: ['TRICAST'] },
 ];

@@ -1,4 +1,10 @@
-export type MarketType = 'FINISH_POSITION' | 'TOP_N' | 'TRICAST' | 'LEADER_AT_LAP';
+export type MarketType =
+  | 'FINISH_POSITION'
+  | 'TOP_N'
+  | 'AGAINST_FINISH_POSITION'
+  | 'AGAINST_TOP_N'
+  | 'TRICAST'
+  | 'LEADER_AT_LAP';
 
 export type TemplateEntry = {
   type: MarketType;
@@ -21,7 +27,14 @@ export type MarketSpec = {
 
 export type TickEntrantLike = { id: string; dist: number; speed: number; pos: number; state: string };
 
-export const MARKET_TYPES: readonly MarketType[] = ['FINISH_POSITION', 'TOP_N', 'TRICAST', 'LEADER_AT_LAP'];
+export const MARKET_TYPES: readonly MarketType[] = [
+  'FINISH_POSITION',
+  'TOP_N',
+  'AGAINST_FINISH_POSITION',
+  'AGAINST_TOP_N',
+  'TRICAST',
+  'LEADER_AT_LAP',
+];
 
 export function leaderLaps(laps: number, every: number): number[] {
   const result: number[] = [];
@@ -69,9 +82,15 @@ export function validateTemplate(entries: unknown): TemplateEntry[] {
   return entries.map((raw, index) => {
     const entry: TemplateEntry = raw;
     if (!MARKET_TYPES.includes(entry.type)) throw new Error(`markets[${index}].type is invalid`);
-    if (entry.type === 'FINISH_POSITION' && ![1, 2, 3].includes(entry.params?.position ?? 0))
+    if (
+      (entry.type === 'FINISH_POSITION' || entry.type === 'AGAINST_FINISH_POSITION') &&
+      ![1, 2, 3].includes(entry.params?.position ?? 0)
+    )
       throw new Error(`markets[${index}].params.position must be 1, 2 or 3`);
-    if (entry.type === 'TOP_N' && !((entry.params?.n ?? 0) >= 2 && (entry.params?.n ?? 0) <= 5))
+    if (
+      (entry.type === 'TOP_N' || entry.type === 'AGAINST_TOP_N') &&
+      !((entry.params?.n ?? 0) >= 2 && (entry.params?.n ?? 0) <= 5)
+    )
       throw new Error(`markets[${index}].params.n must be 2..5`);
     if (entry.type === 'LEADER_AT_LAP' && !((entry.every ?? 0) >= 1))
       throw new Error(`markets[${index}].every must be ≥ 1`);
@@ -119,6 +138,7 @@ export function winningEntrants(
   params: Record<string, number>,
   order: readonly string[],
   lapLeaders: ReadonlyMap<number, string>,
+  field: readonly string[] = order,
 ): string[] {
   switch (type) {
     case 'FINISH_POSITION': {
@@ -127,6 +147,10 @@ export function winningEntrants(
     }
     case 'TOP_N':
       return order.slice(0, params.n ?? 3);
+    case 'AGAINST_FINISH_POSITION':
+      return against(winningEntrants('FINISH_POSITION', params, order, lapLeaders), field);
+    case 'AGAINST_TOP_N':
+      return against(winningEntrants('TOP_N', params, order, lapLeaders), field);
     case 'TRICAST':
       return order.slice(0, 3);
     case 'LEADER_AT_LAP': {
@@ -135,6 +159,11 @@ export function winningEntrants(
     }
   }
   return unknownMarketType(type);
+}
+
+function against(target: readonly string[], field: readonly string[]): string[] {
+  if (target.length === 0) return [];
+  return field.filter((entrant) => !target.includes(entrant));
 }
 
 function unknownMarketType(type: never): never {

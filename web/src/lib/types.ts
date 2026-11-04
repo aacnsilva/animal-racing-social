@@ -2,7 +2,13 @@ export type Species = 'HORSE' | 'GIRAFFE';
 export type RaceClass = 'SPRINT' | 'STANDARD' | 'ENDURANCE';
 export type Temperament = 'FRONT_RUNNER' | 'STALKER' | 'CLOSER' | 'STEADY';
 export type RaceStatus = 'SCHEDULED' | 'OPEN' | 'LOCKED' | 'LIVE' | 'FINISHED' | 'SETTLED' | 'CANCELLED';
-export type MarketType = 'FINISH_POSITION' | 'TOP_N' | 'TRICAST' | 'LEADER_AT_LAP';
+export type MarketType =
+  | 'FINISH_POSITION'
+  | 'TOP_N'
+  | 'AGAINST_FINISH_POSITION'
+  | 'AGAINST_TOP_N'
+  | 'TRICAST'
+  | 'LEADER_AT_LAP';
 export type MarketStatus = 'PENDING' | 'OPEN' | 'SUSPENDED' | 'CLOSED' | 'RESULTED' | 'VOID';
 export type BetStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT';
 export type PricePolicy = 'NONE' | 'BETTER' | 'ANY';

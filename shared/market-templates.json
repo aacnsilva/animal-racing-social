@@ -5,6 +5,8 @@
       { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
       { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
       { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
       { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } }
     ]
   },
@@ -14,6 +16,8 @@
       { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
       { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
       { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
       { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } },
       { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } }
     ]
@@ -24,6 +28,8 @@
       { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "atLap": "last" } },
       { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "atLap": "last" } },
       { "type": "TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
+      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "atLap": "last" } },
+      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "atLap": "last" } },
       { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } },
       { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } }
     ]

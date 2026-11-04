@@ -216,14 +216,23 @@ The Odds Engine's pre-race prices use current stats; form is informational
 
 ## 5. Markets
 
-| Type              | Params              | Selection             | Window                                                                                          |
-| ----------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
-| `FINISH_POSITION` | `position: 1\|2\|3` | entrant               | OPEN → closes at configured lap (default: last lap)                                             |
-| `TOP_N`           | `n: 3`              | entrant               | OPEN → closes at configured lap                                                                 |
-| `TRICAST`         | —                   | exact `[1st,2nd,3rd]` | OPEN only (pre-race)                                                                            |
-| `LEADER_AT_LAP`   | `lap: k`            | entrant               | opened by Market Manager in-running; closes `suspendTicksBefore` ticks before lap `k` completes |
+| Type                      | Params              | Selection             | Window                                                                                          |
+| ------------------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `FINISH_POSITION`         | `position: 1\|2\|3` | entrant               | OPEN → closes at configured lap (default: last lap)                                             |
+| `TOP_N`                   | `n: 3`              | entrant               | OPEN → closes at configured lap                                                                 |
+| `AGAINST_FINISH_POSITION` | `position: 1\|2\|3` | entrant               | same as `FINISH_POSITION`                                                                       |
+| `AGAINST_TOP_N`           | `n: 3`              | entrant               | same as `TOP_N`                                                                                 |
+| `TRICAST`                 | —                   | exact `[1st,2nd,3rd]` | OPEN only (pre-race)                                                                            |
+| `LEADER_AT_LAP`           | `lap: k`            | entrant               | opened by Market Manager in-running; closes `suspendTicksBefore` ticks before lap `k` completes |
 
 `FINISH_POSITION{position:1}` is the plain win market.
+Against markets (`AGAINST_*`) back an entrant to miss the target: an
+`AGAINST_FINISH_POSITION{position:1}` selection wins when that entrant does not
+win, and `AGAINST_TOP_N{n:3}` when it does not finish in the top 3. They are
+priced from the complement (`1 − p`) of the same Monte Carlo table, so short
+prices are normal. Any entrant outside the target, including one that does not
+finish, wins the against selection. If the underlying market has no result, the
+against market is voided too.
 `LEADER_AT_LAP` markets are generated from the lap count (every 2–3 laps, never
 the final lap) and are **not offered for SPRINT** races.
 

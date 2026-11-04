@@ -374,7 +374,8 @@ components:
         score: { type: number }
     RaceStatus: { type: string, enum: [SCHEDULED, OPEN, LOCKED, LIVE, FINISHED, SETTLED, CANCELLED] }
     MarketStatus: { type: string, enum: [OPEN, SUSPENDED, CLOSED, RESULTED] }
-    MarketType: { type: string, enum: [FINISH_POSITION, TOP_N, TRICAST, LEADER_AT_LAP] }
+    MarketType:
+      { type: string, enum: [FINISH_POSITION, TOP_N, AGAINST_FINISH_POSITION, AGAINST_TOP_N, TRICAST, LEADER_AT_LAP] }
     BetStatus: { type: string, enum: [PENDING, ACCEPTED, REJECTED, WON, LOST, VOID, CASHED_OUT] }
     Stats:
       type: object
