@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Lane } from '../components/ui';
+import { readLocal, writeLocal } from '../lib/hooks';
 import { fmtClock, fmtRaceTime } from '../lib/format';
 import type { Entrant, Race, RaceTick } from '../lib/types';
 import { eventText, nameLookup } from './events';
@@ -21,17 +23,22 @@ const STATE_SHORT: Record<string, string> = {
   DNF: 'DNF',
   FINISHED: 'fin',
 };
+type GapMode = 'leader' | 'interval';
+const GAP_MODE_KEY = 'ars.standings.gapMode';
+
 const RESULT_SHORT: Record<string, string> = { DISQUALIFIED: 'DQ', DNF: 'DNF', NON_RUNNER: 'NR' };
 
-function rowsFor(race: Race, tick: RaceTick | null): Row[] {
+function rowsFor(race: Race, tick: RaceTick | null, gapMode: GapMode): Row[] {
   const entrants = race.entrants ?? [];
   const byId = new Map(entrants.map((e) => [e.entrantId, e]));
   if (tick && tick.entrants.length) {
     const sorted = tick.entrants.toSorted((a, b) => a.pos - b.pos);
     const leaderDist = Math.max(...sorted.filter((e) => e.state !== 'DNF').map((e) => e.dist), 0);
-    return sorted.map((t) => {
+    return sorted.map((t, i) => {
       const entrant = byId.get(t.id);
-      const gap = leaderDist - t.dist;
+      const ahead = sorted.slice(0, i).findLast((e) => e.state !== 'DNF');
+      const gap = gapMode === 'interval' ? (ahead ? ahead.dist - t.dist : 0) : leaderDist - t.dist;
+      const isLeader = leaderDist - t.dist < 0.05;
       const result = entrant?.result;
       const finishedText =
         result && (result.resultStatus === 'FINISHED' || result.resultStatus === 'DISQUALIFIED') && result.finishTimeMs
@@ -47,7 +54,7 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
             ? result && result.resultStatus !== 'FINISHED'
               ? (RESULT_SHORT[result.resultStatus] ?? finishedText)
               : finishedText
-            : `${gap < 0.05 ? 'lead' : `+${gap.toFixed(1)} m`}${STATE_SHORT[t.state] ? ` · ${STATE_SHORT[t.state]}` : ''}`,
+            : `${isLeader ? 'lead' : `+${Math.max(0, gap).toFixed(1)} m`}${STATE_SHORT[t.state] ? ` · ${STATE_SHORT[t.state]}` : ''}`,
         stamina: t.staminaPct,
         state: t.state,
       };
@@ -86,7 +93,15 @@ function rowsFor(race: Race, tick: RaceTick | null): Row[] {
 }
 
 export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | null; title: string }) {
-  const rows = rowsFor(race, tick);
+  const [gapMode, setGapMode] = useState<GapMode>(() =>
+    readLocal<GapMode>(GAP_MODE_KEY, 'leader') === 'interval' ? 'interval' : 'leader',
+  );
+  const chooseGapMode = (mode: GapMode) => {
+    setGapMode(mode);
+    writeLocal(GAP_MODE_KEY, mode);
+  };
+  const rows = rowsFor(race, tick, gapMode);
+  const showGapToggle = Boolean(tick?.entrants.length);
   return (
     <section className="card standings-panel">
       <div className="card-head" style={{ marginBottom: 0 }}>
@@ -97,6 +112,27 @@ export function Standings({ race, tick, title }: { race: Race; tick: RaceTick | 
           </span>
         )}
       </div>
+      {showGapToggle && (
+        <fieldset className="tabs gap-toggle" aria-label="Gap shown">
+          {(
+            [
+              ['leader', 'To leader'],
+              ['interval', 'Interval'],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              className={gapMode === mode ? 'active' : undefined}
+              aria-pressed={gapMode === mode}
+              data-testid={`gap-mode-${mode}`}
+              onClick={() => chooseGapMode(mode)}
+            >
+              {label}
+            </button>
+          ))}
+        </fieldset>
+      )}
       <div className="standings" data-testid="standings">
         {rows.map((row) => (
           <div

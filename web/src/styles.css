@@ -1885,6 +1885,15 @@ table.table {
   min-height: 0;
 }
 
+.gap-toggle {
+  align-self: flex-start;
+}
+
+.gap-toggle button {
+  padding: 3px 10px;
+  font-size: 0.72rem;
+}
+
 .standings {
   display: flex;
   flex-direction: column;
