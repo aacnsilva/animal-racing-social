@@ -87,6 +87,7 @@ pub struct RaceEntry {
     pub pending: bool,
     pub priced: u64,
     pub last_reprice: Option<Instant>,
+    pub seconds_per_run: Option<f64>,
 }
 
 #[derive(Default)]

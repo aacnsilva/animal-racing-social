@@ -75,6 +75,23 @@ pub fn round_probability(probability: f64) -> f64 {
     (probability * 1_000_000.0).round() / 1_000_000.0
 }
 
+pub fn live_runs(max: u32, min: u32, budget_secs: f64, seconds_per_run: Option<f64>) -> u32 {
+    let min = min.min(max);
+    let Some(per_run) = seconds_per_run.filter(|value| value.is_finite() && *value > 0.0) else {
+        return max;
+    };
+    let affordable = (budget_secs / per_run).floor();
+    if affordable >= f64::from(max) {
+        max
+    } else if affordable <= f64::from(min) {
+        min
+    } else {
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let runs = affordable as u32;
+        runs
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,6 +107,16 @@ mod tests {
             0.00025_f64.to_bits()
         );
         assert_eq!(floor_probability(0.3, 2000).to_bits(), 0.3_f64.to_bits());
+    }
+
+    #[test]
+    fn live_runs_fit_the_budget() {
+        assert_eq!(live_runs(1500, 500, 1.0, None), 1500);
+        assert_eq!(live_runs(1500, 500, 1.0, Some(0.0006)), 1500);
+        assert_eq!(live_runs(1500, 500, 1.0, Some(0.00122)), 819);
+        assert_eq!(live_runs(1500, 500, 1.0, Some(0.01)), 500);
+        assert_eq!(live_runs(300, 500, 1.0, Some(0.01)), 300);
+        assert_eq!(live_runs(1500, 500, 1.0, Some(f64::NAN)), 1500);
     }
 
     #[test]

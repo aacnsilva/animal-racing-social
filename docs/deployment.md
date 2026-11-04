@@ -111,7 +111,9 @@ The limits add up to more than 4 GB, but typical use is about 1.7 GB; the
 fires regularly.
 
 Monte Carlo load is tunable in `.env`: `ODDS_RUNS_PRERACE`, `ODDS_RUNS_LIVE`,
-`ODDS_THREADS`.
+`ODDS_THREADS`. Live repricing aims to finish within `ODDS_LIVE_BUDGET_MS`
+(1000): each race's run count drops from `ODDS_RUNS_LIVE` towards
+`ODDS_RUNS_LIVE_MIN` (500) while its remaining distance makes runs expensive.
 
 ## 5. Observability
 
@@ -201,8 +203,9 @@ stable, `no_engine` at the race engine, `error` at scheduler logs.
 ### OddsRepriceSlow
 
 Live prices update less often than every 1.5 s (p95). The odds engine is
-CPU-bound: check the Platform dashboard, lower `ODDS_RUNS_LIVE`, or raise
-`ODDS_THREADS` if the server has idle cores.
+CPU-bound: check live Monte Carlo time by race class on the Race Day
+dashboard and the Platform dashboard. Lower `ODDS_LIVE_BUDGET_MS` or
+`ODDS_RUNS_LIVE_MIN`, or raise `ODDS_THREADS` if the server has idle cores.
 
 ### ScriptFailures
 

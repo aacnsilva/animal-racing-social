@@ -12,6 +12,8 @@ pub struct Settings {
     pub margin: f64,
     pub runs_prerace: u32,
     pub runs_live: u32,
+    pub runs_live_min: u32,
+    pub live_budget_secs: f64,
     pub threads: usize,
     pub stale_ms: i64,
 }

@@ -1,13 +1,13 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ars_infra::kafka::MARKET_EVENTS;
 use ars_infra::{Context, Res};
 use ars_proto::envelope::Payload;
 use ars_proto::{PriceUpdated, SelectionPrice};
-use race_engine_core::{PreparedRace, ProbabilityTable, estimate_probabilities};
+use race_engine_core::{PreparedRace, ProbabilityTable, RevealedState, estimate_probabilities};
 
-use crate::pricing::{floor_probability, price, round_probability};
+use crate::pricing::{floor_probability, live_runs, price, round_probability};
 use crate::registry::Market;
 use crate::state::Shared;
 
@@ -176,24 +176,13 @@ fn race_seed(race_id: i64) -> [u8; 32] {
     seed
 }
 
-async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
-    let (prepared, race_class) = prepare(app, race_id).await?;
-    let (revealed, markets) = {
-        let registry = app
-            .registry
-            .lock()
-            .map_err(|_| "registry poisoned".to_string())?;
-        let entry = registry.races.get(&race_id).context("race dropped")?;
-        (entry.live.revealed(), registry.priceable_markets(race_id))
-    };
-    let Some(revealed) = revealed else {
-        return Ok(());
-    };
-    if markets.is_empty() {
-        return Ok(());
-    }
-    let tick = revealed.tick;
-    let runs = app.settings.runs_live;
+async fn simulate(
+    app: &Shared,
+    race_id: i64,
+    prepared: Arc<PreparedRace>,
+    revealed: RevealedState,
+    runs: u32,
+) -> Res<(ProbabilityTable, Duration)> {
     let threads = app.settings.threads;
     let permit = app.compute.acquire().await.map_err(|err| err.to_string())?;
     let started = Instant::now();
@@ -205,7 +194,37 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
     .context("pricing task")?
     .map_err(|err| err.to_string())?;
     drop(permit);
-    let elapsed = started.elapsed();
+    Ok((table, started.elapsed()))
+}
+
+async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
+    let (prepared, race_class) = prepare(app, race_id).await?;
+    let (revealed, markets, seconds_per_run) = {
+        let registry = app
+            .registry
+            .lock()
+            .map_err(|_| "registry poisoned".to_string())?;
+        let entry = registry.races.get(&race_id).context("race dropped")?;
+        (
+            entry.live.revealed(),
+            registry.priceable_markets(race_id),
+            entry.seconds_per_run,
+        )
+    };
+    let Some(revealed) = revealed else {
+        return Ok(());
+    };
+    if markets.is_empty() {
+        return Ok(());
+    }
+    let tick = revealed.tick;
+    let runs = live_runs(
+        app.settings.runs_live,
+        app.settings.runs_live_min,
+        app.settings.live_budget_secs,
+        seconds_per_run,
+    );
+    let (table, elapsed) = simulate(app, race_id, prepared, revealed, runs).await?;
     crate::metrics::monte_carlo("live", &race_class, elapsed);
     let mut published = 0;
     for market in markets {
@@ -250,6 +269,7 @@ async fn price_once(app: &Shared, race_id: i64) -> Res<()> {
         match registry.races.get_mut(&race_id) {
             Some(entry) => {
                 entry.priced += 1;
+                entry.seconds_per_run = Some(elapsed.as_secs_f64() / f64::from(runs));
                 let previous = if published > 0 {
                     entry.last_reprice.replace(published_at)
                 } else {

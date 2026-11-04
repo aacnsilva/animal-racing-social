@@ -64,6 +64,8 @@ async fn run() -> Res<()> {
         margin: config::number("ODDS_MARGIN", 0.05),
         runs_prerace: config::number("ODDS_RUNS_PRERACE", 5000u32).max(1),
         runs_live: config::number("ODDS_RUNS_LIVE", 2000u32).max(1),
+        runs_live_min: config::number("ODDS_RUNS_LIVE_MIN", 500u32).max(1),
+        live_budget_secs: f64::from(config::number("ODDS_LIVE_BUDGET_MS", 1000u32)) / 1000.0,
         threads: config::number("ODDS_THREADS", default_threads).max(1),
         stale_ms: config::number("ODDS_STALE_MS", 2500i64),
     };
@@ -71,11 +73,15 @@ async fn run() -> Res<()> {
         margin = settings.margin,
         runsPrerace = settings.runs_prerace,
         runsLive = settings.runs_live,
+        runsLiveMin = settings.runs_live_min,
+        liveBudgetSecs = settings.live_budget_secs,
         threads = settings.threads,
-        "margin {} prerace runs {} live runs {} threads {}",
+        "margin {} prerace runs {} live runs {}-{} within {} s threads {}",
         settings.margin,
         settings.runs_prerace,
+        settings.runs_live_min,
         settings.runs_live,
+        settings.live_budget_secs,
         settings.threads
     );
     let port: u16 = config::number("PORT", 7003);
