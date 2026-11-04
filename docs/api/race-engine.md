@@ -56,7 +56,9 @@ live run then draws them from that Gaussian posterior instead of the prior, so
 a runner who is clearly ahead on form keeps that form for the rest of the race.
 Without it, late favourites were priced far too long (a runner at 85% won 97%
 of the time). `cargo run --release -p race-engine-core --example calibrate live`
-prints predicted against actual win rates.
+prints predicted against actual win rates. Since 1.5.0 the race stays open: the
+live favourite is about 62% to win at 30% of the race, 72% at halfway and 92% at
+80%, and the prices match how often those favourites actually win.
 
 ## 4. Service API (`race-engine`)
 
@@ -101,6 +103,14 @@ lane     : start in the drawn lane; move one lane at a time to overtake
            least bodyGap behind, and a lane change pauses if it would put
            a runner alongside another
 ```
+
+Pace swings (`noise.pace*`) are short-lived good and bad spells: an AR(1)
+multiplier on target speed, about ±3% (more for inconsistent animals), with a
+~20 s memory. Since 1.5.0 the stamina cost of a stride is measured against the
+runner's speed on the day (form × pace), so a good spell gains ground without
+burning extra stamina. Before that, every spell was paid back by the stamina
+re-plan, races were settled by stamina reserves alone, and the odds engine
+could price a runner 20 m clear at halfway as a near-certain loser.
 
 ### Temperament (public, fixed for life)
 

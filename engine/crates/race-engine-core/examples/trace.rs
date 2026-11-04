@@ -22,7 +22,7 @@ fn main() {
     let plan = plan_race(&params, &venue, species, &venue.class, &field).expect("plan");
     let inputs = RaceInputs {
         race_id: "1".into(),
-        engine_version: "1.4.0".into(),
+        engine_version: "1.5.0".into(),
         species: species.into(),
         laps: plan.laps,
         entrants: field.clone(),
