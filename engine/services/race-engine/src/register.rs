@@ -68,6 +68,12 @@ pub async fn register_engine_version(db: &Db) -> Res<()> {
         let replayable_now: bool = row.get(3);
         let loaded = LoadedParams::from_value(&stored);
         if version == ENGINE_VERSION {
+            if let Err(err) = &loaded {
+                return Err(format!(
+                    "engine version {version} is registered with params this binary cannot load ({err}); \
+                     a simulation change needs a new ENGINE_VERSION, never a reused one"
+                ));
+            }
             if let Ok(loaded) = &loaded
                 && loaded.hash != params.hash
             {
