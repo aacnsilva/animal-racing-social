@@ -2071,6 +2071,7 @@ table.table {
 }
 
 .slip {
+  position: relative;
   background: linear-gradient(180deg, #1b2e27, var(--panel));
   border: 1px solid rgba(244, 183, 64, 0.4);
   border-radius: 14px;
@@ -2188,6 +2189,153 @@ table.table {
   }
   .quick-stakes button {
     min-width: 0;
+  }
+}
+
+.slip-success {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  text-align: center;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(61, 220, 151, 0.22), transparent 65%),
+    linear-gradient(180deg, #13261f, var(--panel));
+  color: var(--text-2);
+  overflow: hidden;
+  animation: slip-success-in 0.28s ease-out both;
+}
+
+.slip-success b {
+  font-size: 1.3rem;
+  color: var(--turf);
+  letter-spacing: 0.02em;
+  animation: slip-success-rise 0.4s 0.35s ease-out both;
+}
+
+.slip-success .small {
+  max-width: 30ch;
+  animation: slip-success-rise 0.4s 0.45s ease-out both;
+}
+
+.slip-check {
+  width: 64px;
+  height: 64px;
+  fill: none;
+  stroke: var(--turf);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 12px rgba(61, 220, 151, 0.45));
+  animation: slip-check-pop 0.45s 0.4s ease-out both;
+}
+
+.slip-check circle {
+  stroke-dasharray: 145;
+  stroke-dashoffset: 145;
+  animation: slip-check-draw 0.45s 0.05s ease-out forwards;
+}
+
+.slip-check path {
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: slip-check-draw 0.3s 0.42s ease-out forwards;
+}
+
+.slip-confetti {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  pointer-events: none;
+}
+
+.slip-confetti i {
+  position: absolute;
+  width: 7px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  animation: slip-confetti 0.95s 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+.slip-confetti i:nth-child(3n) {
+  background: var(--turf);
+}
+
+.slip-confetti i:nth-child(3n + 1) {
+  background: var(--info);
+}
+
+.slip.floating.leaving {
+  animation: slip-leave 0.32s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes slip-success-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes slip-success-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes slip-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes slip-check-pop {
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes slip-confetti {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) rotate(260deg);
+  }
+}
+
+@keyframes slip-leave {
+  to {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slip-success,
+  .slip-success b,
+  .slip-success .small,
+  .slip-check,
+  .slip.floating.leaving {
+    animation: none;
+  }
+  .slip-check circle,
+  .slip-check path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .slip-confetti {
+    display: none;
   }
 }
 

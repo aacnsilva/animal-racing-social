@@ -31,6 +31,7 @@ test('quotes and places a tricast', async ({ page }) => {
   await slip.getByTestId('place-bet').click();
   await expect(page.locator('[data-testid="my-bet"][data-bet-status="ACCEPTED"]')).toHaveCount(1);
   await expect.poll(() => headerBalance(page)).toBe(9975);
+  await expect(slip).toBeHidden();
 });
 
 test('builds a two-race combo and places it', async ({ page }) => {
@@ -82,4 +83,6 @@ test('rejects a stake above the balance', async ({ page }) => {
   await page.getByTestId('place-bet').click();
   await expect(page.getByTestId('bet-slip-message')).toContainText(/enough points|insufficient/i);
   await expect.poll(() => headerBalance(page)).toBe(10000);
+  await expect(page.getByTestId('bet-slip')).toBeVisible();
+  await expect(page.getByTestId('bet-slip-success')).toHaveCount(0);
 });

@@ -57,6 +57,9 @@ function statusFromBet(bet: Bet): SlipStatus {
 }
 
 const QUICK = [10, 50, 100, 500];
+const SUCCESS_HOLD_MS = 1600;
+const SUCCESS_LEAVE_MS = 320;
+const CONFETTI = Array.from({ length: 14 }, (_, i) => i);
 
 const MARKET_STATE: Record<string, string> = {
   PENDING: 'This market is not open yet.',
@@ -100,6 +103,24 @@ export function BetSlip({
   }
 
   useEffect(() => () => stopWatch.current?.(), []);
+
+  const succeeded = status?.kind === 'accepted';
+  const [leaving, setLeaving] = useState(false);
+  const [trackedSucceeded, setTrackedSucceeded] = useState(succeeded);
+  if (trackedSucceeded !== succeeded) {
+    setTrackedSucceeded(succeeded);
+    setLeaving(false);
+  }
+  const close = useEffectEvent(() => onClose());
+  useEffect(() => {
+    if (!succeeded) return undefined;
+    const leave = window.setTimeout(() => setLeaving(true), SUCCESS_HOLD_MS);
+    const done = window.setTimeout(() => close(), SUCCESS_HOLD_MS + SUCCESS_LEAVE_MS);
+    return () => {
+      window.clearTimeout(leave);
+      window.clearTimeout(done);
+    };
+  }, [succeeded]);
 
   const watchedId = status?.betId;
   useEffect(
@@ -232,7 +253,25 @@ export function BetSlip({
         : 'info';
 
   return (
-    <section className="slip floating" data-testid="bet-slip">
+    <section
+      className={`slip floating${succeeded ? ' succeeded' : ''}${leaving ? ' leaving' : ''}`}
+      data-testid="bet-slip"
+    >
+      {succeeded && (
+        <output className="slip-success" data-testid="bet-slip-success">
+          <div className="slip-confetti" aria-hidden="true">
+            {CONFETTI.map((i) => (
+              <i key={i} style={{ rotate: `${i * 25.7}deg` }} />
+            ))}
+          </div>
+          <svg className="slip-check" viewBox="0 0 52 52" aria-hidden="true">
+            <circle cx="26" cy="26" r="23" />
+            <path d="M15 27l7 7 15-16" />
+          </svg>
+          <b>Bet placed!</b>
+          <span className="small">{status?.message}</span>
+        </output>
+      )}
       <div className="slip-head">
         <h3>Bet slip</h3>
         <button className="btn ghost small" onClick={onClose} aria-label="Close bet slip">
