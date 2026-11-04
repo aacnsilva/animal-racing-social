@@ -186,7 +186,6 @@ pub(crate) struct Runner {
     pub dist: f64,
     pub speed: f64,
     pub lane: f64,
-    pub lane_target: f64,
     pub stamina: f64,
     pub phase: Phase,
     pub wait_ticks: u32,
@@ -221,12 +220,8 @@ pub(crate) struct Sim<'a> {
     pub events: Vec<TickEvent>,
     pub incidents: Vec<Incident>,
     snapshot_dist: Vec<f64>,
-    snapshot_lane: Vec<f64>,
-    snapshot_speed: Vec<f64>,
-    snapshot_active: Vec<bool>,
     ranks: Vec<u32>,
     order: Vec<usize>,
-    order_position: Vec<usize>,
     lap_crossings: Vec<(u32, f64, usize)>,
     finish_crossings: Vec<(f64, usize)>,
 }
@@ -241,7 +236,6 @@ impl<'a> Sim<'a> {
                 dist: 0.0,
                 speed: 0.0,
                 lane: f64::from(entrant.lane),
-                lane_target: f64::from(entrant.lane),
                 stamina: 100.0,
                 phase: Phase::Running,
                 wait_ticks: 0,
@@ -276,12 +270,8 @@ impl<'a> Sim<'a> {
             events: Vec::new(),
             incidents: Vec::new(),
             snapshot_dist: vec![0.0; count],
-            snapshot_lane: vec![0.0; count],
-            snapshot_speed: vec![0.0; count],
-            snapshot_active: vec![false; count],
             ranks: vec![0; count],
             order: (0..count).collect(),
-            order_position: (0..count).collect(),
             lap_crossings: Vec::with_capacity(count),
             finish_crossings: Vec::with_capacity(count),
         }
@@ -468,9 +458,7 @@ impl<'a> Sim<'a> {
             }
         }
         let mut ahead = 0;
-        for position in 0..count {
-            let index = self.order[position];
-            self.order_position[index] = position;
+        for &index in &self.order {
             self.ranks[index] = ahead + 1;
             if matches!(self.runners[index].phase, Phase::Running | Phase::Finished) {
                 ahead += 1;
@@ -482,12 +470,8 @@ impl<'a> Sim<'a> {
         self.tick += 1;
         self.events.clear();
         let count = self.runners.len();
-        for index in 0..count {
-            let runner = &self.runners[index];
-            self.snapshot_dist[index] = runner.dist;
-            self.snapshot_lane[index] = runner.lane;
-            self.snapshot_speed[index] = runner.speed;
-            self.snapshot_active[index] = runner.phase == Phase::Running && runner.wait_ticks == 0;
+        for (snapshot, runner) in self.snapshot_dist.iter_mut().zip(&self.runners) {
+            *snapshot = runner.dist;
         }
         self.sort_order();
         self.lap_crossings.clear();
@@ -606,87 +590,6 @@ impl<'a> Sim<'a> {
         libm::cbrt(available / demand)
     }
 
-    #[inline]
-    fn lane_conflict(&self, other: usize, candidate: f64) -> bool {
-        let clearance = self.race.physics.lane_clearance;
-        (self.snapshot_lane[other] - candidate).abs() < clearance
-            || (self.runners[other].lane_target - candidate).abs() < clearance
-    }
-
-    fn lane_free(&self, index: usize, candidate: f64, dist: f64) -> bool {
-        let physics = &self.race.physics;
-        let position = self.order_position[index];
-        for cursor in (0..position).rev() {
-            let other = self.order[cursor];
-            if self.snapshot_dist[other] - dist >= physics.free_lane_ahead {
-                break;
-            }
-            if self.snapshot_active[other] && self.lane_conflict(other, candidate) {
-                return false;
-            }
-        }
-        for cursor in position + 1..self.order.len() {
-            let other = self.order[cursor];
-            if self.snapshot_dist[other] - dist <= -physics.free_lane_behind {
-                break;
-            }
-            if self.snapshot_active[other] && self.lane_conflict(other, candidate) {
-                return false;
-            }
-        }
-        true
-    }
-
-    fn traffic(&mut self, index: usize, target: f64) -> f64 {
-        let physics = self.race.physics;
-        let lanes = f64::from(self.race.venue.lanes);
-        let dist = self.snapshot_dist[index];
-        let lane_now = self.runners[index].lane;
-        let mut blocker = None;
-        let position = self.order_position[index];
-        for cursor in (0..position).rev() {
-            let other = self.order[cursor];
-            let gap = self.snapshot_dist[other] - dist;
-            if gap >= physics.blocking_gap {
-                break;
-            }
-            if gap > 0.0
-                && self.snapshot_active[other]
-                && (self.snapshot_lane[other] - lane_now).abs() < physics.lane_clearance
-            {
-                blocker = Some(other);
-                break;
-            }
-        }
-        let settled = (self.runners[index].lane_target - lane_now).abs() < 1e-9;
-        match blocker {
-            Some(other) if target > self.snapshot_speed[other] => {
-                if settled {
-                    let current = self.runners[index].lane_target;
-                    for candidate in [current - 1.0, current + 1.0] {
-                        if candidate >= 1.0
-                            && candidate <= lanes
-                            && self.lane_free(index, candidate, dist)
-                        {
-                            self.runners[index].lane_target = candidate;
-                            break;
-                        }
-                    }
-                }
-                target.min(self.snapshot_speed[other] + physics.overtake_margin)
-            }
-            _ => {
-                if settled && self.runners[index].lane_target > 1.0 {
-                    let candidate = self.runners[index].lane_target - 1.0;
-                    if self.lane_free(index, candidate, dist) {
-                        self.runners[index].lane_target = candidate;
-                    }
-                }
-                target
-            }
-        }
-    }
-
     fn advance_runner<S: Streams>(
         &mut self,
         index: usize,
@@ -749,18 +652,10 @@ impl<'a> Sim<'a> {
         if runner.stumble_ticks > 0 {
             target *= incidents.stumble_target_factor;
         }
-        let target = self.traffic(index, target);
         let delta = (target - speed).clamp(-entrant.brake_step, entrant.accel_step);
         let new_speed = (speed + delta).max(0.0);
         let runner = &mut self.runners[index];
-        let lane_step = physics.lane_change_per_tick;
-        runner.lane += (runner.lane_target - runner.lane).clamp(-lane_step, lane_step);
-        let lane_factor = if segment.radius > 0.0 {
-            segment.radius / (segment.radius + (runner.lane - 1.0) * physics.lane_width)
-        } else {
-            1.0
-        };
-        let advance = new_speed * race.dt * lane_factor;
+        let advance = new_speed * race.dt;
         let relative = new_speed * runner.inverse_reference_speed;
         let cost = relative * relative * relative;
         runner.stamina = (runner.stamina

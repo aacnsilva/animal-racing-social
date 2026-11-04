@@ -145,7 +145,7 @@ async fn open_markets(
     let priced = http_post(
         &format!("{odds_url}/internal/price"),
         &serde_json::json!({ "venueId": race.venue_id, "venueVersion": race.venue_version, "species": race.species, "laps": race.laps,
-                             "engineVersion": "1.0.0", "entrants": race.wire_entrants,
+                             "engineVersion": "1.1.0", "entrants": race.wire_entrants,
                              "markets": market_specs.iter().map(|(kind, params)| serde_json::json!({ "type": kind, "params": params })).collect::<Vec<_>>() }),
     )
     .await?;
@@ -293,7 +293,7 @@ async fn schedule(args: &[String]) -> Res<()> {
     let entrants = pick_entrants(&client, &species, field).await?;
     let wire_entrants: Vec<serde_json::Value> = entrants.iter().map(wire_entrant).collect();
     let plan_request = serde_json::json!({ "venueId": venue_id, "venueVersion": venue_version, "species": species, "raceClass": race_class,
-                                           "engineVersion": "1.0.0", "entrants": wire_entrants });
+                                           "engineVersion": "1.1.0", "entrants": wire_entrants });
     let (laps, estimate) = request_plan(&engine_url, &plan_request).await?;
     let start_at = SystemTime::now() + Duration::from_secs(start_in);
     let closes_at = start_at - Duration::from_mins(1);
@@ -312,7 +312,7 @@ async fn schedule(args: &[String]) -> Res<()> {
     let producer = Producer::new(&config::kafka_brokers(), "devtool")?;
     let command = GenerateScript {
         race_id,
-        engine_version: "1.0.0".into(),
+        engine_version: "1.1.0".into(),
         venue_id: venue_id.clone(),
         venue_version: wire_venue_version,
         laps: wire_laps,
@@ -343,7 +343,7 @@ async fn schedule(args: &[String]) -> Res<()> {
         race_class: race_class.clone(),
         venue_id: venue_id.clone(),
         venue_version: wire_venue_version,
-        engine_version: "1.0.0".into(),
+        engine_version: "1.1.0".into(),
         start_at: ars_infra::time::format_rfc3339(start_at),
         laps: wire_laps,
         estimated_duration_sec: u32::try_from(estimate).context("estimate")?,

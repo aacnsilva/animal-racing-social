@@ -7,6 +7,13 @@ use race_engine_core::{EntrantState, EventKind, IncidentKind, RaceScript, Result
 fn check_ticks(script: &RaceScript, count: usize) {
     let count_u32 = u32::try_from(count).expect("entrant count fits u32");
     let length = script.track.length.0;
+    let assigned: std::collections::BTreeMap<&str, u32> = script
+        .entrants
+        .iter()
+        .map(|entrant| (entrant.id.as_str(), entrant.lane))
+        .collect();
+    let distinct_lanes: BTreeSet<u32> = assigned.values().copied().collect();
+    assert_eq!(distinct_lanes.len(), count, "two entrants share a lane");
     for (position, tick) in script.ticks.iter().enumerate() {
         assert_eq!(tick.tick as usize, position);
         assert_eq!(tick.entrants.len(), count);
@@ -21,6 +28,13 @@ fn check_ticks(script: &RaceScript, count: usize) {
             assert!(entrant.dist.0 >= 0.0 && entrant.dist.0 <= length + 1e-6);
             assert!(entrant.stamina_pct.0 >= 0.0 && entrant.stamina_pct.0 <= 100.0);
             assert!(entrant.lane.0 >= 1.0 && entrant.lane.0 <= f64::from(script.track.lanes));
+            assert_eq!(
+                entrant.lane.0.to_bits(),
+                f64::from(assigned[entrant.id.as_str()]).to_bits(),
+                "tick {} entrant {} left its lane",
+                tick.tick,
+                entrant.id
+            );
         }
         assert!(tick.lap >= 1 && tick.lap <= script.track.laps);
     }

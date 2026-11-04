@@ -124,8 +124,9 @@ e.g. `"1.0.0"`). It must contain `species.<SPECIES>.surfaceAffinity` and
 }
 ```
 
-- `dist` is total distance from the start line (0 … `track.length`); `lane`
-  is fractional for smooth lane changes; `lap` is the leader's current lap;
+- `dist` is total distance from the start line (0 … `track.length`), measured
+  per lane so every lane races the same distance; `lane` is the entrant's
+  assigned lane and never changes (since engine 1.1.0); `lap` is the leader's current lap;
   `pos` is the current as-run position (finished entrants keep their finish
   position, DNF entrants rank last by distance).
 - States: `RUNNING | SPRINTING | TIRED | STUMBLED | DNF | FINISHED`

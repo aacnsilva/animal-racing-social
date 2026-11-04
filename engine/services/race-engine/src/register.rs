@@ -14,6 +14,20 @@ pub async fn register_engine_version(db: &Db) -> Res<()> {
     let hash = hex::decode(&params.hash).context("params hash")?;
     let value = params.value();
     let conn = db.acquire().await?;
+    let retired = conn
+        .execute(
+            "UPDATE racing.engine_versions SET is_active = false
+             WHERE is_active AND split_part(engine_version, '+', 1) <> $1",
+            &[&ENGINE_VERSION],
+        )
+        .await
+        .context("retire unsupported active engine version")?;
+    if retired > 0 {
+        tracing::info!(
+            engineVersion = ENGINE_VERSION,
+            "active engine version is not supported by this binary; switching to {ENGINE_VERSION}"
+        );
+    }
     let insert = "INSERT INTO racing.engine_versions (engine_version, params, params_hash, is_active, replayable)
                   SELECT $1, $2::jsonb, $3, NOT EXISTS (SELECT 1 FROM racing.engine_versions WHERE is_active) AND $4, true
                   ON CONFLICT (engine_version) DO NOTHING";
@@ -27,6 +41,16 @@ pub async fn register_engine_version(db: &Db) -> Res<()> {
             .await
             .context("register engine version")?,
     };
+    if retired > 0 && inserted == 0 {
+        conn.execute(
+            "UPDATE racing.engine_versions SET is_active = true
+             WHERE engine_version = $1
+               AND NOT EXISTS (SELECT 1 FROM racing.engine_versions WHERE is_active)",
+            &[&ENGINE_VERSION],
+        )
+        .await
+        .context("activate engine version")?;
+    }
     if inserted > 0 {
         tracing::info!(engineVersion = ENGINE_VERSION, paramsHash = %params.hash, "registered engine version {ENGINE_VERSION} paramsHash {}", params.hash);
     }

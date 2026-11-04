@@ -125,7 +125,6 @@ fn restore<S: Streams>(
 ) {
     let race = sim.race;
     let length = race.track.length;
-    let lanes = f64::from(race.venue.lanes);
     sim.tick = revealed.tick;
     let mut finished: Vec<(u32, usize)> = Vec::new();
     let mut kick_lock: Vec<(usize, f64)> = Vec::new();
@@ -140,8 +139,6 @@ fn restore<S: Streams>(
         let runner = &mut sim.runners[index];
         runner.dist = entrant.dist.clamp(0.0, length);
         runner.speed = entrant.speed.max(0.0);
-        runner.lane = entrant.lane.clamp(1.0, lanes);
-        runner.lane_target = libm::round(runner.lane);
         runner.stamina = entrant.stamina_pct.clamp(0.0, 100.0);
         match entrant.state {
             EntrantState::Finished => {

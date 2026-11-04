@@ -86,7 +86,8 @@ target  = velocity × ageFactor
         × temperamentEffort(lap, position, staminaPct)
 speed  += clamp(target − speed, ±acceleration·dt) + noise(1 − consistency)
 stamina -= drain(effort, grade, surface)      // < 25% → TIRED, target × 0.8
-lane     : 1D blocking model; overtakes when gap & lane free
+lane     : fixed; each runner stays in its own lane for the whole race,
+           so runners never touch (no blocking, no lane changes)
 ```
 
 ### Temperament (public, fixed for life)
