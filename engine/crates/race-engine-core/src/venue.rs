@@ -117,6 +117,7 @@ impl Venue {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct TrackSegment {
     pub end: f64,
+    pub radius: f64,
     pub speed_factor: f64,
     pub speed_cap: f64,
     pub drain_factor: f64,
@@ -200,6 +201,11 @@ impl Track {
             weighted_drain += drain_factor * length;
             segments.push(TrackSegment {
                 end: position,
+                radius: if matches!(kind, SegmentKind::Curve | SegmentKind::TightCurve) {
+                    radius
+                } else {
+                    0.0
+                },
                 speed_factor: surface_affinity * affinity * grade_speed,
                 speed_cap,
                 drain_factor,

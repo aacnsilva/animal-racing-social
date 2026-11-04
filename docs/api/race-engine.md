@@ -86,8 +86,13 @@ target  = velocity × ageFactor
         × temperamentEffort(lap, position, staminaPct)
 speed  += clamp(target − speed, ±acceleration·dt) + noise(1 − consistency)
 stamina -= drain(effort, grade, surface)      // < 25% → TIRED, target × 0.8
-lane     : fixed; each runner stays in its own lane for the whole race,
-           so runners never touch (no blocking, no lane changes)
+lane     : start in the drawn lane; move one lane at a time to overtake
+           (when a slower runner is within blockingGap ahead) or toward the
+           rail, only into a lane that is clear alongside and has no slower
+           runner just ahead. Runners move front to back each tick and
+           never overlap: anyone within laneClearance laterally stays at
+           least bodyGap behind, and a lane change pauses if it would put
+           a runner alongside another
 ```
 
 ### Temperament (public, fixed for life)
