@@ -380,7 +380,7 @@ fn live_report(params: &LoadedParams, runs: u32) {
     let mut favourites = vec![(0.0_f64, 0u32, 0u32); fractions.len()];
     let mut seed = 0u64;
     for venue in support::venues() {
-        for species in SPECIES {
+        for species in support::species_for(&venue) {
             for field_seed in 1..=4u8 {
                 let field = support::varied_field(species, 8, field_seed);
                 let Ok(plan) = plan_race(params, &venue, species, &venue.class, &field) else {
