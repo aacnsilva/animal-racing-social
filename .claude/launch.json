@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "web/vite.config.ts", "web"],
+      "env": { "API_UPSTREAM": "http://localhost:8080", "SSE_UPSTREAM": "http://localhost:8080" },
+      "port": 5173
+    }
+  ]
+}
