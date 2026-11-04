@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use race_engine_core::{
-    EntrantInput, EventKind, LoadedParams, PreparedRace, RaceInputs, ResultStatus, Temperament,
-    estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
+    EntrantInput, EventKind, LoadedParams, PreparedRace, RaceInputs, ResultStatus, RevealedState,
+    Temperament, estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
 };
 
 const SPECIES: [&str; 2] = ["HORSE", "GIRAFFE"];
@@ -364,6 +364,90 @@ fn timing(params: &LoadedParams) {
     }
 }
 
+#[expect(
+    clippy::print_stdout,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "calibration report truncates tick fractions and writes to stdout"
+)]
+fn live_report(params: &LoadedParams, runs: u32) {
+    println!("== live calibration: predicted vs actual from revealed state ({runs} runs per tick)");
+    let fractions = [0.05, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95];
+    let edges = [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 0.95, 1.01];
+    let mut buckets = vec![(0.0_f64, 0u32, 0u32); edges.len() - 1];
+    let mut favourites = vec![(0.0_f64, 0u32, 0u32); fractions.len()];
+    let mut seed = 0u64;
+    for venue in support::venues() {
+        for species in SPECIES {
+            for field_seed in 1..=4u8 {
+                let field = support::varied_field(species, 8, field_seed);
+                let Ok(plan) = plan_race(params, &venue, species, &venue.class, &field) else {
+                    continue;
+                };
+                let race =
+                    PreparedRace::new(params, &venue, species, plan.laps, &field).expect("race");
+                for _ in 0..4 {
+                    seed += 1;
+                    let inputs = support::race_inputs(species, plan.laps, field.clone());
+                    let sealed =
+                        simulate(params, &venue, &inputs, &support::seed(seed)).expect("simulate");
+                    let script = &sealed.script;
+                    let winner = race.entrant_index(&script.result.order[0]).expect("winner");
+                    for (slot, fraction) in fractions.iter().enumerate() {
+                        let tick = (f64::from(script.result.finish_tick) * fraction) as u32;
+                        let Some(revealed) = RevealedState::from_script(script, tick) else {
+                            continue;
+                        };
+                        let table =
+                            estimate_probabilities(&race, Some(&revealed), runs, 4, [7; 32])
+                                .expect("estimate");
+                        let mut favourite = (0, 0.0);
+                        for entrant in 0..field.len() {
+                            let p = table.win(entrant);
+                            if p > favourite.1 {
+                                favourite = (entrant, p);
+                            }
+                            if let Some(bucket) = edges
+                                .windows(2)
+                                .position(|edge| p >= edge[0] && p < edge[1])
+                            {
+                                buckets[bucket].0 += p;
+                                buckets[bucket].1 += 1;
+                                buckets[bucket].2 += u32::from(entrant == winner);
+                            }
+                        }
+                        favourites[slot].0 += favourite.1;
+                        favourites[slot].1 += 1;
+                        favourites[slot].2 += u32::from(favourite.0 == winner);
+                    }
+                }
+            }
+        }
+    }
+    for (bucket, (sum, count, hits)) in buckets.iter().enumerate() {
+        if *count > 0 {
+            println!(
+                "win p in [{:.2},{:.2}) n {:>5} predicted {:.3} actual {:.3}",
+                edges[bucket],
+                edges[bucket + 1],
+                count,
+                sum / f64::from(*count),
+                f64::from(*hits) / f64::from(*count)
+            );
+        }
+    }
+    for (slot, (sum, count, hits)) in favourites.iter().enumerate() {
+        if *count > 0 {
+            println!(
+                "favourite at {:.2} of the race: predicted {:.3} actual {:.3}",
+                fractions[slot],
+                sum / f64::from(*count),
+                f64::from(*hits) / f64::from(*count)
+            );
+        }
+    }
+}
+
 fn main() {
     let params = support::params();
     let args: Vec<String> = std::env::args().collect();
@@ -386,6 +470,9 @@ fn main() {
     }
     if mode == "all" || mode == "incidents" {
         incident_report(&params, runs.min(200));
+    }
+    if mode == "all" || mode == "live" {
+        live_report(&params, runs);
     }
     if mode == "all" || mode == "timing" {
         timing(&params);

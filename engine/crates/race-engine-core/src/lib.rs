@@ -1,4 +1,5 @@
 mod error;
+mod hidden;
 mod inputs;
 mod outcome;
 mod params;

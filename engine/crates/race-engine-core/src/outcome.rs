@@ -1,6 +1,7 @@
 use rand_core::Rng;
 
 use crate::error::EngineError;
+use crate::hidden::{PRIOR, Posterior};
 use crate::rng::{SharedStream, Streams, fast_rng};
 use crate::script::{EntrantState, EventKind, RaceScript};
 use crate::sim::{Phase, PreparedRace, Sim};
@@ -112,6 +113,27 @@ pub fn check_revealed(
     Ok(mapping)
 }
 
+fn posteriors(race: &PreparedRace, revealed: &RevealedState, mapping: &[usize]) -> Vec<Posterior> {
+    let model = race.hidden_model();
+    let mut hidden = vec![PRIOR; race.entrants.len()];
+    for (position, entrant) in revealed.entrants.iter().enumerate() {
+        if matches!(
+            entrant.state,
+            EntrantState::Running
+                | EntrantState::Tired
+                | EntrantState::Sprinting
+                | EntrantState::Stumbled
+        ) {
+            hidden[mapping[position]] = model.posterior(
+                mapping[position],
+                revealed.tick,
+                [entrant.dist, entrant.speed, entrant.stamina_pct],
+            );
+        }
+    }
+    hidden
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -129,8 +151,9 @@ fn restore<S: Streams>(
     sim.tick = revealed.tick;
     let mut finished: Vec<(u32, usize)> = Vec::new();
     let mut kick_lock: Vec<(usize, f64)> = Vec::new();
-    for index in 0..race.entrants.len() {
-        sim.draw_hidden(index, streams);
+    let hidden = posteriors(race, revealed, mapping);
+    for (index, given) in hidden.iter().enumerate() {
+        sim.draw_hidden_given(index, streams, given);
     }
     for (position, entrant) in revealed.entrants.iter().enumerate() {
         let index = mapping[position];

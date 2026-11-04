@@ -1,4 +1,7 @@
+use std::sync::OnceLock;
+
 use crate::error::EngineError;
+use crate::hidden::{HiddenModel, PRIOR, Posterior};
 use crate::inputs::{EntrantInput, Stats, Temperament, sorted_entrants, validate_entrants};
 use crate::params::{
     IncidentParams, LoadedParams, NoiseParams, PhysicsParams, StaminaParams, TemperamentParams,
@@ -40,6 +43,7 @@ pub struct PreparedRace {
     pub(crate) stamina: StaminaParams,
     pub(crate) incidents: IncidentParams,
     pub(crate) max_ticks: u32,
+    hidden_model: OnceLock<HiddenModel>,
 }
 
 impl PreparedRace {
@@ -126,6 +130,7 @@ impl PreparedRace {
             stamina,
             incidents,
             max_ticks: engine.max_ticks,
+            hidden_model: OnceLock::new(),
         })
     }
 
@@ -166,6 +171,10 @@ impl PreparedRace {
 
     pub fn species(&self) -> &str {
         &self.species
+    }
+
+    pub(crate) fn hidden_model(&self) -> &HiddenModel {
+        self.hidden_model.get_or_init(|| HiddenModel::build(self))
     }
 
     pub fn false_start_delay_ticks(&self) -> u32 {
@@ -280,14 +289,24 @@ impl<'a> Sim<'a> {
     }
 
     pub fn draw_hidden<S: Streams>(&mut self, index: usize, streams: &mut S) {
+        self.draw_hidden_given(index, streams, &PRIOR);
+    }
+
+    pub fn draw_hidden_given<S: Streams>(
+        &mut self,
+        index: usize,
+        streams: &mut S,
+        posterior: &Posterior,
+    ) {
         let race = self.race;
         let entrant = &race.entrants[index];
         let stream = streams.entrant(index);
         let clamp = race.noise.form_clamp_sd;
-        let form_z = stream.normal().clamp(-clamp, clamp);
-        let pace_z = stream.normal().clamp(-clamp, clamp);
+        let [form, pace, pacing] = *posterior;
+        let form_z = (form.0 + form.1 * stream.normal()).clamp(-clamp, clamp);
+        let pace_z = (pace.0 + pace.1 * stream.normal()).clamp(-clamp, clamp);
         let jitter = 1.0 + entrant.tactics.kick_jitter * (2.0 * stream.uniform() - 1.0);
-        let pacing_z = stream.normal().clamp(-clamp, clamp);
+        let pacing_z = (pacing.0 + pacing.1 * stream.normal()).clamp(-clamp, clamp);
         let runner = &mut self.runners[index];
         runner.pacing_error = (1.0 + pacing_z * race.noise.pacing_error_sd).max(0.5);
         runner.form = 1.0 + form_z * entrant.form_sd;

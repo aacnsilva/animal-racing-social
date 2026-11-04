@@ -48,8 +48,15 @@ count (within `venue.lapsRange`) whose median finish lands in the class window
 (SPRINT 120–180 s, STANDARD ~300 s, ENDURANCE ≤ 600 s).
 
 `simulate_from` must work from revealed data only: positions, speeds,
-stamina, states, incidents so far. Hidden internal state (e.g. an entrant's
-current pacing decision) is re-sampled.
+stamina, states, incidents so far. Hidden internal state (an entrant's form,
+current pace and pacing error) is re-sampled, but conditioned on what has been
+revealed: once per prepared race, pilot simulations from the start fit, per tick
+and entrant, how the hidden values co-vary with distance, speed and stamina. Each
+live run then draws them from that Gaussian posterior instead of the prior, so
+a runner who is clearly ahead on form keeps that form for the rest of the race.
+Without it, late favourites were priced far too long (a runner at 85% won 97%
+of the time). `cargo run --release -p race-engine-core --example calibrate live`
+prints predicted against actual win rates.
 
 ## 4. Service API (`race-engine`)
 

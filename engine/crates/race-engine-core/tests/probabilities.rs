@@ -98,3 +98,47 @@ fn finished_entrants_are_certain() {
     }
     assert!((table.leader_at_lap(winner, 3) - 1.0).abs() < 1e-12);
 }
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a fraction of a positive finish tick truncates to a valid tick"
+)]
+#[test]
+fn live_favourites_are_priced_at_their_real_chance() {
+    let params = support::params();
+    let venue = support::venue("v_riverside_oval");
+    let mut predicted = 0.0;
+    let mut won = 0.0;
+    let mut races = 0.0;
+    for field_seed in 1..=6u8 {
+        let field = support::varied_field("HORSE", 8, field_seed);
+        let plan = plan_race(&params, &venue, "HORSE", "STANDARD", &field).expect("plan");
+        let race = PreparedRace::new(&params, &venue, "HORSE", plan.laps, &field).expect("race");
+        for race_seed in 0..6u64 {
+            let inputs = support::race_inputs("HORSE", plan.laps, field.clone());
+            let seed = support::seed(u64::from(field_seed) * 100 + race_seed);
+            let sealed = simulate(&params, &venue, &inputs, &seed).expect("simulate");
+            let script = &sealed.script;
+            let tick = (f64::from(script.result.finish_tick) * 0.5) as u32;
+            let revealed = RevealedState::from_script(script, tick).expect("tick");
+            let table =
+                estimate_probabilities(&race, Some(&revealed), 300, 2, [5; 32]).expect("estimate");
+            let favourite = (0..field.len())
+                .max_by(|a, b| table.win(*a).total_cmp(&table.win(*b)))
+                .expect("favourite");
+            predicted += table.win(favourite);
+            if race.entrant_index(&script.result.order[0]) == Some(favourite) {
+                won += 1.0;
+            }
+            races += 1.0;
+        }
+    }
+    let predicted = predicted / races;
+    let won = won / races;
+    assert!(
+        (predicted - won).abs() < 0.04,
+        "favourites priced at {predicted:.3} won {won:.3}"
+    );
+    assert!(predicted > 0.85, "favourites priced at {predicted:.3}");
+}
