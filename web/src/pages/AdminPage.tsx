@@ -714,7 +714,7 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
           </span>
         ))}
       </dl>
-      <div className="form-grid" style={{ gridTemplateColumns: '160px 110px 1fr auto' }}>
+      <div className="form-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         <label className="field">
           <span>Action</span>
           <select
@@ -742,6 +742,8 @@ function UserDetail({ userId, onChanged }: { userId: string; onChanged: () => vo
             onChange={(e) => setAmount(e.target.value)}
           />
         </label>
+      </div>
+      <div className="form-grid" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
         <label className="field">
           <span>Reason (shown to the user)</span>
           <input
