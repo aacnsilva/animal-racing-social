@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "tickMs": 500,
   "maxTicks": 2400,
   "classes": {
@@ -13,6 +13,7 @@
     "brakingFactor": 2.0,
     "curveLookAheadSec": 1.0,
     "tightCurveRadius": 30,
+    "laneWidth": 1.4,
     "raceEffort": 0.93,
     "minEffort": 0.6,
     "uphillSpeedLossPerGrade": 2.0,

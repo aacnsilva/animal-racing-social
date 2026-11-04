@@ -29,7 +29,7 @@ pub use simulate::simulate;
 pub use venue::{SegmentSpec, Venue, parse_venues};
 pub use verify::{Verification, inputs_from_script, parse_seed, verify, verify_script_bytes};
 
-pub const ENGINE_VERSION: &str = "1.1.0";
+pub const ENGINE_VERSION: &str = "1.2.0";
 
 pub const DEFAULT_PARAMS_JSON: &str = include_str!("../../../../shared/engine-params.json");
 

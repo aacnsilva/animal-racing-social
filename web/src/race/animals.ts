@@ -12,7 +12,7 @@ export type AnimalRig = {
   baseColors: THREE.Color[];
   ring: THREE.Mesh;
   ringMaterial: THREE.MeshBasicMaterial;
-  trail: THREE.Mesh;
+  trail: THREE.Group;
   trailMaterial: THREE.MeshBasicMaterial;
   species: Species;
   height: number;
@@ -87,7 +87,54 @@ function legGroup(
   return { pivot, phase, lower };
 }
 
-function addRingAndTrail(root: THREE.Group, color: THREE.Color, length: number) {
+function buildJockey(silks: THREE.Material, skin: THREE.Material, y: number, z: number, lean: number): THREE.Group {
+  const jockey = new THREE.Group();
+  jockey.position.set(0, y, z);
+  jockey.rotation.x = lean;
+  jockey.add(mesh(box(0.34, 0.42, 0.24), silks, 0, 0.2, 0));
+  jockey.add(
+    mesh(
+      cached('head', () => new THREE.IcosahedronGeometry(0.13, 0)),
+      skin,
+      0,
+      0.5,
+      0.03,
+    ),
+  );
+  jockey.add(
+    mesh(
+      cached('helmet', () => new THREE.SphereGeometry(0.15, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
+      silks,
+      0,
+      0.53,
+      0.03,
+    ),
+  );
+  jockey.add(mesh(box(0.1, 0.1, 0.38), silks, -0.2, 0.08, 0.16));
+  jockey.add(mesh(box(0.1, 0.1, 0.38), silks, 0.2, 0.08, 0.16));
+  return jockey;
+}
+
+function speedLineGeometry(length: number, width: number): THREE.BufferGeometry {
+  return cached(`speedline:${length}:${width}`, () => {
+    const geometry = new THREE.PlaneGeometry(1, length, 1, 10);
+    const position = geometry.getAttribute('position');
+    const alpha = new Float32Array(position.count * 4);
+    for (let i = 0; i < position.count; i += 1) {
+      const along = 0.5 - position.getY(i) / length;
+      position.setX(i, Math.sign(position.getX(i)) * width * (1 - along * 0.8) * 0.5);
+      position.setY(i, position.getY(i) - length / 2);
+      alpha.set([1, 1, 1, (1 - along) ** 2], i * 4);
+    }
+    position.needsUpdate = true;
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(alpha, 4));
+    geometry.rotateX(Math.PI / 2);
+    geometry.rotateZ(Math.PI / 2);
+    return geometry;
+  });
+}
+
+function addRingAndTrail(root: THREE.Group, body: THREE.Group, color: THREE.Color, length: number) {
   const ringMaterial = new THREE.MeshBasicMaterial({
     color: 0xffd34d,
     transparent: true,
@@ -102,19 +149,26 @@ function addRingAndTrail(root: THREE.Group, color: THREE.Color, length: number) 
   ring.position.y = 0.06;
   root.add(ring);
   const trailMaterial = new THREE.MeshBasicMaterial({
-    color: color.clone().lerp(new THREE.Color('#ffffff'), 0.5),
+    color: color.clone().lerp(new THREE.Color('#ffffff'), 0.6),
+    vertexColors: true,
     transparent: true,
     opacity: 0,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
-  const trail = new THREE.Mesh(
-    cached(`trail:${length}`, () => new THREE.PlaneGeometry(0.9, length * 1.6)),
-    trailMaterial,
-  );
-  trail.rotation.x = -Math.PI / 2;
-  trail.position.set(0, 0.08, -length * 1.1);
-  root.add(trail);
+  const trail = new THREE.Group();
+  const lines: [number, number, number, number][] = [
+    [0.3, 0.32, 1.0, 0.07],
+    [-0.3, 0.05, 1.4, 0.08],
+    [0.3, -0.22, 0.8, 0.06],
+    [-0.3, 0.38, 0.7, 0.05],
+  ];
+  for (const [side, y, scale, width] of lines) {
+    const line = new THREE.Mesh(speedLineGeometry(length * scale, width), trailMaterial);
+    line.position.set(side, y, -length * 0.42);
+    trail.add(line);
+  }
+  body.add(trail);
   return { ring, ringMaterial, trail, trailMaterial };
 }
 
@@ -139,31 +193,7 @@ export function buildHorse(laneHex: string): AnimalRig {
   body.add(mesh(box(0.74, 0.06, 0.7), cloth, 0, 0.36, -0.05));
   body.add(mesh(box(0.76, 0.05, 0.3), silks, 0, 0.37, -0.05));
 
-  const jockey = new THREE.Group();
-  jockey.position.set(0, 0.48, 0.12);
-  jockey.rotation.x = 0.55;
-  jockey.add(mesh(box(0.34, 0.42, 0.24), silks, 0, 0.2, 0));
-  jockey.add(
-    mesh(
-      cached('head', () => new THREE.IcosahedronGeometry(0.13, 0)),
-      skin,
-      0,
-      0.5,
-      0.03,
-    ),
-  );
-  jockey.add(
-    mesh(
-      cached('helmet', () => new THREE.SphereGeometry(0.15, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
-      silks,
-      0,
-      0.53,
-      0.03,
-    ),
-  );
-  jockey.add(mesh(box(0.1, 0.1, 0.38), silks, -0.2, 0.08, 0.16));
-  jockey.add(mesh(box(0.1, 0.1, 0.38), silks, 0.2, 0.08, 0.16));
-  body.add(jockey);
+  body.add(buildJockey(silks, skin, 0.48, 0.12, 0.55));
 
   const neck = new THREE.Group();
   neck.position.set(0, 0.2, 0.78);
@@ -195,7 +225,7 @@ export function buildHorse(laneHex: string): AnimalRig {
   ];
   for (const leg of legs) body.add(leg.pivot);
 
-  const extras = addRingAndTrail(root, lane, 2.4);
+  const extras = addRingAndTrail(root, body, lane, 2.4);
   const materials = [coat, maneMat, silks, cloth];
   return {
     root,
@@ -226,6 +256,7 @@ export function buildGiraffe(laneHex: string): AnimalRig {
   const hoof = material('#2a2119');
   const cloth = material('#f5f2ea');
   const silks = material(lane, { roughness: 0.5 });
+  const skin = material('#e7c19b');
 
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -251,6 +282,7 @@ export function buildGiraffe(laneHex: string): AnimalRig {
   }
   body.add(mesh(box(0.86, 0.06, 0.6), cloth, 0, 0.47, 0));
   body.add(mesh(box(0.88, 0.05, 0.26), silks, 0, 0.48, 0));
+  body.add(buildJockey(silks, skin, 0.5, -0.12, 0.35));
 
   const neck = new THREE.Group();
   neck.position.set(0, 0.28, 0.62);
@@ -290,7 +322,7 @@ export function buildGiraffe(laneHex: string): AnimalRig {
   legs[3].pivot.position.y = -0.1;
   for (const leg of legs) body.add(leg.pivot);
 
-  const extras = addRingAndTrail(root, lane, 2.6);
+  const extras = addRingAndTrail(root, body, lane, 2.6);
   const materials = [coat, spots, silks, cloth];
   return {
     root,
@@ -361,6 +393,6 @@ export function animateRig(rig: AnimalRig, state: EntrantState, speed: number, d
   rig.ringMaterial.color.set(state === 'STUMBLED' ? '#ff4d4d' : '#ffd34d');
   rig.ringMaterial.opacity += (ringTarget - rig.ringMaterial.opacity) * Math.min(1, dt * 6);
   rig.ring.scale.setScalar(state === 'STUMBLED' ? 1 + Math.sin(time * 10) * 0.15 : 1);
-  const trailTarget = state === 'SPRINTING' ? 0.45 : 0;
+  const trailTarget = state === 'SPRINTING' ? 0.7 : 0;
   rig.trailMaterial.opacity += (trailTarget - rig.trailMaterial.opacity) * Math.min(1, dt * 5);
 }

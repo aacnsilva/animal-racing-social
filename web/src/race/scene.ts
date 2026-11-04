@@ -12,6 +12,7 @@ export type SceneOptions = {
   segments: Segment[];
   lapLength: number;
   lanes: number;
+  laps: number;
   surface: string;
   species: Species;
   entrants: { id: string; lane: number }[];
@@ -119,6 +120,24 @@ function checkerTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+function groundQuad(track: TrackPath, s: number, from: number, to: number, half: number): THREE.BufferGeometry {
+  const a = track.point(s - half, from);
+  const b = track.point(s - half, to);
+  const c = track.point(s + half, from);
+  const d = track.point(s + half, to);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(
+      [a.x, a.y + 0.075, a.z, b.x, b.y + 0.075, b.z, c.x, c.y + 0.075, c.z, d.x, d.y + 0.075, d.z],
+      3,
+    ),
+  );
+  geometry.setIndex([0, 2, 1, 1, 2, 3]);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function coast(finishedForMs: number | null, speed: number): number {
   if (finishedForMs === null) return 0;
   const T = 6;
@@ -146,12 +165,14 @@ export class RaceScene {
   private snapCamera = true;
   private sun: THREE.DirectionalLight;
   private species: Species;
+  private laps: number;
   private disposables: { dispose: () => void }[] = [];
   onFrame: ((frame: Frame | null) => void) | null = null;
 
   constructor(container: HTMLElement, options: SceneOptions) {
     this.container = container;
     this.species = options.species;
+    this.laps = options.laps;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
@@ -361,6 +382,13 @@ export class RaceScene {
     const finish = new THREE.Mesh(finishGeometry, finishMat);
     finish.material.side = THREE.DoubleSide;
     this.add(finish);
+
+    const startMat = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide });
+    for (let lane = 1; lane <= track.lanes; lane += 1) {
+      const s = track.raceToTrack(lane, this.laps, 0);
+      const offset = track.laneOffset(lane);
+      this.add(new THREE.Mesh(groundQuad(track, s, offset - 0.68, offset + 0.68, 0.12), startMat));
+    }
 
     const gantryMat = new THREE.MeshStandardMaterial({ color: '#20302a', roughness: 0.5 });
     const inner = track.point(0, track.innerOffset() - 1.2);
@@ -652,9 +680,13 @@ export class RaceScene {
     }
   }
 
+  private trackPosition(lane: number, dist: number): number {
+    return this.track.raceToTrack(lane, this.laps, dist);
+  }
+
   private updateRunner(runner: Runner, entrant: FrameEntrant, dt: number): void {
-    const s = entrant.dist + coast(entrant.finishedForMs, entrant.finishSpeed);
-    const lateral = this.track.laneOffset(entrant.lane);
+    const s = this.trackPosition(runner.lane, entrant.dist + coast(entrant.finishedForMs, entrant.finishSpeed));
+    const lateral = this.track.laneOffset(runner.lane);
     const f = this.track.frame(s);
     const x = f.x + f.nx * lateral;
     const z = f.z + f.nz * lateral;
@@ -689,6 +721,13 @@ export class RaceScene {
   private focusPoint(frame: Frame | null, out: THREE.Vector3): { tx: number; tz: number; nx: number; nz: number } {
     const active = frame?.entrants.filter((e) => e.state !== 'DNF') ?? [];
     const moving = active.some((e) => e.speed > 0.5 || e.dist > 1);
+    if (frame && active.length && !moving) {
+      const lane = Math.min(...active.map((e) => this.runners.get(e.id)?.lane ?? e.lane));
+      const f = this.track.frame(this.trackPosition(lane, 0));
+      const lateral = this.track.laneOffset(lane);
+      out.set(f.x + f.nx * lateral, f.y, f.z + f.nz * lateral);
+      return f;
+    }
     if (!frame || !active.length || !moving) {
       const midLane = (this.track.lanes + 1) / 2;
       const f = this.track.frame(4);
@@ -698,7 +737,10 @@ export class RaceScene {
     const sorted = active.toSorted((a, b) => a.pos - b.pos);
     const leader = sorted.find((e) => e.state !== 'FINISHED') ?? sorted[0];
     const runner = this.runners.get(leader.id);
-    const s = leader.dist + coast(leader.finishedForMs, leader.finishSpeed);
+    const s = this.trackPosition(
+      runner?.lane ?? leader.lane,
+      leader.dist + coast(leader.finishedForMs, leader.finishSpeed),
+    );
     const f = this.track.frame(s);
     if (runner) out.copy(runner.world);
     else out.set(f.x, f.y, f.z);

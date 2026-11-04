@@ -151,6 +151,50 @@ export class TrackPath {
     return (lane - 1) * LANE_WIDTH;
   }
 
+  private laneEnds = new Map<number, Float64Array>();
+
+  private laneLayout(lane: number): Float64Array {
+    const known = this.laneEnds.get(lane);
+    if (known) return known;
+    const offset = this.laneOffset(lane);
+    const ends = new Float64Array(this.ranges.length);
+    let end = 0;
+    this.ranges.forEach((range, index) => {
+      const turn = range.type === 'CURVE' ? (Math.abs(range.angle) * Math.PI) / 180 : 0;
+      end += range.end - range.start + offset * turn;
+      ends[index] = end;
+    });
+    this.laneEnds.set(lane, ends);
+    return ends;
+  }
+
+  laneLapLength(lane: number): number {
+    const ends = this.laneLayout(lane);
+    return ends[ends.length - 1] ?? this.lapLength;
+  }
+
+  laneStart(lane: number, laps: number): number {
+    return laps * (this.laneLapLength(lane) - this.lapLength);
+  }
+
+  raceToTrack(lane: number, laps: number, dist: number): number {
+    const ends = this.laneLayout(lane);
+    const laneLap = this.laneLapLength(lane);
+    let position = (this.laneStart(lane, laps) + dist) % laneLap;
+    if (position < 0) position += laneLap;
+    let begin = 0;
+    for (let index = 0; index < ends.length; index += 1) {
+      const end = ends[index];
+      if (position < end || index === ends.length - 1) {
+        const range = this.ranges[index];
+        const fraction = end > begin ? (position - begin) / (end - begin) : 0;
+        return range.start + Math.min(1, Math.max(0, fraction)) * (range.end - range.start);
+      }
+      begin = end;
+    }
+    return position;
+  }
+
   get centerX(): number {
     return (this.minX + this.maxX) / 2;
   }

@@ -47,6 +47,7 @@ pub struct PhysicsParams {
     pub braking_factor: f64,
     pub curve_look_ahead_sec: f64,
     pub tight_curve_radius: f64,
+    pub lane_width: f64,
     pub race_effort: f64,
     pub min_effort: f64,
     pub uphill_speed_loss_per_grade: f64,
@@ -244,6 +245,11 @@ fn validate(params: &EngineParams) -> Result<(), EngineError> {
     }
     if params.max_ticks < 10 {
         return Err(EngineError::InvalidParams("maxTicks too small".into()));
+    }
+    if !(params.physics.lane_width.is_finite() && params.physics.lane_width >= 0.0) {
+        return Err(EngineError::InvalidParams(
+            "physics.laneWidth must be non-negative".into(),
+        ));
     }
     if params.noise.pace_update_ticks == 0 || params.stamina.replan_ticks == 0 {
         return Err(EngineError::InvalidParams(
