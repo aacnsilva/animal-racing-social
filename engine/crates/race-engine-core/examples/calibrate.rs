@@ -196,7 +196,7 @@ fn incident_report(params: &LoadedParams, races: u32) {
             let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
             let inputs = RaceInputs {
                 race_id: "1".into(),
-                engine_version: "1.2.0".into(),
+                engine_version: "1.1.0".into(),
                 species: species.into(),
                 laps: plan.laps,
                 entrants: field.clone(),

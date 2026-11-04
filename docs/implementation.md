@@ -124,13 +124,9 @@ e.g. `"1.0.0"`). It must contain `species.<SPECIES>.surfaceAffinity` and
 }
 ```
 
-- `dist` is the distance the entrant has run (0 … `track.length`), the same
-  for every lane. Lanes start staggered: lane `k` starts
-  `laps × (k − 1) × laneWidth × totalTurn` ahead along its own lane (since
-  engine 1.2.0), so everyone finishes on the shared line. `physics.laneWidth`
-  must match `LANE_WIDTH` in `web/src/lib/track.ts`; the viewer maps `dist`
-  to a track position with `TrackPath.raceToTrack`. `lane` is the entrant's
-  assigned lane and never changes; `lap` is the leader's current lap;
+- `dist` is total distance from the start line (0 … `track.length`), measured
+  per lane so every lane races the same distance; `lane` is the entrant's
+  assigned lane and never changes (since engine 1.1.0); `lap` is the leader's current lap;
   `pos` is the current as-run position (finished entrants keep their finish
   position, DNF entrants rank last by distance).
 - States: `RUNNING | SPRINTING | TIRED | STUMBLED | DNF | FINISHED`

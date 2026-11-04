@@ -256,11 +256,11 @@ impl<'a> Sim<'a> {
                 stumble_budget: f64::INFINITY,
                 segment_lap: 0,
                 segment_index: 0,
-                segment_end: 0.0,
+                segment_end: race.track.segment_end(0, 0),
                 laps_done: 0,
             })
             .collect();
-        let mut sim = Sim {
+        Sim {
             race,
             runners,
             tick: 0,
@@ -274,11 +274,7 @@ impl<'a> Sim<'a> {
             order: (0..count).collect(),
             lap_crossings: Vec::with_capacity(count),
             finish_crossings: Vec::with_capacity(count),
-        };
-        for index in 0..count {
-            sim.sync_cursor(index);
         }
-        sim
     }
 
     pub fn draw_hidden<S: Streams>(&mut self, index: usize, streams: &mut S) {
@@ -431,13 +427,11 @@ impl<'a> Sim<'a> {
     )]
     pub fn sync_cursor(&mut self, index: usize) {
         let track = &self.race.track;
-        let layout = track.lane(self.race.entrants[index].lane);
         let runner = &mut self.runners[index];
-        let position = layout.start + runner.dist;
-        let (lap, segment) = layout.locate(position);
+        let (lap, segment) = track.locate(runner.dist);
         runner.segment_lap = lap;
         runner.segment_index = segment;
-        runner.segment_end = layout.segment_end(lap, segment);
+        runner.segment_end = track.segment_end(lap, segment);
         runner.laps_done = (libm::floor(runner.dist / track.lap_length) as u32).min(track.laps);
     }
 
@@ -639,14 +633,13 @@ impl<'a> Sim<'a> {
             self.runners[index].pacing_scale = self.sustainable_scale(index, remaining);
         }
         let runner = &self.runners[index];
-        let layout = track.lane(entrant.lane);
         let segment = track.segments[runner.segment_index];
-        let ahead = &track.segments[layout.segment_ahead(
+        let ahead = track.segment_ahead(
             runner.segment_lap,
             runner.segment_index,
             runner.segment_end,
-            layout.start + dist + speed * physics.curve_look_ahead_sec,
-        )];
+            dist + speed * physics.curve_look_ahead_sec,
+        );
         let effort = self.effort(index, remaining, runner.pacing_scale);
         let mut target =
             entrant.v_top * runner.form * (1.0 + runner.pace) * segment.speed_factor * effort;
@@ -683,11 +676,11 @@ impl<'a> Sim<'a> {
             self.finish_crossings.push((time, index));
         } else {
             runner.dist = new_dist;
-            layout.advance_cursor(
+            track.advance_cursor(
                 &mut runner.segment_lap,
                 &mut runner.segment_index,
                 &mut runner.segment_end,
-                layout.start + new_dist,
+                new_dist,
             );
         }
     }

@@ -88,11 +88,6 @@ speed  += clamp(target − speed, ±acceleration·dt) + noise(1 − consistency)
 stamina -= drain(effort, grade, surface)      // < 25% → TIRED, target × 0.8
 lane     : fixed; each runner stays in its own lane for the whole race,
            so runners never touch (no blocking, no lane changes)
-stagger  : outer lanes are longer on bends (+ laneWidth × turn angle), so
-           lane k starts laps × (lane k lap − lane 1 lap) ahead; every lane
-           runs exactly track.length to the shared finish line, and
-           hills, bends and surface are looked up at the runner's real
-           spot in its own lane
 ```
 
 ### Temperament (public, fixed for life)

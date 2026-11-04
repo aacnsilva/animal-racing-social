@@ -1,6 +1,6 @@
 {
   "raceId": "424242",
-  "engineVersion": "1.2.0",
+  "engineVersion": "1.1.0",
   "species": "HORSE",
   "laps": 7,
   "seed": "a3f1c2d4e5b60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00",
@@ -79,5 +79,5 @@
       "stats": { "velocity": 15.7, "stamina": 66, "acceleration": 3.3, "consistency": 0.69 }
     }
   ],
-  "scriptHash": "c8b1346bb56be8be216c406287feb32b0dd43f99a9756b0b687a0f2dc06298b3"
+  "scriptHash": "426b9ecba93faa85258bf1650b694fbfe2ca37fa30909c357ed4afb1dd71863b"
 }

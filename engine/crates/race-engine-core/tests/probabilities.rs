@@ -94,10 +94,7 @@ fn finished_entrants_are_certain() {
         .entrant_index(&script.result.as_run[0])
         .expect("winner");
     if script.result.order[0] == script.result.as_run[0] {
-        let last = u32::try_from(field.len()).expect("field fits u32");
-        let kept_or_disqualified = table.win(winner) + table.finish_position(winner, last);
-        assert!((kept_or_disqualified - 1.0).abs() < 1e-12);
-        assert!(table.win(winner) > 0.95);
+        assert!(table.win(winner) > 0.99);
     }
     assert!((table.leader_at_lap(winner, 3) - 1.0).abs() < 1e-12);
 }

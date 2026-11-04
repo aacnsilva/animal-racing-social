@@ -131,8 +131,7 @@ export function RaceViewer({
     });
   }, [stream, live]);
 
-  const sceneKey =
-    venue && entrants.length ? `${venue.id}@${venue.version}|${race.laps}|${entrantKey}|${race.species}` : null;
+  const sceneKey = venue && entrants.length ? `${venue.id}@${venue.version}|${entrantKey}|${race.species}` : null;
 
   const createScene = useEffectEvent((SceneClass: typeof RaceScene, container: HTMLDivElement) => {
     if (!venue) return null;
@@ -141,7 +140,6 @@ export function RaceViewer({
       segments: venue.segments,
       lapLength: venue.lapLength,
       lanes: venue.lanes || 10,
-      laps: race.laps,
       surface: venue.surface || race.surface,
       species: race.species,
       entrants: entrants.map((e) => ({ id: e.entrantId, lane: e.lane })),

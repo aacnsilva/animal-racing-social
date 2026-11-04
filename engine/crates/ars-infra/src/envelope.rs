@@ -111,7 +111,7 @@ mod tests {
     fn envelope_round_trips_with_type_name() {
         let payload = Payload::ScriptSealed(ars_proto::ScriptSealed {
             race_id: 123,
-            engine_version: "1.2.0".into(),
+            engine_version: "1.1.0".into(),
             seed_hash: "aa".into(),
             script_hash: "bb".into(),
         });

@@ -124,19 +124,11 @@ pub(crate) struct TrackSegment {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct LaneLayout {
-    pub ends: Vec<f64>,
-    pub lap_length: f64,
-    pub start: f64,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct Track {
     pub lap_length: f64,
     pub laps: u32,
     pub length: f64,
     pub segments: Vec<TrackSegment>,
-    pub lanes: Vec<LaneLayout>,
     pub average_drain_factor: f64,
     pub surface_affinity: f64,
 }
@@ -172,7 +164,6 @@ impl Track {
         }
         let scale = venue.lap_length / raw_total;
         let mut segments = Vec::with_capacity(venue.segments.len());
-        let mut turns = Vec::with_capacity(venue.segments.len());
         let mut position = 0.0;
         let mut weighted_drain = 0.0;
         for (index, spec) in venue.segments.iter().enumerate() {
@@ -180,11 +171,6 @@ impl Track {
             position += length;
             let grade = spec.grade.unwrap_or(0.0).abs();
             let radius = spec.radius.unwrap_or(0.0);
-            turns.push(if spec.kind == "CURVE" {
-                spec.angle.unwrap_or(0.0).to_radians()
-            } else {
-                0.0
-            });
             let kind = match spec.kind.as_str() {
                 "CURVE" if radius < physics.tight_curve_radius => SegmentKind::TightCurve,
                 "CURVE" => SegmentKind::Curve,
@@ -223,63 +209,19 @@ impl Track {
         if let Some(last) = segments.last_mut() {
             last.end = venue.lap_length;
         }
-        let lanes = LaneLayout::build_all(venue.lanes, laps, physics.lane_width, &segments, &turns);
         Ok(Track {
             lap_length: venue.lap_length,
             laps,
             length: venue.lap_length * f64::from(laps),
             segments,
-            lanes,
             average_drain_factor: weighted_drain / venue.lap_length,
             surface_affinity,
         })
     }
 
-    pub fn lane(&self, lane: u32) -> &LaneLayout {
-        &self.lanes[lane as usize - 1]
-    }
-}
-
-impl LaneLayout {
-    fn build_all(
-        lanes: u32,
-        laps: u32,
-        lane_width: f64,
-        segments: &[TrackSegment],
-        turns: &[f64],
-    ) -> Vec<LaneLayout> {
-        let total_turn: f64 = turns.iter().sum();
-        let inner_lap = segments.last().map_or(0.0, |segment| segment.end);
-        (0..lanes)
-            .map(|lane| {
-                let offset = f64::from(lane) * lane_width;
-                let mut previous = 0.0;
-                let mut lane_end = 0.0;
-                let mut ends: Vec<f64> = segments
-                    .iter()
-                    .zip(turns)
-                    .map(|(segment, turn)| {
-                        lane_end += segment.end - previous + offset * turn;
-                        previous = segment.end;
-                        lane_end
-                    })
-                    .collect();
-                let lap_length = inner_lap + offset * total_turn;
-                if let Some(last) = ends.last_mut() {
-                    *last = lap_length;
-                }
-                LaneLayout {
-                    ends,
-                    lap_length,
-                    start: f64::from(laps) * offset * total_turn,
-                }
-            })
-            .collect()
-    }
-
     #[inline]
     pub fn segment_end(&self, lap: u32, index: usize) -> f64 {
-        f64::from(lap) * self.lap_length + self.ends[index]
+        f64::from(lap) * self.lap_length + self.segments[index].end
     }
 
     #[expect(
@@ -287,20 +229,20 @@ impl LaneLayout {
         clippy::cast_sign_loss,
         reason = "lap index is clamped non-negative and bounded by the lap count"
     )]
-    pub fn locate(&self, position: f64) -> (u32, usize) {
-        let lap = libm::floor(position / self.lap_length).max(0.0) as u32;
+    pub fn locate(&self, dist: f64) -> (u32, usize) {
+        let lap = libm::floor(dist / self.lap_length).max(0.0) as u32;
         let mut index = 0;
-        while index + 1 < self.ends.len() && position >= self.segment_end(lap, index) {
+        while index + 1 < self.segments.len() && dist >= self.segment_end(lap, index) {
             index += 1;
         }
         (lap, index)
     }
 
     #[inline]
-    pub fn advance_cursor(&self, lap: &mut u32, index: &mut usize, end: &mut f64, position: f64) {
-        while position >= *end {
+    pub fn advance_cursor(&self, lap: &mut u32, index: &mut usize, end: &mut f64, dist: f64) {
+        while dist >= *end {
             *index += 1;
-            if *index == self.ends.len() {
+            if *index == self.segments.len() {
                 *index = 0;
                 *lap += 1;
             }
@@ -309,13 +251,13 @@ impl LaneLayout {
     }
 
     #[inline]
-    pub fn segment_ahead(&self, lap: u32, index: usize, end: f64, position: f64) -> usize {
-        if position < end {
-            return index;
+    pub fn segment_ahead(&self, lap: u32, index: usize, end: f64, dist: f64) -> &TrackSegment {
+        if dist < end {
+            return &self.segments[index];
         }
         let (mut lap, mut index, mut end) = (lap, index, end);
-        self.advance_cursor(&mut lap, &mut index, &mut end, position);
-        index
+        self.advance_cursor(&mut lap, &mut index, &mut end, dist);
+        &self.segments[index]
     }
 }
 
@@ -337,40 +279,4 @@ pub fn parse_venues(text: &str) -> Result<Vec<Venue>, EngineError> {
                 .map_err(|err| EngineError::InvalidVenue(err.to_string()))
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Track, parse_venues};
-
-    const VENUES_JSON: &str = include_str!("../../../../shared/venues.json");
-
-    #[test]
-    fn every_lane_races_the_same_distance_to_a_shared_finish() {
-        let loaded = crate::default_params().expect("params");
-        let params = &loaded.params;
-        let width = params.physics.lane_width;
-        for venue in parse_venues(VENUES_JSON).expect("venues") {
-            let laps = venue.laps_range[1];
-            let species = &params.species["HORSE"];
-            let track = Track::build(&venue, laps, species, params).expect("track");
-            let inner = track.lane(1);
-            assert!(inner.start.abs() < 1e-9);
-            assert!((inner.lap_length - track.lap_length).abs() < 1e-9);
-            for lane in 1..=venue.lanes {
-                let layout = track.lane(lane);
-                let offset = f64::from(lane - 1) * width;
-                let extra = offset * core::f64::consts::TAU;
-                assert!((layout.lap_length - (track.lap_length + extra)).abs() < 1e-6);
-                let finish = layout.start + track.length;
-                let laps_in_lane = finish / layout.lap_length;
-                assert!(
-                    (laps_in_lane - f64::from(laps)).abs() < 1e-9,
-                    "{} lane {lane} does not finish on the line",
-                    venue.id
-                );
-                assert!(layout.ends.windows(2).all(|pair| pair[1] > pair[0]));
-            }
-        }
-    }
 }
