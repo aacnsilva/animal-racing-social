@@ -192,14 +192,13 @@ export type DailyReward = {
   bestStreak: number;
 };
 
-export type LifesaverState = 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY' | 'USED';
+export type LifesaverState = 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY';
 
 export type Lifesaver = {
   state: LifesaverState;
   claimable: boolean;
   amount: number;
-  freePerSeason: number;
-  freeRemaining: number;
+  usedCount: number;
   seasonId: string | null;
   usedAt: string | null;
 };

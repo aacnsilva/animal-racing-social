@@ -189,7 +189,7 @@ failure and resumes from wall-clock time.
 - `POST /internal/debit` `{ userId, seasonId, betId, amount }` → `{ balance }` | 409 `INSUFFICIENT_FUNDS`
 - `POST /internal/daily-claim` `{ userId }` → `{ amount, balance, streak }` | 409 `ALREADY_CLAIMED`
 - `POST /internal/lifesaver/status` `{ userId }` → `Lifesaver` (active season)
-- `POST /internal/lifesaver/claim` `{ userId }` → `{ amount, balance, balanceBefore }` | 409 `NOT_BUSTED` / `BETS_STILL_OPEN` / `LIFESAVER_USED`
+- `POST /internal/lifesaver/claim` `{ userId }` → `{ amount, balance, balanceBefore }` | 409 `NOT_BUSTED` / `BETS_STILL_OPEN`
 - `POST /internal/adjust` `{ userId, seasonId, amount, refId, reason }` → `{ balance }`
 - `POST /internal/ensure` `{ userId, seasonId }` → wallet
 
@@ -359,11 +359,10 @@ type LedgerEntry = {
 };
 type DailyReward = { claimable: boolean; amount: number; nextClaimAt: string; streak: number; bestStreak: number };
 type Lifesaver = {
-  state: 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY' | 'USED';
+  state: 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'READY';
   claimable: boolean;
   amount: number;
-  freePerSeason: number;
-  freeRemaining: number;
+  usedCount: number;
   seasonId: string | null;
   usedAt: string | null;
 };
@@ -438,7 +437,7 @@ type Notification = {
 | `GET /me/wallet`                         |                                                                                                                         | `Wallet`                                                                                                                                                                                                                           |
 | `GET /me/wallet/ledger`                  | `cursor,limit`                                                                                                          | `{ items: LedgerEntry[], nextCursor }`                                                                                                                                                                                             |
 | `GET /me/rewards/daily` · `POST`         |                                                                                                                         | `DailyReward` · `{ amount, balance }` (409 `ALREADY_CLAIMED`)                                                                                                                                                                      |
-| `GET /me/rewards/lifesaver` · `POST`     |                                                                                                                         | `Lifesaver` · `{ amount, balance, balanceBefore }` (409 `NOT_BUSTED`, `BETS_STILL_OPEN`, `LIFESAVER_USED`)                                                                                                                         |
+| `GET /me/rewards/lifesaver` · `POST`     |                                                                                                                         | `Lifesaver` · `{ amount, balance, balanceBefore }` (409 `NOT_BUSTED`, `BETS_STILL_OPEN`)                                                                                                                                           |
 | `GET /me/notifications`                  | `unread=true,cursor,limit`                                                                                              | `{ items: Notification[], nextCursor, unreadCount }`                                                                                                                                                                               |
 | `POST /me/notifications/read`            | `{ ids }` or `{ all: true }`                                                                                            | `{ unreadCount }`                                                                                                                                                                                                                  |
 | `GET /me/notification-settings` · `PUT`  | `{ enabled, types }`                                                                                                    | `{ enabled, types }`                                                                                                                                                                                                               |

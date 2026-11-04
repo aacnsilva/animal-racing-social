@@ -397,7 +397,7 @@ Amounts: **`SEASON_GRANT` = 10 000** points at season start (and on signup
 mid-season); **`DAILY_GRANT` = 50** points per day after that.
 Because all-in is allowed, `DAILY_GRANT` is the safety net that gets busted
 players back in the game. On top of that, a busted player (balance 0, no open
-bets) gets one free **`LIFESAVER` = 5 000** points per season; paid lifesavers
+bets) gets a free **`LIFESAVER` = 5 000** points every time (unlimited); paid lifesavers
 are on the roadmap (see `platform.md` §3a).
 
 ## 8a. Seasons & leaderboards

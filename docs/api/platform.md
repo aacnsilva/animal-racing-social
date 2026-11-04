@@ -52,23 +52,23 @@ POST /v1/me/rewards/daily   → 200 { amount, balance } | 409 ALREADY_CLAIMED
 ## 3a. Lifesaver (free rescue when busted)
 
 ```
-GET  /v1/me/rewards/lifesaver → { state, claimable, amount: 5000, freePerSeason: 1, freeRemaining, seasonId, usedAt }
+GET  /v1/me/rewards/lifesaver → { state, claimable, amount: 5000, usedCount, seasonId, usedAt }
 POST /v1/me/rewards/lifesaver → 200 { amount, balance, balanceBefore }
-                                | 409 NOT_BUSTED | BETS_STILL_OPEN | LIFESAVER_USED
+                                | 409 NOT_BUSTED | BETS_STILL_OPEN
 ```
 
-- A racer who has lost every point (balance 0 and no open bets) gets **one free
-  lifesaver per season** worth `season.lifesaverGrant` (default 5 000 points).
+- A racer who has lost every point (balance 0 and no open bets) gets a **free
+  lifesaver every time it happens** (unlimited) worth `season.lifesaverGrant` (default 5 000 points).
 - `state`: `AFLOAT` (still has points), `WAITING_ON_BETS` (balance 0 but bets may
-  still pay out), `READY`, `USED`, `NO_SEASON`.
-- Ledger `LIFESAVER` with `refId = free:<seasonId>`. The `(user, type, refId)`
-  unique key makes it once per season even under retries; the wallet row lock
-  serialises concurrent claims.
+  still pay out), `READY`, `NO_SEASON`. `usedCount` and `usedAt` (latest) cover this season.
+- Ledger `LIFESAVER` with `refId = free:<seasonId>:<usedCount>`. The
+  `(user, type, refId)` unique key makes each claim idempotent under retries and
+  double clicks; the wallet row lock serialises concurrent claims.
 - The web client pops an animated rescue (racer overboard, lifebuoy throw, haul
-  out of the water, balance counting up) the first time it sees `READY`, and keeps
-  an SOS button in the header until it is used.
+  out of the water, balance counting up) the first time it sees `READY` after each
+  bust, and keeps an SOS button in the header until it is used.
 - Roadmap: paid lifesavers. They will reuse the `LIFESAVER` entry type with
-  `refId = paid:<purchaseId>`, so the free one and paid ones never collide.
+  `refId = paid:<purchaseId>`, so free and paid ones never collide.
 
 ## 4. Admin API
 
