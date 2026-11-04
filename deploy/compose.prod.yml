@@ -320,7 +320,7 @@ services:
   alloy:
     image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/alloy:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    mem_limit: 256m
+    mem_limit: 384m
     <<: *logging
     cgroup: host
     environment:
@@ -342,7 +342,7 @@ services:
   grafana:
     image: ${REGISTRY:-ghcr.io/aacnsilva/animal-racing-social}/grafana:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    mem_limit: 192m
+    mem_limit: 384m
     <<: *logging
     environment:
       GF_SERVER_ROOT_URL: https://${DOMAIN}/grafana/
