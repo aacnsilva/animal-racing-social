@@ -12,10 +12,10 @@ test('browses animals and an animal profile', async ({ page }) => {
   await expect(page.getByText(/velocity/i).first()).toBeVisible();
 });
 
-test('lists the 12 venues and shows a track map', async ({ page }) => {
+test('lists the 18 venues and shows a track map', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('nav-venues').click();
-  await expect(page.getByTestId('venue-card')).toHaveCount(12);
+  await expect(page.getByTestId('venue-card')).toHaveCount(18);
   await page.locator('[data-testid="venue-card"][data-venue-id="v_dune_loop"]').click();
   await expect(page.getByRole('heading', { name: 'Dune Loop' })).toBeVisible();
   await expect(page.getByRole('img', { name: 'Track map' })).toBeVisible();
