@@ -58,7 +58,8 @@ CREATE UNIQUE INDEX ON identity.refresh_tokens (token_hash);
 -- ───────────────────────────── stable ─────────────────────────────
 
 CREATE TABLE stable.species (                                   -- [G]
-  species            TEXT PRIMARY KEY,   -- HORSE | GIRAFFE
+  species            TEXT PRIMARY KEY,   -- HORSE | GIRAFFE | SHARK | OCTOPUS
+  habitat            TEXT NOT NULL DEFAULT 'TERRAIN' CHECK (habitat IN ('TERRAIN','AQUATIC')),
   max_career_days    INT  NOT NULL,      -- 140
   life_stages        JSONB NOT NULL,     -- {"ROOKIE":[0,25],"PRIME":[25,95],"VETERAN":[95,140]}
   age_curve          JSONB NOT NULL,     -- ageFactor control points per career day
@@ -123,7 +124,11 @@ CREATE TABLE racing.venues (                                    -- [G] immutable
   version      INT  NOT NULL,
   name         TEXT NOT NULL,
   race_class   TEXT NOT NULL CHECK (race_class IN ('SPRINT','STANDARD','ENDURANCE')),
-  surface      TEXT NOT NULL CHECK (surface IN ('DIRT','GRASS','SAND','MUD','ICE')),
+  surface      TEXT NOT NULL CHECK (surface IN
+                 ('DIRT','GRASS','SAND','MUD','ICE','POOL','AQUARIUM','OPEN_SEA')),
+  habitat      TEXT NOT NULL GENERATED ALWAYS AS (
+                 CASE WHEN surface IN ('POOL','AQUARIUM','OPEN_SEA') THEN 'AQUATIC' ELSE 'TERRAIN' END
+               ) STORED,
   lanes        INT  NOT NULL DEFAULT 10,
   lap_length   NUMERIC(8,2) NOT NULL,
   laps_min     INT NOT NULL,
@@ -134,6 +139,7 @@ CREATE TABLE racing.venues (                                    -- [G] immutable
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (venue_id, version)
 );
+CREATE INDEX ON racing.venues (race_class, habitat);
 
 CREATE TABLE racing.engine_versions (                           -- [G]
   engine_version  TEXT PRIMARY KEY,      -- semver of race-engine-core
@@ -220,7 +226,7 @@ CREATE TABLE racing.programme (                                 -- [G] singleton
   version          INT PRIMARY KEY,
   races_per_hour   INT NOT NULL DEFAULT 3,
   class_mix        JSONB NOT NULL,     -- per-hour slot pattern
-  species_rotation TEXT[] NOT NULL,    -- {'HORSE','GIRAFFE'}
+  species_rotation TEXT[] NOT NULL,    -- {'HORSE','SHARK','GIRAFFE','OCTOPUS'}
   horizon_hours    INT NOT NULL DEFAULT 24,
   recovery_minutes JSONB NOT NULL,     -- {"SPRINT":60,"STANDARD":90,"ENDURANCE":120}
   effective_from   TIMESTAMPTZ NOT NULL,
