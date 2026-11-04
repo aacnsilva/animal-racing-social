@@ -3,7 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { laneColor, laneText, surfaceColors, TrackPath } from '../lib/track';
 import type { Segment, Species } from '../lib/types';
 import { animateRig, buildAnimal, type AnimalRig } from './animals';
+import { rng, stripGeometry, wallGeometry } from './geometry';
 import type { Frame, FrameEntrant, FrameSource } from './playback';
+import { buildWaterVenue, waterTheme, type WaterTheme } from './water';
 
 export type CameraMode = 'follow' | 'tv' | 'overview';
 
@@ -28,79 +30,6 @@ type Runner = {
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
-
-function rng(seedText: string): () => number {
-  let seed = 2166136261;
-  for (let i = 0; i < seedText.length; i += 1) seed = Math.imul(seed ^ seedText.charCodeAt(i), 16777619);
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function stripGeometry(
-  track: TrackPath,
-  a: number,
-  b: number,
-  yA: number,
-  yB: number,
-  step: number,
-  sideways = true,
-): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  const samples = track.samples(step);
-  const p = { x: 0, y: 0, z: 0 };
-  samples.forEach((s, i) => {
-    track.point(s, a, p);
-    positions.push(p.x, p.y + yA, p.z);
-    track.point(s, b, p);
-    positions.push(p.x, (sideways ? p.y : p.y) + yB, p.z);
-    uvs.push(0, s / 4, 1, s / 4);
-    if (i > 0) {
-      const base = (i - 1) * 2;
-      if (track.winding > 0) indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-      else indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
-    }
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function wallGeometry(
-  track: TrackPath,
-  lateral: number,
-  bottom: number,
-  top: number,
-  step: number,
-  relativeBottom: boolean,
-): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const samples = track.samples(step);
-  const p = { x: 0, y: 0, z: 0 };
-  samples.forEach((s, i) => {
-    track.point(s, lateral, p);
-    positions.push(p.x, relativeBottom ? p.y + bottom : bottom, p.z);
-    positions.push(p.x, p.y + top, p.z);
-    if (i > 0) {
-      const base = (i - 1) * 2;
-      indices.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
-    }
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
 
 function checkerTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -147,6 +76,13 @@ export class RaceScene {
   private sun: THREE.DirectionalLight;
   private species: Species;
   private disposables: { dispose: () => void }[] = [];
+  private animateWater: ((time: number) => void) | null = null;
+  private waterFog: {
+    level: number;
+    below: boolean | null;
+    water: { color: THREE.Color; near: number; far: number };
+    air: { color: THREE.Color; near: number; far: number };
+  } | null = null;
   onFrame: ((frame: Frame | null) => void) | null = null;
 
   constructor(container: HTMLElement, options: SceneOptions) {
@@ -245,6 +181,7 @@ export class RaceScene {
     const cz = track.centerZ;
     const random = rng(options.venueId);
 
+    const theme = waterTheme(options.surface);
     this.scene.background = new THREE.Color(colors.sky);
     this.scene.fog = new THREE.Fog(colors.fog, size * 2.2, size * 6.5);
 
@@ -263,63 +200,77 @@ export class RaceScene {
     this.add(this.sun);
     this.add(this.sun.target);
 
-    const groundMat = new THREE.MeshStandardMaterial({ color: colors.ground, roughness: 1, flatShading: true });
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(size * 5, 64), groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(cx, -0.05, cz);
-    ground.receiveShadow = true;
-    this.add(ground);
+    if (theme) {
+      const water = buildWaterVenue(theme, track, random, colors);
+      this.add(water.group);
+      this.disposables.push(...water.textures);
+      this.animateWater = water.animate;
+      const underwaterFar: Record<WaterTheme, number> = { POOL: 150, AQUARIUM: 130, OPEN_SEA: 110 };
+      this.waterFog = {
+        level: water.level,
+        below: null,
+        water: { color: new THREE.Color(colors.fog), near: 2, far: underwaterFar[theme] },
+        air: { color: new THREE.Color(colors.sky), near: size * 1.5, far: size * 6 },
+      };
+    } else {
+      const groundMat = new THREE.MeshStandardMaterial({ color: colors.ground, roughness: 1, flatShading: true });
+      const ground = new THREE.Mesh(new THREE.CircleGeometry(size * 5, 64), groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.set(cx, -0.05, cz);
+      ground.receiveShadow = true;
+      this.add(ground);
 
-    const infieldPoints = track.samples(2).map((s) => {
-      const p = track.point(s, track.innerOffset() - 0.8);
-      return new THREE.Vector2(p.x, -p.z);
-    });
-    const infield = new THREE.Mesh(
-      new THREE.ShapeGeometry(new THREE.Shape(infieldPoints)),
-      new THREE.MeshStandardMaterial({ color: colors.infield, roughness: 1, side: THREE.DoubleSide }),
-    );
-    infield.rotation.x = -Math.PI / 2;
-    infield.position.y = 0.0;
-    infield.receiveShadow = true;
-    this.add(infield);
-
-    const trackMat = new THREE.MeshStandardMaterial({
-      color: colors.track,
-      roughness: options.surface === 'ICE' ? 0.25 : 0.95,
-      metalness: options.surface === 'ICE' ? 0.15 : 0,
-    });
-    const ribbon = new THREE.Mesh(
-      stripGeometry(track, track.innerOffset(), track.outerOffset(), 0.04, 0.04, 1),
-      trackMat,
-    );
-    ribbon.receiveShadow = true;
-    this.add(ribbon);
-
-    const lineMat = new THREE.MeshBasicMaterial({
-      color: '#ffffff',
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false,
-    });
-    for (let lane = 1; lane < track.lanes; lane += 1) {
-      const offset = track.laneOffset(lane) + 0.7;
-      this.add(new THREE.Mesh(stripGeometry(track, offset - 0.04, offset + 0.04, 0.06, 0.06, 1), lineMat));
-    }
-
-    const railMat = new THREE.MeshStandardMaterial({ color: '#f7f7f2', roughness: 0.6, side: THREE.DoubleSide });
-    for (const lateral of [track.innerOffset() - 0.3, track.outerOffset() + 0.3]) {
-      this.add(new THREE.Mesh(wallGeometry(track, lateral, 0.92, 1.06, 1, true), railMat));
-      const posts = track.samples(6);
-      const postMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 1.05, 0.08), railMat, posts.length);
-      const m = new THREE.Matrix4();
-      const p = { x: 0, y: 0, z: 0 };
-      posts.forEach((s, i) => {
-        track.point(s, lateral, p);
-        m.makeTranslation(p.x, p.y + 0.52, p.z);
-        postMesh.setMatrixAt(i, m);
+      const infieldPoints = track.samples(2).map((s) => {
+        const p = track.point(s, track.innerOffset() - 0.8);
+        return new THREE.Vector2(p.x, -p.z);
       });
-      postMesh.castShadow = true;
-      this.add(postMesh);
+      const infield = new THREE.Mesh(
+        new THREE.ShapeGeometry(new THREE.Shape(infieldPoints)),
+        new THREE.MeshStandardMaterial({ color: colors.infield, roughness: 1, side: THREE.DoubleSide }),
+      );
+      infield.rotation.x = -Math.PI / 2;
+      infield.position.y = 0.0;
+      infield.receiveShadow = true;
+      this.add(infield);
+
+      const trackMat = new THREE.MeshStandardMaterial({
+        color: colors.track,
+        roughness: options.surface === 'ICE' ? 0.25 : 0.95,
+        metalness: options.surface === 'ICE' ? 0.15 : 0,
+      });
+      const ribbon = new THREE.Mesh(
+        stripGeometry(track, track.innerOffset(), track.outerOffset(), 0.04, 0.04, 1),
+        trackMat,
+      );
+      ribbon.receiveShadow = true;
+      this.add(ribbon);
+
+      const lineMat = new THREE.MeshBasicMaterial({
+        color: '#ffffff',
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+      });
+      for (let lane = 1; lane < track.lanes; lane += 1) {
+        const offset = track.laneOffset(lane) + 0.7;
+        this.add(new THREE.Mesh(stripGeometry(track, offset - 0.04, offset + 0.04, 0.06, 0.06, 1), lineMat));
+      }
+
+      const railMat = new THREE.MeshStandardMaterial({ color: '#f7f7f2', roughness: 0.6, side: THREE.DoubleSide });
+      for (const lateral of [track.innerOffset() - 0.3, track.outerOffset() + 0.3]) {
+        this.add(new THREE.Mesh(wallGeometry(track, lateral, 0.92, 1.06, 1, true), railMat));
+        const posts = track.samples(6);
+        const postMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 1.05, 0.08), railMat, posts.length);
+        const m = new THREE.Matrix4();
+        const p = { x: 0, y: 0, z: 0 };
+        posts.forEach((s, i) => {
+          track.point(s, lateral, p);
+          m.makeTranslation(p.x, p.y + 0.52, p.z);
+          postMesh.setMatrixAt(i, m);
+        });
+        postMesh.castShadow = true;
+        this.add(postMesh);
+      }
     }
 
     if (track.maxY > 0.05) {
@@ -385,8 +336,10 @@ export class RaceScene {
     banner.castShadow = true;
     this.add(banner);
 
-    this.buildGrandstand(random);
-    this.buildDecor(options.surface, random, colors);
+    if (!theme) {
+      this.buildGrandstand(random);
+      this.buildDecor(options.surface, random, colors);
+    }
   }
 
   private buildGrandstand(random: () => number): void {
@@ -716,7 +669,7 @@ export class RaceScene {
     const normal = new THREE.Vector3(f.nx, 0, f.nz);
     const desiredPos = new THREE.Vector3();
     const desiredTarget = new THREE.Vector3();
-    const tall = this.species === 'GIRAFFE' ? 1.6 : 1;
+    const tall = this.species === 'GIRAFFE' ? 1.6 : this.species === 'OCTOPUS' ? 1.15 : 1;
     if (this.mode === 'follow') {
       desiredPos
         .copy(focus)
@@ -776,11 +729,26 @@ export class RaceScene {
     }
   }
 
+  private updateWaterFog(): void {
+    const water = this.waterFog;
+    const fog = this.scene.fog;
+    if (!water || !(fog instanceof THREE.Fog) || !(this.scene.background instanceof THREE.Color)) return;
+    const below = this.camera.position.y < water.level;
+    if (below === water.below) return;
+    water.below = below;
+    const look = below ? water.water : water.air;
+    fog.color.copy(look.color);
+    fog.near = look.near;
+    fog.far = look.far;
+    this.scene.background.copy(look.color);
+  }
+
   private loop = (now: number): void => {
     this.raf = requestAnimationFrame(this.loop);
     const dt = Math.min(0.1, Math.max(0, (now - this.lastTime) / 1000));
     this.lastTime = now;
     this.elapsed += dt;
+    this.animateWater?.(this.elapsed);
     const frame = this.source?.frame(now) ?? null;
     if (frame) {
       for (const entrant of frame.entrants) {
@@ -795,6 +763,7 @@ export class RaceScene {
       this.sun.target.position.copy(focus);
     }
     this.updateCamera(frame, dt);
+    this.updateWaterFog();
     this.renderer.render(this.scene, this.camera);
     this.updateLabels();
     this.onFrame?.(frame);

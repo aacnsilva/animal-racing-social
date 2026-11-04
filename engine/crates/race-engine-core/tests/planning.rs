@@ -6,7 +6,7 @@ use race_engine_core::plan_race;
 fn every_venue_and_species_plans_inside_its_class_window() {
     let params = support::params();
     for venue in support::venues() {
-        for species in ["HORSE", "GIRAFFE"] {
+        for species in support::species_for(&venue) {
             let field = support::typical_field(species, 8);
             let plan = plan_race(&params, &venue, species, &venue.class, &field).expect("plan");
             let window = params.params.classes[&venue.class];
@@ -23,6 +23,27 @@ fn every_venue_and_species_plans_inside_its_class_window() {
                 window.max_sec
             );
             assert!(plan.in_window);
+        }
+    }
+}
+
+#[test]
+fn species_only_race_in_their_own_habitat() {
+    let params = support::params();
+    for venue in support::venues() {
+        let allowed = support::species_for(&venue);
+        for species in support::TERRAIN_SPECIES
+            .into_iter()
+            .chain(support::AQUATIC_SPECIES)
+        {
+            let field = support::typical_field(species, 8);
+            let planned = plan_race(&params, &venue, species, &venue.class, &field);
+            assert_eq!(
+                planned.is_ok(),
+                allowed.contains(&species),
+                "{} {species}",
+                venue.id
+            );
         }
     }
 }

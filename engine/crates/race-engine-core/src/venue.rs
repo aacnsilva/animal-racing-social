@@ -147,6 +147,15 @@ impl Track {
             .get(&venue.surface)
             .ok_or_else(|| EngineError::InvalidVenue(format!("unknown surface {}", venue.surface)))?
             .grip;
+        let venue_habitat = params
+            .habitat_of_surface(&venue.surface)
+            .unwrap_or_default();
+        if venue_habitat != species.habitat {
+            return Err(EngineError::InvalidVenue(format!(
+                "{} venue {} cannot host {} species",
+                venue_habitat, venue.id, species.habitat
+            )));
+        }
         let surface_affinity = *species
             .surface_affinity
             .get(&venue.surface)

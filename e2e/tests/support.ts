@@ -4,7 +4,7 @@ import { expect, request, type APIRequestContext, type Locator, type Page } from
 export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:8080';
 export const ADMIN_SUBJECT = process.env.E2E_ADMIN_SUBJECT ?? 'admin1';
 
-export type Species = 'HORSE' | 'GIRAFFE';
+export type Species = 'HORSE' | 'GIRAFFE' | 'SHARK' | 'OCTOPUS';
 export type RaceClass = 'SPRINT' | 'STANDARD' | 'ENDURANCE';
 
 export function uniqueSubject(prefix: string): string {

@@ -30,8 +30,36 @@ pub const TEMPERAMENTS: [Temperament; 4] = [
     Temperament::Steady,
 ];
 
+pub const TERRAIN_SPECIES: [&str; 2] = ["HORSE", "GIRAFFE"];
+pub const AQUATIC_SPECIES: [&str; 2] = ["SHARK", "OCTOPUS"];
+
+pub fn species_for(venue: &Venue) -> [&'static str; 2] {
+    let habitat = params()
+        .params
+        .habitat_of_surface(&venue.surface)
+        .expect("venue surface has a habitat")
+        .to_owned();
+    if habitat == "AQUATIC" {
+        AQUATIC_SPECIES
+    } else {
+        TERRAIN_SPECIES
+    }
+}
+
 pub fn typical_stats(species: &str) -> Stats {
     match species {
+        "SHARK" => Stats {
+            velocity: 15.2,
+            stamina: 72.0,
+            acceleration: 3.0,
+            consistency: 0.82,
+        },
+        "OCTOPUS" => Stats {
+            velocity: 13.2,
+            stamina: 78.0,
+            acceleration: 3.8,
+            consistency: 0.72,
+        },
         "GIRAFFE" => Stats {
             velocity: 13.6,
             stamina: 80.0,
@@ -49,6 +77,8 @@ pub fn typical_stats(species: &str) -> Stats {
 
 pub fn ranges(species: &str) -> [(f64, f64); 4] {
     match species {
+        "SHARK" => [(14.0, 16.5), (50.0, 92.0), (2.2, 3.8), (0.65, 0.95)],
+        "OCTOPUS" => [(12.0, 14.5), (60.0, 96.0), (2.8, 4.8), (0.5, 0.9)],
         "GIRAFFE" => [(12.5, 15.5), (65.0, 98.0), (1.8, 3.5), (0.55, 0.92)],
         _ => [(14.0, 17.0), (55.0, 95.0), (2.5, 4.5), (0.6, 0.95)],
     }

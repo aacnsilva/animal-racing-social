@@ -1,4 +1,15 @@
-import type { BetLeg, BetSelection, Entrant, Market, PricePolicy, RaceClass, RaceStatus, Stats } from './types';
+import type {
+  BetLeg,
+  BetSelection,
+  Entrant,
+  Habitat,
+  Market,
+  PricePolicy,
+  RaceClass,
+  RaceStatus,
+  Species,
+  Stats,
+} from './types';
 
 const pointsFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
@@ -101,7 +112,14 @@ export const STATUS_LABEL: Record<RaceStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
-export const SPECIES_ICON: Record<string, string> = { HORSE: '🐎', GIRAFFE: '🦒' };
+export const SPECIES_HABITAT: Record<Species, Habitat> = {
+  HORSE: 'TERRAIN',
+  GIRAFFE: 'TERRAIN',
+  SHARK: 'AQUATIC',
+  OCTOPUS: 'AQUATIC',
+};
+
+export const SPECIES_ICON: Record<string, string> = { HORSE: '🐎', GIRAFFE: '🦒', SHARK: '🦈', OCTOPUS: '🐙' };
 
 export const TEMPERAMENT_LABEL: Record<string, string> = {
   FRONT_RUNNER: 'Front-runner',

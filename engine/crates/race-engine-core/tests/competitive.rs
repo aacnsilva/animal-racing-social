@@ -13,6 +13,10 @@ fn varied_fields_produce_several_winners_and_beatable_favourites() {
         ("v_mudflat_ring", "HORSE", 3),
         ("v_coastal_classic", "GIRAFFE", 4),
         ("v_hairpin_hollow", "HORSE", 5),
+        ("v_lido_sprint", "SHARK", 2),
+        ("v_olympic_pool", "OCTOPUS", 3),
+        ("v_grand_aquarium", "SHARK", 2),
+        ("v_grand_aquarium", "OCTOPUS", 1),
     ] {
         let venue = support::venue(venue_id);
         let field = support::varied_field(species, 8, field_seed);
@@ -44,9 +48,15 @@ fn incidents_are_rare() {
     let params = support::params();
     let mut clean = 0;
     let mut total = 0;
-    for venue_id in ["v_meadow_dash", "v_dune_loop", "v_glacier_grand"] {
+    for venue_id in [
+        "v_meadow_dash",
+        "v_dune_loop",
+        "v_glacier_grand",
+        "v_reef_tank_rush",
+        "v_open_sea_grand",
+    ] {
         let venue = support::venue(venue_id);
-        for species in ["HORSE", "GIRAFFE"] {
+        for species in support::species_for(&venue) {
             let field = support::varied_field(species, 8, 9);
             let plan = plan_race(&params, &venue, species, &venue.class, &field).expect("plan");
             let inputs = support::race_inputs(species, plan.laps, field);

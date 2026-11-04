@@ -19,6 +19,7 @@ pub struct EngineParams {
     pub temperaments: BTreeMap<String, TemperamentParams>,
     pub incidents: IncidentParams,
     pub surfaces: BTreeMap<String, SurfaceParams>,
+    pub habitats: BTreeMap<String, Vec<String>>,
     pub species: BTreeMap<String, SpeciesParams>,
 }
 
@@ -138,6 +139,7 @@ pub struct SurfaceParams {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeciesParams {
+    pub habitat: String,
     pub reference_velocity: f64,
     pub lateral_grip: f64,
     pub surface_affinity: BTreeMap<String, f64>,
@@ -147,7 +149,7 @@ pub struct SpeciesParams {
     pub segment_stumble: BTreeMap<String, f64>,
 }
 
-pub const SURFACES: [&str; 5] = ["DIRT", "GRASS", "SAND", "MUD", "ICE"];
+pub const HABITATS: [&str; 2] = ["TERRAIN", "AQUATIC"];
 pub const SEGMENT_KINDS: [&str; 5] = ["STRAIGHT", "CURVE", "TIGHT_CURVE", "UPHILL", "DOWNHILL"];
 pub const TEMPERAMENTS: [&str; 4] = ["FRONT_RUNNER", "STALKER", "CLOSER", "STEADY"];
 
@@ -247,6 +249,45 @@ fn require_keys(
     Ok(())
 }
 
+fn validate_habitats(params: &EngineParams) -> Result<(), EngineError> {
+    for name in HABITATS {
+        match params.habitats.get(name) {
+            Some(surfaces) if !surfaces.is_empty() => {}
+            _ => {
+                return Err(EngineError::InvalidParams(format!(
+                    "habitats.{name} missing or empty"
+                )));
+            }
+        }
+    }
+    let mut habitat_surfaces = BTreeMap::new();
+    for (habitat, surfaces) in &params.habitats {
+        for surface in surfaces {
+            if !params.surfaces.contains_key(surface) {
+                return Err(EngineError::InvalidParams(format!(
+                    "habitats.{habitat} lists unknown surface {surface}"
+                )));
+            }
+            if habitat_surfaces
+                .insert(surface.as_str(), habitat.as_str())
+                .is_some()
+            {
+                return Err(EngineError::InvalidParams(format!(
+                    "surface {surface} belongs to more than one habitat"
+                )));
+            }
+        }
+    }
+    for name in params.surfaces.keys() {
+        if !habitat_surfaces.contains_key(name.as_str()) {
+            return Err(EngineError::InvalidParams(format!(
+                "surfaces.{name} belongs to no habitat"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate(params: &EngineParams) -> Result<(), EngineError> {
     if params.tick_ms == 0 {
         return Err(EngineError::InvalidParams("tickMs must be positive".into()));
@@ -273,21 +314,27 @@ fn validate(params: &EngineParams) -> Result<(), EngineError> {
             )));
         }
     }
-    for name in SURFACES {
-        if !params.surfaces.contains_key(name) {
-            return Err(EngineError::InvalidParams(format!(
-                "surfaces.{name} missing"
-            )));
-        }
-    }
+    validate_habitats(params)?;
     if params.species.is_empty() {
         return Err(EngineError::InvalidParams("species missing".into()));
     }
     for (name, species) in &params.species {
         let context = format!("species.{name}");
+        let surfaces: Vec<&str> = params
+            .habitats
+            .get(&species.habitat)
+            .ok_or_else(|| {
+                EngineError::InvalidParams(format!(
+                    "{context}.habitat {} is unknown",
+                    species.habitat
+                ))
+            })?
+            .iter()
+            .map(String::as_str)
+            .collect();
         require_keys(
             &species.surface_affinity,
-            &SURFACES,
+            &surfaces,
             &format!("{context}.surfaceAffinity"),
         )?;
         require_keys(
@@ -297,12 +344,12 @@ fn validate(params: &EngineParams) -> Result<(), EngineError> {
         )?;
         require_keys(
             &species.surface_stamina_drain,
-            &SURFACES,
+            &surfaces,
             &format!("{context}.surfaceStaminaDrain"),
         )?;
         require_keys(
             &species.surface_stumble,
-            &SURFACES,
+            &surfaces,
             &format!("{context}.surfaceStumble"),
         )?;
         require_keys(
@@ -317,6 +364,15 @@ fn validate(params: &EngineParams) -> Result<(), EngineError> {
         }
     }
     Ok(())
+}
+
+impl EngineParams {
+    pub fn habitat_of_surface(&self, surface: &str) -> Option<&str> {
+        self.habitats
+            .iter()
+            .find(|(_, surfaces)| surfaces.iter().any(|known| known == surface))
+            .map(|(habitat, _)| habitat.as_str())
+    }
 }
 
 pub fn core_version(engine_version: &str) -> &str {

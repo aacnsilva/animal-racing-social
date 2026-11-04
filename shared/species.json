@@ -1,6 +1,7 @@
 [
   {
     "species": "HORSE",
+    "habitat": "TERRAIN",
     "maxCareerDays": 140,
     "lifeStages": { "ROOKIE": [0, 25], "PRIME": [25, 95], "VETERAN": [95, 140] },
     "ageCurve": [
@@ -21,6 +22,7 @@
   },
   {
     "species": "GIRAFFE",
+    "habitat": "TERRAIN",
     "maxCareerDays": 140,
     "lifeStages": { "ROOKIE": [0, 35], "PRIME": [35, 110], "VETERAN": [110, 140] },
     "ageCurve": [
@@ -37,6 +39,48 @@
       "stamina": [65, 98],
       "acceleration": [2.0, 3.2],
       "consistency": [0.6, 0.92]
+    }
+  },
+  {
+    "species": "SHARK",
+    "habitat": "AQUATIC",
+    "maxCareerDays": 140,
+    "lifeStages": { "ROOKIE": [0, 30], "PRIME": [30, 105], "VETERAN": [105, 140] },
+    "ageCurve": [
+      [0, 0.965],
+      [30, 0.99],
+      [70, 1.0],
+      [105, 0.99],
+      [140, 0.96]
+    ],
+    "retireThreshold": 0.965,
+    "targetPoolSize": 60,
+    "baseRanges": {
+      "velocity": [14.8, 15.7],
+      "stamina": [55, 90],
+      "acceleration": [2.4, 3.6],
+      "consistency": [0.7, 0.95]
+    }
+  },
+  {
+    "species": "OCTOPUS",
+    "habitat": "AQUATIC",
+    "maxCareerDays": 140,
+    "lifeStages": { "ROOKIE": [0, 20], "PRIME": [20, 85], "VETERAN": [85, 140] },
+    "ageCurve": [
+      [0, 0.97],
+      [20, 0.99],
+      [50, 1.0],
+      [85, 0.985],
+      [140, 0.95]
+    ],
+    "retireThreshold": 0.96,
+    "targetPoolSize": 60,
+    "baseRanges": {
+      "velocity": [12.8, 13.6],
+      "stamina": [62, 95],
+      "acceleration": [3.0, 4.6],
+      "consistency": [0.55, 0.9]
     }
   }
 ]

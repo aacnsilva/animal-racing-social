@@ -4,6 +4,7 @@ import { ApiError, pathId, v, type Router } from '../../lib/http.ts';
 import { iso } from '../../lib/time.ts';
 import { activeSeason, seasonJson, type SeasonRow } from '../../lib/seasons.ts';
 import { BOARDS, type Board } from '../../domain/leaderboard.ts';
+import { SPECIES } from '../../domain/species.ts';
 import { animalDetail, animalSummary } from '../../read/animals.ts';
 import { framesFor } from '../../read/podium.ts';
 import { RACE_SELECT, raceJson } from '../../read/races.ts';
@@ -16,6 +17,7 @@ export function venueJson(row: Row) {
     name: row.name,
     class: row.race_class,
     surface: row.surface,
+    habitat: row.habitat,
     description: row.description,
     lanes: row.lanes,
     lapLength: Number(row.lap_length),
@@ -153,9 +155,7 @@ export function catalogRoutes(router: Router, deps: Deps): void {
     const limit = pageLimit(ctx.query, 50);
     const cursor = decodeCursor(ctx.query.get('cursor'));
     const status = ctx.query.get('status') ? v.oneOf(ctx.query.get('status'), 'status', ['ACTIVE', 'RETIRED']) : null;
-    const species = ctx.query.get('species')
-      ? v.oneOf(ctx.query.get('species'), 'species', ['HORSE', 'GIRAFFE'])
-      : null;
+    const species = ctx.query.get('species') ? v.oneOf(ctx.query.get('species'), 'species', SPECIES) : null;
     const rows = await many(
       deps.pool,
       `SELECT * FROM stable.animals WHERE ($1::text IS NULL OR species = $1) AND ($2::text IS NULL OR status = $2)

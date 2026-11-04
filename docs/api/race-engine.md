@@ -163,7 +163,14 @@ reveals them live and markets suspend). DQ is announced at `RaceFinished`
 ## 10. Fields & species
 
 - **6–10 entrants per race**, single species. Every venue has **10 lanes**.
-- v1 species: **horses** and **giraffes**. 1 real day = 1 animal week.
+- Species: **horses** and **giraffes** (TERRAIN), **sharks** and **octopuses**
+  (AQUATIC). 1 real day = 1 animal week.
+- **Habitats.** Every surface belongs to exactly one habitat in the engine
+  params (`habitats`): TERRAIN = DIRT/GRASS/SAND/MUD/ICE, AQUATIC =
+  POOL/AQUARIUM/OPEN_SEA (swimming pools, aquarium tanks and open sea). Each species declares its `habitat` and only carries
+  affinities for that habitat's surfaces; the engine refuses to plan or
+  simulate a species on a venue of the other habitat, and the Scheduler only
+  picks venues whose `habitat` matches the species.
 
 **Max career: 5 seasons = 140 days** (= 140 animal weeks ≈ 2.7 animal years).
 Life stages are expressed in career days:
@@ -177,15 +184,24 @@ Life stages are expressed in career days:
 | Strengths  | acceleration, tight curves, DIRT/GRASS              | top speed on long straights, stamina, SAND |
 | Weaknesses | stamina on MUD                                      | tight curves (hairpins), ICE stumble risk  |
 
+|            | Shark                                       | Octopus                              |
+| ---------- | ------------------------------------------- | ------------------------------------ |
+| ROOKIE     | days 0–30                                   | days 0–20 (matures fast)             |
+| PRIME      | days 30–105                                 | days 20–85                           |
+| VETERAN    | days 105–140                                | days 85–140                          |
+| Strengths  | top speed, long straights, OPEN_SEA         | acceleration, tight curves, AQUARIUM |
+| Weaknesses | tight curves, stumbles in AQUARIUM rockwork | open-sea stamina, less consistent    |
+
 Animals enter the roster at a random age within ROOKIE so retirements are
 staggered; the Stable keeps each species' active pool sized for its race
 programme.
 
 ## 11. Race programme
 
-- **3 races per hour, 24/7** (= 72/day), alternating species
-  (≈ 36 horse + 36 giraffe races/day). Class mix per hour configurable
-  (default: 1 SPRINT, 1 STANDARD, 1 SPRINT/ENDURANCE alternating).
+- **6 races per hour, 24/7** (= 144/day), rotating HORSE → SHARK → GIRAFFE →
+  OCTOPUS so terrain and aquatic races alternate (≈ 36 races/day per species).
+  Class mix per hour configurable (default: SPRINT, STANDARD,
+  SPRINT/ENDURANCE alternating, repeated twice an hour).
 - Cadence per race: scheduled & sealed (up to 24 h ahead) → OPEN until
   `startAt − 60 s` → LIVE 2–10 min. Races overlap; at most ~3 are LIVE at once.
 - **Recovery, not daily caps.** Animals may race any number of times per day

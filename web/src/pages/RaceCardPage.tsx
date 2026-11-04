@@ -14,6 +14,8 @@ function Filters({ species, raceClass }: { species: string; raceClass: string })
           ['', 'All species'],
           ['HORSE', '🐎 Horses'],
           ['GIRAFFE', '🦒 Giraffes'],
+          ['SHARK', '🦈 Sharks'],
+          ['OCTOPUS', '🐙 Octopuses'],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -224,7 +226,10 @@ export function RaceCardPage({ view }: { view: 'upcoming' | 'results' }) {
         <div>
           <div className="eyebrow">Race card</div>
           <h1>{view === 'upcoming' ? 'Today at the track' : 'Results'}</h1>
-          <p>Horses and giraffes, three races an hour. Every race is simulated and sealed before the first bet.</p>
+          <p>
+            Horses and giraffes on land, sharks and octopuses in the water: six races an hour. Every race is simulated
+            and sealed before the first bet.
+          </p>
         </div>
         <div className="tabs">
           <Link to={`/${search ? `?${search}` : ''}`} className={view === 'upcoming' ? 'active' : ''}>

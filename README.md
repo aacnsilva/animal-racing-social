@@ -6,7 +6,7 @@ A portfolio project: a fictional animal-racing betting app combined with an Inst
 
 ## Vision
 
-Fans follow fictional animal races (snails, turtles, ostriches, corgis...), place point-based predictions, and share the moment: photos, posts and short videos of their favourite racers, race highlights and leaderboards.
+Fans follow fictional animal races (horses and giraffes on land, sharks and octopuses in the water...), place point-based predictions, and share the moment: photos, posts and short videos of their favourite racers, race highlights and leaderboards.
 
 The project exists to showcase backend architecture at scale, with two halves that each stress a different set of distributed-systems problems.
 
@@ -73,7 +73,7 @@ Requirements: Docker with Compose v2.
 docker compose up -d --build --wait
 ```
 
-Open http://localhost:8080 and sign in with Google or GitHub. Locally both point at the mock provider on http://localhost:9000, where you can type any account id. The account id `admin1` is an admin: the Admin page can schedule a one-off race a minute or two ahead, so you don't have to wait for the programme (3 races per hour).
+Open http://localhost:8080 and sign in with Google or GitHub. Locally both point at the mock provider on http://localhost:9000, where you can type any account id. The account id `admin1` is an admin: the Admin page can schedule a one-off race a minute or two ahead, so you don't have to wait for the programme (6 races per hour).
 
 Grafana runs at http://localhost:8080/grafana (user `admin`, password `admin`) with the same dashboards, alerts and datasources as production. The stores' own UIs are on localhost only: Jaeger http://localhost:16686, VictoriaMetrics http://localhost:8428/vmui, VictoriaLogs http://localhost:9428/select/vmui. Alerts go to a fake Discord webhook on the mock server: http://localhost:9000/webhooks/discord lists what was posted.
 

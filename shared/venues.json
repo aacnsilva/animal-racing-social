@@ -5,6 +5,7 @@
     "name": "Meadow Dash",
     "class": "SPRINT",
     "surface": "GRASS",
+    "habitat": "TERRAIN",
     "description": "Flat and fast with sweeping curves: pure speed.",
     "lanes": 10,
     "lapLength": 602.74,
@@ -39,6 +40,7 @@
     "name": "Dune Drag",
     "class": "SPRINT",
     "surface": "SAND",
+    "habitat": "TERRAIN",
     "description": "Long sand straights that tax stamina.",
     "lanes": 10,
     "lapLength": 641.06,
@@ -73,6 +75,7 @@
     "name": "Frost Strip",
     "class": "SPRINT",
     "surface": "ICE",
+    "habitat": "TERRAIN",
     "description": "Short and slippery, four tight corners.",
     "lanes": 10,
     "lapLength": 523.36,
@@ -125,6 +128,7 @@
     "name": "Canyon Chute",
     "class": "SPRINT",
     "surface": "DIRT",
+    "habitat": "TERRAIN",
     "description": "Downhill start, uphill finish.",
     "lanes": 10,
     "lapLength": 611.33,
@@ -169,6 +173,7 @@
     "name": "Dune Loop",
     "class": "STANDARD",
     "surface": "SAND",
+    "habitat": "TERRAIN",
     "description": "Classic oval with a hill on the back straight.",
     "lanes": 10,
     "lapLength": 562.74,
@@ -209,6 +214,7 @@
     "name": "Riverside Oval",
     "class": "STANDARD",
     "surface": "GRASS",
+    "habitat": "TERRAIN",
     "description": "Wide and balanced: the neutral venue.",
     "lanes": 10,
     "lapLength": 614.16,
@@ -243,6 +249,7 @@
     "name": "Mudflat Ring",
     "class": "STANDARD",
     "surface": "MUD",
+    "habitat": "TERRAIN",
     "description": "Heavy going that favours stamina.",
     "lanes": 10,
     "lapLength": 561.59,
@@ -277,6 +284,7 @@
     "name": "Hairpin Hollow",
     "class": "STANDARD",
     "surface": "DIRT",
+    "habitat": "TERRAIN",
     "description": "Long straights joined by tight hairpins.",
     "lanes": 10,
     "lapLength": 575.66,
@@ -311,6 +319,7 @@
     "name": "Summit Circuit",
     "class": "ENDURANCE",
     "surface": "DIRT",
+    "habitat": "TERRAIN",
     "description": "Long climbs and descents every lap.",
     "lanes": 10,
     "lapLength": 531.33,
@@ -355,6 +364,7 @@
     "name": "Glacier Grand",
     "class": "ENDURANCE",
     "surface": "ICE",
+    "habitat": "TERRAIN",
     "description": "Long icy laps where consistency matters.",
     "lanes": 10,
     "lapLength": 539.91,
@@ -389,6 +399,7 @@
     "name": "Jungle Marathon",
     "class": "ENDURANCE",
     "surface": "MUD",
+    "habitat": "TERRAIN",
     "description": "Mixed terrain attrition race.",
     "lanes": 10,
     "lapLength": 568.5,
@@ -451,6 +462,7 @@
     "name": "Coastal Classic",
     "class": "ENDURANCE",
     "surface": "SAND",
+    "habitat": "TERRAIN",
     "description": "Long wind-swept sand straights.",
     "lanes": 10,
     "lapLength": 525.93,
@@ -477,6 +489,262 @@
     ],
     "assets": {
       "model": "venues/coastal_classic/v1.glb"
+    }
+  },
+  {
+    "id": "v_lido_sprint",
+    "version": 1,
+    "name": "Lido Sprint",
+    "class": "SPRINT",
+    "surface": "POOL",
+    "habitat": "AQUATIC",
+    "description": "An outdoor lido pool: clean lanes and sweeping turns, pure speed.",
+    "lanes": 10,
+    "lapLength": 602.74,
+    "lapsRange": [3, 4],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/lido_sprint/v1.glb"
+    }
+  },
+  {
+    "id": "v_reef_tank_rush",
+    "version": 1,
+    "name": "Reef Tank Rush",
+    "class": "SPRINT",
+    "surface": "AQUARIUM",
+    "habitat": "AQUATIC",
+    "description": "A reef aquarium tank with four tight corners along the glass.",
+    "lanes": 10,
+    "lapLength": 523.36,
+    "lapsRange": [3, 4],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 120
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 120
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 26,
+        "angle": 90
+      }
+    ],
+    "assets": {
+      "model": "venues/reef_tank_rush/v1.glb"
+    }
+  },
+  {
+    "id": "v_harbour_swell",
+    "version": 1,
+    "name": "Harbour Swell",
+    "class": "STANDARD",
+    "surface": "OPEN_SEA",
+    "habitat": "AQUATIC",
+    "description": "Open sea past the harbour wall: down into the swell and back up every lap.",
+    "lanes": 10,
+    "lapLength": 562.74,
+    "lapsRange": [6, 8],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 140
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      },
+      {
+        "type": "DOWNHILL",
+        "length": 60,
+        "grade": 0.06
+      },
+      {
+        "type": "UPHILL",
+        "length": 80,
+        "grade": 0.06
+      },
+      {
+        "type": "CURVE",
+        "radius": 45,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/harbour_swell/v1.glb"
+    }
+  },
+  {
+    "id": "v_olympic_pool",
+    "version": 1,
+    "name": "Olympic Pool",
+    "class": "STANDARD",
+    "surface": "POOL",
+    "habitat": "AQUATIC",
+    "description": "Long racing lanes joined by tight turns at each end of the pool.",
+    "lanes": 10,
+    "lapLength": 575.66,
+    "lapsRange": [6, 8],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 225
+      },
+      {
+        "type": "CURVE",
+        "radius": 20,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 225
+      },
+      {
+        "type": "CURVE",
+        "radius": 20,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/olympic_pool/v1.glb"
+    }
+  },
+  {
+    "id": "v_grand_aquarium",
+    "version": 1,
+    "name": "Grand Aquarium",
+    "class": "ENDURANCE",
+    "surface": "AQUARIUM",
+    "habitat": "AQUATIC",
+    "description": "Winding laps around the rockwork of a giant public aquarium.",
+    "lanes": 10,
+    "lapLength": 528.5,
+    "lapsRange": [12, 15],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 80
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 80
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      },
+      {
+        "type": "CURVE",
+        "radius": 30,
+        "angle": 90
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 60
+      }
+    ],
+    "assets": {
+      "model": "venues/grand_aquarium/v1.glb"
+    }
+  },
+  {
+    "id": "v_open_sea_grand",
+    "version": 1,
+    "name": "Open Sea Grand",
+    "class": "ENDURANCE",
+    "surface": "OPEN_SEA",
+    "habitat": "AQUATIC",
+    "description": "Long blue-water laps between marker buoys where stamina decides it.",
+    "lanes": 10,
+    "lapLength": 539.91,
+    "lapsRange": [12, 15],
+    "segments": [
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 35,
+        "angle": 180
+      },
+      {
+        "type": "STRAIGHT",
+        "length": 160
+      },
+      {
+        "type": "CURVE",
+        "radius": 35,
+        "angle": 180
+      }
+    ],
+    "assets": {
+      "model": "venues/open_sea_grand/v1.glb"
     }
   }
 ]

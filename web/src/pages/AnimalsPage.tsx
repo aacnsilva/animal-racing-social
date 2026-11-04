@@ -82,6 +82,8 @@ export function AnimalsPage() {
             ['', 'All'],
             ['HORSE', '🐎 Horses'],
             ['GIRAFFE', '🦒 Giraffes'],
+            ['SHARK', '🦈 Sharks'],
+            ['OCTOPUS', '🐙 Octopuses'],
           ].map(([value, label]) => (
             <button
               key={value}

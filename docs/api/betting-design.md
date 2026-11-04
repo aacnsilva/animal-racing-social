@@ -124,9 +124,10 @@ rule applies to `LEADER_AT_LAP` checkpoints. Settlement never handles dead heats
 }
 ```
 
-- **Races are single-species.** Entrants are always the same species; venues
-  are shared across species, and each species has its own surface/terrain
-  affinities.
+- **Races are single-species.** Entrants are always the same species. Venues
+  belong to a habitat (derived from the surface): terrain venues are shared by
+  horses and giraffes, aquatic venues by sharks and octopuses, and each species
+  has its own surface/segment affinities.
 
 Draft venue roster:
 
@@ -144,6 +145,17 @@ Draft venue roster:
 | ENDURANCE | Glacier Grand   | ICE     | Long laps, consistency matters        |
 | ENDURANCE | Jungle Marathon | MUD     | Mixed terrain, attrition race         |
 | ENDURANCE | Coastal Classic | SAND    | Long straights, wind-swept sand       |
+
+Aquatic venues: two swimming pools, two aquariums and two open-sea courses.
+
+| Class     | Venue          | Surface  | Character                                  |
+| --------- | -------------- | -------- | ------------------------------------------ |
+| SPRINT    | Lido Sprint    | POOL     | Outdoor lido, clean lanes, sweeping turns  |
+| SPRINT    | Reef Tank Rush | AQUARIUM | Reef tank, four tight corners by the glass |
+| STANDARD  | Harbour Swell  | OPEN_SEA | Down into the swell and back up every lap  |
+| STANDARD  | Olympic Pool   | POOL     | Long racing lanes, tight turns at each end |
+| ENDURANCE | Grand Aquarium | AQUARIUM | Winding laps around the rockwork           |
+| ENDURANCE | Open Sea Grand | OPEN_SEA | Long laps between buoys, stamina decides   |
 
 - The engine simulates in 1D (`dist`, `lane`) and looks up the segment at each
   distance for modifiers (curves penalize velocity, uphill drains stamina,

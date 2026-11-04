@@ -11,6 +11,7 @@ import { iso } from '../../lib/time.ts';
 import { DEFAULT_LIFESAVER_GRANT } from '../../domain/lifesaver.ts';
 import { validateTemplate } from '../../domain/markets.ts';
 import { validateProgramme } from '../../domain/scheduler.ts';
+import { SPECIES, SPECIES_HABITAT, SURFACES, surfaceHabitat } from '../../domain/species.ts';
 import { animalSummary } from '../../read/animals.ts';
 import { venueJson } from './catalog.ts';
 import { requireAdmin, type Deps } from './context.ts';
@@ -18,7 +19,6 @@ import { scriptBytes } from './races.ts';
 import { userWithProviders } from './auth.ts';
 
 const CLASSES = ['SPRINT', 'STANDARD', 'ENDURANCE'] as const;
-const SURFACES = ['DIRT', 'GRASS', 'SAND', 'MUD', 'ICE'] as const;
 const SEGMENTS = ['STRAIGHT', 'CURVE', 'UPHILL', 'DOWNHILL'] as const;
 
 async function audit(
@@ -212,13 +212,27 @@ export function adminRoutes(router: Router, deps: Deps): void {
       throw new ApiError(422, 'VALIDATION_FAILED', 'startAt must be at least 65 seconds in the future');
     if (startAt.getTime() > Date.now() + 48 * 3600_000)
       throw new ApiError(422, 'VALIDATION_FAILED', 'startAt must be within 48 hours');
-    const species = v.oneOf(body.species, 'species', ['HORSE', 'GIRAFFE'] as const);
+    const species = v.oneOf(body.species, 'species', SPECIES);
     const raceClass = v.oneOf(body.class, 'class', CLASSES);
     const venueId = body.venueId === undefined || body.venueId === null ? undefined : v.str(body.venueId, 'venueId');
     const fieldSize =
       body.fieldSize === undefined || body.fieldSize === null
         ? undefined
         : v.int(body.fieldSize, 'fieldSize', { min: 6, max: 10 });
+    if (venueId) {
+      const venue = await one(
+        deps.pool,
+        'SELECT habitat FROM racing.venues WHERE venue_id = $1 ORDER BY version DESC LIMIT 1',
+        [venueId],
+      );
+      if (!venue) throw new ApiError(422, 'VALIDATION_FAILED', 'Unknown venueId');
+      if (venue.habitat !== SPECIES_HABITAT[species])
+        throw new ApiError(
+          422,
+          'VALIDATION_FAILED',
+          `${species} races on ${SPECIES_HABITAT[species].toLowerCase()} venues; ${venueId} is ${venue.habitat.toLowerCase()}`,
+        );
+    }
     const raceId = newId(0);
     await tx(deps.pool, async (client) => {
       await enqueue(
@@ -408,6 +422,8 @@ export function adminRoutes(router: Router, deps: Deps): void {
         [ctx.params.venueId],
       );
       if (!latest) throw new ApiError(404, 'NOT_FOUND', 'Unknown venue');
+      if (surfaceHabitat(venue.surface) !== latest.habitat)
+        throw new ApiError(422, 'VALIDATION_FAILED', `surface must stay ${latest.habitat.toLowerCase()}`);
       const row = await insertVenue(client, ctx.params.venueId, latest.version + 1, venue, 'ACTIVE');
       await audit(client, userId, 'venue.publish', 'venue', ctx.params.venueId, venueJson(latest), venueJson(row));
       return venueJson(row);
@@ -568,7 +584,7 @@ export function adminRoutes(router: Router, deps: Deps): void {
   router.put('/v1/admin/stable/pool-size', async (ctx) => {
     const { userId } = await admin(ctx);
     const body = await ctx.body();
-    const species = v.oneOf(body.species, 'species', ['HORSE', 'GIRAFFE'] as const);
+    const species = v.oneOf(body.species, 'species', SPECIES);
     const size = v.int(body.size, 'size', { min: 20, max: 500 });
     return tx(deps.pool, async (client) => {
       const before = await one(client, 'SELECT target_pool_size FROM stable.species WHERE species = $1 FOR UPDATE', [

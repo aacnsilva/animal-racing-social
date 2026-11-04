@@ -1,4 +1,5 @@
-export type Species = 'HORSE' | 'GIRAFFE';
+export type Species = 'HORSE' | 'GIRAFFE' | 'SHARK' | 'OCTOPUS';
+export type Habitat = 'TERRAIN' | 'AQUATIC';
 export type RaceClass = 'SPRINT' | 'STANDARD' | 'ENDURANCE';
 export type Temperament = 'FRONT_RUNNER' | 'STALKER' | 'CLOSER' | 'STEADY';
 export type RaceStatus = 'SCHEDULED' | 'OPEN' | 'LOCKED' | 'LIVE' | 'FINISHED' | 'SETTLED' | 'CANCELLED';
@@ -241,6 +242,7 @@ export type Venue = {
   name: string;
   class: RaceClass;
   surface: string;
+  habitat: Habitat;
   description: string;
   lanes: number;
   lapLength: number;

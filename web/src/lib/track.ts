@@ -227,6 +227,23 @@ export const SURFACE_COLORS: Record<
   DIRT: { track: '#9a5a36', ground: '#8a7a52', infield: '#7d8a4a', accent: '#5e4a2c', sky: '#9cc4e4', fog: '#ddd2bd' },
   MUD: { track: '#5e4030', ground: '#4f6233', infield: '#56703a', accent: '#3a4326', sky: '#9fb3b6', fog: '#b9c4bb' },
   ICE: { track: '#a9d3ea', ground: '#f4f8fa', infield: '#e6eff3', accent: '#a7cde0', sky: '#a9cfea', fog: '#e4f1f8' },
+  POOL: { track: '#5cc8e6', ground: '#e9f6fb', infield: '#d9eff6', accent: '#1f5f9e', sky: '#a7dcf3', fog: '#4fb6d8' },
+  AQUARIUM: {
+    track: '#4fb3bf',
+    ground: '#d9c7a0',
+    infield: '#cdb98f',
+    accent: '#e07a6a',
+    sky: '#0b1a24',
+    fog: '#1e6676',
+  },
+  OPEN_SEA: {
+    track: '#2f86b8',
+    ground: '#d8c9a0',
+    infield: '#c9b98c',
+    accent: '#5d7f8c',
+    sky: '#0f4f7d',
+    fog: '#17608f',
+  },
 };
 
 export const surfaceColors = (surface: string) => SURFACE_COLORS[surface] ?? SURFACE_COLORS.GRASS;

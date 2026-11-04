@@ -3,7 +3,7 @@ import { Empty, ErrorNotice, Loading, Pager, SignInPrompt } from '../components/
 import { api, ApiError, qs, useSession } from '../lib/api';
 import { toast } from '../lib/app';
 import { friendlyError } from '../lib/errors';
-import { CLASS_LABEL, fmtDateTime, fmtPoints, fmtSigned, fmtTime, pickOption } from '../lib/format';
+import { CLASS_LABEL, fmtDateTime, fmtPoints, fmtSigned, fmtTime, pickOption, SPECIES_HABITAT } from '../lib/format';
 import { useAsync, usePaged } from '../lib/hooks';
 import { Link, setQuery, useLocation } from '../lib/router';
 import type { LedgerEntry, Page, Race, RaceClass, Season, Species, User, Venue } from '../lib/types';
@@ -42,7 +42,7 @@ function Card({ title, children, hint }: { title: string; children: ReactNode; h
   );
 }
 
-const SPECIES_OPTIONS: readonly Species[] = ['HORSE', 'GIRAFFE'];
+const SPECIES_OPTIONS: readonly Species[] = ['HORSE', 'GIRAFFE', 'SHARK', 'OCTOPUS'];
 const RACE_CLASS_OPTIONS: readonly RaceClass[] = ['SPRINT', 'STANDARD', 'ENDURANCE'];
 
 function fieldOf(value: unknown, key: string): unknown {
@@ -103,10 +103,15 @@ function ScheduleRace() {
             className="select"
             data-testid="admin-race-species"
             value={species}
-            onChange={(e) => setSpecies(pickOption(SPECIES_OPTIONS, e.target.value, 'HORSE'))}
+            onChange={(e) => {
+              setSpecies(pickOption(SPECIES_OPTIONS, e.target.value, 'HORSE'));
+              setVenueId('');
+            }}
           >
             <option value="HORSE">Horse</option>
             <option value="GIRAFFE">Giraffe</option>
+            <option value="SHARK">Shark</option>
+            <option value="OCTOPUS">Octopus</option>
           </select>
         </label>
         <label className="field">
@@ -146,11 +151,13 @@ function ScheduleRace() {
             data-testid="admin-race-venue"
           >
             <option value="">Random</option>
-            {(venues.data ?? []).map((venue) => (
-              <option key={venue.id} value={venue.id}>
-                {venue.name}
-              </option>
-            ))}
+            {(venues.data ?? [])
+              .filter((venue) => venue.habitat === SPECIES_HABITAT[species])
+              .map((venue) => (
+                <option key={venue.id} value={venue.id}>
+                  {venue.name}
+                </option>
+              ))}
           </select>
         </label>
         <label className="field">

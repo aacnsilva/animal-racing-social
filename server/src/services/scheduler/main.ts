@@ -22,6 +22,7 @@ import {
   type RaceClass,
   type Species,
 } from '../../domain/scheduler.ts';
+import { SPECIES_HABITAT } from '../../domain/species.ts';
 
 const FIELD_MIN = () => envInt('FIELD_MIN', 6);
 const FIELD_MAX = () => envInt('FIELD_MAX', 10);
@@ -59,11 +60,12 @@ async function seasonFor(client: Client, startAt: Date) {
   );
 }
 
-async function pickVenue(client: Client, raceClass: RaceClass, venueId?: string) {
+async function pickVenue(client: Client, species: Species, raceClass: RaceClass, venueId?: string) {
   const venues = await many(
     client,
-    `SELECT DISTINCT ON (venue_id) * FROM racing.venues WHERE race_class = $1 AND ($2::text IS NULL OR venue_id = $2) ORDER BY venue_id, version DESC`,
-    [raceClass, venueId ?? null],
+    `SELECT DISTINCT ON (venue_id) * FROM racing.venues
+     WHERE race_class = $1 AND habitat = $2 AND ($3::text IS NULL OR venue_id = $3) ORDER BY venue_id, version DESC`,
+    [raceClass, SPECIES_HABITAT[species], venueId ?? null],
   );
   const active = venues.filter((venue) => venue.status === 'ACTIVE');
   return active.length ? active[randomInt(active.length)] : undefined;
@@ -123,9 +125,9 @@ export async function scheduleRace(
     instruments.schedulerSkipped().add(1, { reason: 'no_engine' });
     return null;
   }
-  const venue = await pickVenue(client, request.raceClass, request.venueId);
+  const venue = await pickVenue(client, request.species, request.raceClass, request.venueId);
   if (!venue) {
-    log.warn('no active venue', { raceClass: request.raceClass, venueId: request.venueId });
+    log.warn('no active venue', { species: request.species, raceClass: request.raceClass, venueId: request.venueId });
     instruments.schedulerSkipped().add(1, { reason: 'no_venue' });
     return null;
   }

@@ -9,8 +9,6 @@ use race_engine_core::{
     estimate_probabilities, fast_rng, plan_race, simulate, simulate_from,
 };
 
-const SPECIES: [&str; 2] = ["HORSE", "GIRAFFE"];
-
 fn scaled(field: &[EntrantInput], factor: f64) -> Vec<EntrantInput> {
     field
         .iter()
@@ -29,7 +27,7 @@ fn scaled(field: &[EntrantInput], factor: f64) -> Vec<EntrantInput> {
 fn plan_report(params: &LoadedParams) {
     println!("== plan (typical field of 8; slow = velocity x0.94, fast = x1.06)");
     for venue in support::venues() {
-        for species in SPECIES {
+        for species in support::species_for(&venue) {
             let field = support::typical_field(species, 8);
             let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
             let slow = plan_race(params, &venue, species, &venue.class, &scaled(&field, 0.94))
@@ -76,12 +74,16 @@ fn field_report(params: &LoadedParams, runs: u32) {
         "v_glacier_grand",
         "v_jungle_marathon",
         "v_coastal_classic",
+        "v_lido_sprint",
+        "v_reef_tank_rush",
+        "v_olympic_pool",
+        "v_grand_aquarium",
     ];
     let mut favourite_total = 0.0;
     let mut favourite_count = 0.0;
     for venue_id in venue_ids {
         let venue = support::venue(venue_id);
-        for species in SPECIES {
+        for species in support::species_for(&venue) {
             for seed in 1..=3u8 {
                 let field = support::varied_field(species, 8, seed);
                 let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
@@ -137,7 +139,7 @@ fn field_report(params: &LoadedParams, runs: u32) {
 fn temperament_report(params: &LoadedParams, runs: u32) {
     println!("== temperament balance (identical stats, 2 of each temperament)");
     for venue in support::venues() {
-        for species in SPECIES {
+        for species in support::species_for(&venue) {
             let base = support::typical_stats(species);
             let field: Vec<EntrantInput> = (0..8u32)
                 .map(|index| EntrantInput {
@@ -191,12 +193,12 @@ fn incident_report(params: &LoadedParams, races: u32) {
     let mut total_races = 0u32;
     let mut clean_races = 0u32;
     for venue in support::venues() {
-        for species in SPECIES {
+        for species in support::species_for(&venue) {
             let field = support::varied_field(species, 8, 4);
             let plan = plan_race(params, &venue, species, &venue.class, &field).expect("plan");
             let inputs = RaceInputs {
                 race_id: "1".into(),
-                engine_version: "1.3.0".into(),
+                engine_version: "1.4.0".into(),
                 species: species.into(),
                 laps: plan.laps,
                 entrants: field.clone(),
@@ -299,7 +301,7 @@ fn stat_effects(params: &LoadedParams, runs: u32) {
         "v_jungle_marathon",
     ] {
         let venue = support::venue(venue_id);
-        for species in SPECIES {
+        for species in support::species_for(&venue) {
             let mut cells = Vec::new();
             for stat in ["velocity", "stamina", "acceleration", "consistency"] {
                 let base = support::typical_stats(species);

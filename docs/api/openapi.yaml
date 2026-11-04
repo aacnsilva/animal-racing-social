@@ -24,7 +24,7 @@ paths:
       parameters:
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
-        - { name: species, in: query, schema: { type: string, enum: [HORSE, GIRAFFE] } }
+        - { name: species, in: query, schema: { type: string, enum: [HORSE, GIRAFFE, SHARK, OCTOPUS] } }
         - { name: class, in: query, schema: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] } }
       responses:
         '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RacePage' } } } }
@@ -344,7 +344,8 @@ components:
         lanes: { type: integer }
         lapLength: { type: number }
         lapsRange: { type: array, items: { type: integer }, minItems: 2, maxItems: 2 }
-        surface: { type: string, enum: [DIRT, GRASS, SAND, MUD, ICE] }
+        surface: { type: string, enum: [DIRT, GRASS, SAND, MUD, ICE, POOL, AQUARIUM, OPEN_SEA] }
+        habitat: { type: string, enum: [TERRAIN, AQUATIC] }
         segments:
           type: array
           items:
@@ -427,7 +428,7 @@ components:
         id: { type: string }
         status: { $ref: '#/components/schemas/RaceStatus' }
         class: { type: string, enum: [SPRINT, STANDARD, ENDURANCE] }
-        species: { type: string, enum: [HORSE, GIRAFFE] }
+        species: { type: string, enum: [HORSE, GIRAFFE, SHARK, OCTOPUS] }
         bettingClosesAt: { type: string, format: date-time, description: 'startAt − 60 s' }
         startAt: { type: string, format: date-time }
         venueId: { type: string }

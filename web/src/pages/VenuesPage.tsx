@@ -32,8 +32,9 @@ export function VenuesPage() {
           <div className="eyebrow">Tracks</div>
           <h1>Venues</h1>
           <p>
-            Twelve fixed, versioned venues, four per race class. The 3D viewer builds each track from the same segments
-            the engine simulates.
+            Eighteen fixed, versioned venues, six per race class: terrain tracks for horses and giraffes, swimming
+            pools, aquariums and open-sea courses for sharks and octopuses. The 3D viewer builds each track from the
+            same segments the engine simulates.
           </p>
         </div>
       </div>
@@ -60,6 +61,7 @@ export function VenuesPage() {
                   <TrackMap venue={venue} mini />
                   <div className="row">
                     <h3 style={{ flex: 1 }}>{venue.name}</h3>
+                    <span className="chip">{titleCase(venue.habitat)}</span>
                     <span className="chip">{titleCase(venue.surface)}</span>
                   </div>
                   <div className="small muted">{venue.description}</div>
@@ -95,6 +97,7 @@ export function VenuePage({ id }: { id: string }) {
           <p>{v.description}</p>
         </div>
         <div className="row wrap">
+          <span className="chip">{titleCase(v.habitat)}</span>
           <span className="chip">{titleCase(v.surface)}</span>
           <span className="chip">{v.lapLength.toFixed(2)} m lap</span>
           <span className="chip">
@@ -173,8 +176,11 @@ export function VenuePage({ id }: { id: string }) {
         )}
         <Pager hasMore={history.hasMore} loading={history.loading} onMore={history.loadMore} />
         <div className="tiny muted" style={{ marginTop: 8 }}>
-          {SPECIES_ICON.HORSE} and {SPECIES_ICON.GIRAFFE} share venues; each species has its own surface and segment
-          affinities. Last updated {fmtDateTime(new Date(now).toISOString())}.
+          {v.habitat === 'AQUATIC'
+            ? `${SPECIES_ICON.SHARK} and ${SPECIES_ICON.OCTOPUS} share aquatic venues`
+            : `${SPECIES_ICON.HORSE} and ${SPECIES_ICON.GIRAFFE} share terrain venues`}
+          ; each species has its own surface and segment affinities. Last updated{' '}
+          {fmtDateTime(new Date(now).toISOString())}.
         </div>
       </section>
     </div>

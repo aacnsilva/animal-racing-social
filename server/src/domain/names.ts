@@ -89,8 +89,67 @@ const GIRAFFE_NOUNS = [
   'Zenith',
 ];
 
+const SHARK_NOUNS = [
+  'Abyss',
+  'Barracuda',
+  'Breaker',
+  'Current',
+  'Depth',
+  'Fin',
+  'Hammer',
+  'Harpoon',
+  'Mako',
+  'Marlin',
+  'Monsoon',
+  'Riptide',
+  'Shadow',
+  'Squall',
+  'Surge',
+  'Tide',
+  'Torpedo',
+  'Trench',
+  'Typhoon',
+  'Undertow',
+  'Vortex',
+  'Wake',
+  'Whitecap',
+  'Zenith',
+];
+const OCTOPUS_NOUNS = [
+  'Anemone',
+  'Barnacle',
+  'Coral',
+  'Drift',
+  'Eddy',
+  'Grotto',
+  'Inkwell',
+  'Kelp',
+  'Kraken',
+  'Lagoon',
+  'Mantle',
+  'Nautilus',
+  'Pearl',
+  'Puzzle',
+  'Ripple',
+  'Riddle',
+  'Shell',
+  'Siphon',
+  'Sucker',
+  'Tangle',
+  'Tentacle',
+  'Urchin',
+  'Whorl',
+  'Wisp',
+];
+const NOUNS: Record<string, readonly string[]> = {
+  HORSE: HORSE_NOUNS,
+  GIRAFFE: GIRAFFE_NOUNS,
+  SHARK: SHARK_NOUNS,
+  OCTOPUS: OCTOPUS_NOUNS,
+};
+
 export function animalName(species: string, random: () => number = Math.random): string {
-  const nouns = species === 'GIRAFFE' ? GIRAFFE_NOUNS : HORSE_NOUNS;
+  const nouns = NOUNS[species] ?? HORSE_NOUNS;
   const adjective = ADJECTIVES[Math.floor(random() * ADJECTIVES.length)];
   const noun = nouns[Math.floor(random() * nouns.length)];
   return `${adjective} ${noun}`;

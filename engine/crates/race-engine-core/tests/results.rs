@@ -175,9 +175,15 @@ fn check_script(script: &RaceScript) {
 #[test]
 fn scripts_have_unique_positions_and_consistent_results() {
     let params = support::params();
-    for venue_id in ["v_meadow_dash", "v_hairpin_hollow", "v_glacier_grand"] {
+    for venue_id in [
+        "v_meadow_dash",
+        "v_hairpin_hollow",
+        "v_glacier_grand",
+        "v_reef_tank_rush",
+        "v_olympic_pool",
+    ] {
         let venue = support::venue(venue_id);
-        for species in ["HORSE", "GIRAFFE"] {
+        for species in support::species_for(&venue) {
             for value in 0..4 {
                 let inputs = support::race_inputs(
                     species,

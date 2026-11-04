@@ -238,7 +238,7 @@ type Podium = Frame & { score: number; endedAt: string };
 type AnimalSummary = {
   id: string;
   name: string;
-  species: 'HORSE' | 'GIRAFFE';
+  species: 'HORSE' | 'GIRAFFE' | 'SHARK' | 'OCTOPUS';
   status: 'ACTIVE' | 'RETIRED';
   ageWeeks: number;
   careerDay: number;
@@ -276,7 +276,7 @@ type Race = {
   seasonId: string;
   status: 'SCHEDULED' | 'OPEN' | 'LOCKED' | 'LIVE' | 'FINISHED' | 'SETTLED' | 'CANCELLED';
   class: 'SPRINT' | 'STANDARD' | 'ENDURANCE';
-  species: 'HORSE' | 'GIRAFFE';
+  species: 'HORSE' | 'GIRAFFE' | 'SHARK' | 'OCTOPUS';
   venueId: string;
   venueVersion: number;
   venueName: string;

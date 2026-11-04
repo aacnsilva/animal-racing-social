@@ -2,32 +2,69 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { isAvailable, slotPlan, slotsBetween, validateProgramme, type Programme } from '../src/domain/scheduler.ts';
+import { SPECIES_HABITAT, surfaceHabitat } from '../src/domain/species.ts';
 
 const programme: Programme = JSON.parse(readFileSync(new URL('../../shared/programme.json', import.meta.url), 'utf8'));
 
 void describe('programme slots', () => {
-  void it('produces three aligned slots per hour', () => {
+  void it('produces six aligned slots per hour', () => {
     const slots = slotsBetween(new Date('2026-10-30T12:05:00Z'), new Date('2026-10-30T13:00:00Z'), programme);
     assert.deepEqual(
       slots.map((s) => s.toISOString()),
-      ['2026-10-30T12:20:00.000Z', '2026-10-30T12:40:00.000Z', '2026-10-30T13:00:00.000Z'],
+      [
+        '2026-10-30T12:10:00.000Z',
+        '2026-10-30T12:20:00.000Z',
+        '2026-10-30T12:30:00.000Z',
+        '2026-10-30T12:40:00.000Z',
+        '2026-10-30T12:50:00.000Z',
+        '2026-10-30T13:00:00.000Z',
+      ],
     );
   });
 
-  void it('alternates species and follows the class mix', () => {
+  void it('alternates terrain and aquatic species and follows the class mix', () => {
     const plans = slotsBetween(new Date('2026-10-30T12:00:00Z'), new Date('2026-10-30T13:59:00Z'), programme).map(
       (slot) => slotPlan(slot, programme),
     );
     assert.deepEqual(
       plans.map((p) => p.raceClass),
-      ['SPRINT', 'STANDARD', 'SPRINT', 'SPRINT', 'STANDARD', 'ENDURANCE'],
+      [
+        'SPRINT',
+        'STANDARD',
+        'SPRINT',
+        'SPRINT',
+        'STANDARD',
+        'SPRINT',
+        'SPRINT',
+        'STANDARD',
+        'ENDURANCE',
+        'SPRINT',
+        'STANDARD',
+        'ENDURANCE',
+      ],
     );
-    const species = plans.map((p) => p.species);
-    for (let i = 1; i < species.length; i++) assert.notEqual(species[i], species[i - 1]);
+    const habitats = plans.map((p) => SPECIES_HABITAT[p.species]);
+    for (let i = 1; i < habitats.length; i++) assert.notEqual(habitats[i], habitats[i - 1]);
+    assert.deepEqual(new Set(plans.map((p) => p.species)), new Set(['HORSE', 'GIRAFFE', 'SHARK', 'OCTOPUS']));
+  });
+
+  void it('pairs every species with a habitat that has venues for every class', () => {
+    const venues: { class: string; surface: string; habitat: string }[] = JSON.parse(
+      readFileSync(new URL('../../shared/venues.json', import.meta.url), 'utf8'),
+    );
+    for (const venue of venues) assert.equal(surfaceHabitat(venue.surface), venue.habitat, venue.surface);
+    for (const species of programme.speciesRotation) {
+      for (const raceClass of ['SPRINT', 'STANDARD', 'ENDURANCE']) {
+        assert.ok(
+          venues.some((venue) => venue.class === raceClass && venue.habitat === SPECIES_HABITAT[species]),
+          `${species} has no ${raceClass} venue`,
+        );
+      }
+    }
   });
 
   void it('validates admin programmes', () => {
-    assert.equal(validateProgramme(programme).racesPerHour, 3);
+    assert.equal(validateProgramme(programme).racesPerHour, 6);
     assert.throws(() => validateProgramme({ ...programme, racesPerHour: 0 }));
     assert.throws(() => validateProgramme({ ...programme, speciesRotation: ['ANT'] }));
   });

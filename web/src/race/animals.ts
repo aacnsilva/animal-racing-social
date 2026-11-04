@@ -15,6 +15,11 @@ export type AnimalRig = {
   trail: THREE.Group;
   trailMaterial: THREE.MeshBasicMaterial;
   species: Species;
+  swimmer: boolean;
+  riderTail: THREE.Group | null;
+  baseY: number;
+  neckBase: number;
+  neckSwing: number;
   height: number;
   gait: number;
   stride: number;
@@ -113,6 +118,79 @@ function buildJockey(silks: THREE.Material, skin: THREE.Material, y: number, z: 
   jockey.add(mesh(box(0.1, 0.1, 0.38), silks, -0.2, 0.08, 0.16));
   jockey.add(mesh(box(0.1, 0.1, 0.38), silks, 0.2, 0.08, 0.16));
   return jockey;
+}
+
+const TAIL_REST = 1.45;
+
+const HAIR_COLORS = ['#d8452e', '#f2c14e', '#3b2a20', '#7a4fd0', '#2fa7a0', '#f28ab2', '#e9e4d0'];
+
+function laneHash(laneHex: string): number {
+  let hash = 0;
+  for (const char of laneHex) hash = (hash * 31 + char.charCodeAt(0)) % 9973;
+  return hash;
+}
+
+function buildMermaid(
+  lane: THREE.Color,
+  laneHex: string,
+  y: number,
+  z: number,
+  lean: number,
+): { rider: THREE.Group; tail: THREE.Group; materials: THREE.MeshStandardMaterial[] } {
+  const hash = laneHash(laneHex);
+  const skin = material(['#e7c19b', '#c68a5e', '#8d5a3b', '#f1d2b6'][hash % 4]);
+  const hair = material(HAIR_COLORS[hash % HAIR_COLORS.length], { roughness: 0.6 });
+  const scales = material(lane.clone().lerp(new THREE.Color('#2fb8a6'), 0.45), { roughness: 0.35, metalness: 0.25 });
+  const fin = material(lane.clone().lerp(new THREE.Color('#9ff0e0'), 0.55), { roughness: 0.35, metalness: 0.2 });
+  const top = material(lane.clone().lerp(new THREE.Color('#ffffff'), 0.15), { roughness: 0.5 });
+
+  const rider = new THREE.Group();
+  rider.position.set(0, y, z);
+  rider.rotation.x = lean;
+  rider.scale.setScalar(1.15);
+  rider.add(mesh(box(0.3, 0.4, 0.2), skin, 0, 0.22, 0));
+  rider.add(mesh(box(0.33, 0.16, 0.23), top, 0, 0.3, 0.005));
+  rider.add(mesh(box(0.32, 0.12, 0.22), scales, 0, 0.03, 0));
+  rider.add(
+    mesh(
+      cached('head', () => new THREE.IcosahedronGeometry(0.13, 0)),
+      skin,
+      0,
+      0.52,
+      0.03,
+    ),
+  );
+  rider.add(
+    mesh(
+      cached('hair-cap', () => new THREE.SphereGeometry(0.15, 6, 4, 0, Math.PI * 2, 0, Math.PI / 2)),
+      hair,
+      0,
+      0.55,
+      0.01,
+    ),
+  );
+  rider.add(mesh(box(0.28, 0.5, 0.08), hair, 0, 0.36, -0.13));
+  rider.add(mesh(box(0.08, 0.08, 0.36), skin, -0.18, 0.18, 0.15));
+  rider.add(mesh(box(0.08, 0.08, 0.36), skin, 0.18, 0.18, 0.15));
+
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.06, -0.08);
+  tail.rotation.x = TAIL_REST;
+  const upper = mesh(cyl(0.16, 0.12, 0.6, 6), scales, 0, -0.3, 0);
+  tail.add(upper);
+  const lower = new THREE.Group();
+  lower.position.set(0, -0.6, 0);
+  lower.rotation.x = -0.45;
+  lower.add(mesh(cyl(0.12, 0.05, 0.55, 6), scales, 0, -0.27, 0));
+  for (const side of [-1, 1]) {
+    const fluke = mesh(cone(0.16, 0.5, 3), fin, side * 0.17, -0.66, 0);
+    fluke.rotation.z = side * -0.75;
+    fluke.scale.set(1, 1, 0.25);
+    lower.add(fluke);
+  }
+  tail.add(lower);
+  rider.add(tail);
+  return { rider, tail, materials: [scales, top] };
 }
 
 function speedLineGeometry(length: number, width: number): THREE.BufferGeometry {
@@ -238,6 +316,11 @@ export function buildHorse(laneHex: string): AnimalRig {
     baseColors: materials.map((m) => m.color.clone()),
     ...extras,
     species: 'HORSE',
+    swimmer: false,
+    riderTail: null,
+    baseY: 1.32,
+    neckBase: 0.7,
+    neckSwing: 0.08,
     height: 2.75,
     gait: 0.62,
     stride: 6.2,
@@ -335,6 +418,11 @@ export function buildGiraffe(laneHex: string): AnimalRig {
     baseColors: materials.map((m) => m.color.clone()),
     ...extras,
     species: 'GIRAFFE',
+    swimmer: false,
+    riderTail: null,
+    baseY: 2.2,
+    neckBase: 0.42,
+    neckSwing: 0.12,
     height: 5.0,
     gait: 0.45,
     stride: 4.8,
@@ -344,8 +432,211 @@ export function buildGiraffe(laneHex: string): AnimalRig {
   };
 }
 
+export function buildShark(laneHex: string): AnimalRig {
+  const lane = new THREE.Color(laneHex);
+  const skinColor = lane.clone().lerp(new THREE.Color('#5d6f80'), 0.55);
+  const coat = material(skinColor, { roughness: 0.45 });
+  const belly = material('#e9eef2', { roughness: 0.5 });
+  const fins = material(skinColor.clone().multiplyScalar(0.7), { roughness: 0.45 });
+  const eye = material('#111418');
+  const saddle = material(lane.clone().lerp(new THREE.Color('#ffffff'), 0.15), { roughness: 0.5 });
+
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  body.position.y = 1.05;
+  root.add(body);
+  const torso = mesh(capsule(0.42, 1.6), coat);
+  torso.rotation.x = Math.PI / 2;
+  torso.scale.set(0.9, 1, 1);
+  body.add(torso);
+  const underside = mesh(capsule(0.34, 1.4), belly, 0, -0.14, 0.05);
+  underside.rotation.x = Math.PI / 2;
+  underside.scale.set(0.9, 1, 0.85);
+  body.add(underside);
+
+  const dorsal = mesh(cone(0.28, 0.75, 3), fins, 0, 0.62, -0.1);
+  dorsal.rotation.x = -0.35;
+  dorsal.scale.set(0.3, 1, 1);
+  body.add(dorsal);
+  body.add(mesh(box(0.7, 0.05, 0.36), saddle, 0, 0.4, 0.42));
+  const mermaid = buildMermaid(lane, laneHex, 0.44, 0.45, 0.45);
+  body.add(mermaid.rider);
+
+  const neck = new THREE.Group();
+  neck.position.set(0, 0, 1.0);
+  neck.rotation.x = Math.PI / 2;
+  body.add(neck);
+  const head = new THREE.Group();
+  const snout = mesh(cone(0.38, 0.75, 7), coat, 0, 0.32, 0);
+  snout.scale.set(0.9, 1, 0.8);
+  head.add(snout);
+  head.add(mesh(box(0.06, 0.06, 0.06), eye, -0.26, 0.12, 0.12));
+  head.add(mesh(box(0.06, 0.06, 0.06), eye, 0.26, 0.12, 0.12));
+  head.add(mesh(box(0.42, 0.04, 0.05), eye, 0, 0.22, -0.28));
+  neck.add(head);
+
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.02, -1.15);
+  const stalk = mesh(cyl(0.2, 0.08, 0.6, 6), coat, 0, 0, -0.25);
+  stalk.rotation.x = Math.PI / 2;
+  tail.add(stalk);
+  const upperLobe = mesh(cone(0.18, 0.8, 3), fins, 0, 0.32, -0.6);
+  upperLobe.rotation.x = -0.75;
+  upperLobe.scale.set(0.25, 1, 1);
+  tail.add(upperLobe);
+  const lowerLobe = mesh(cone(0.14, 0.5, 3), fins, 0, -0.18, -0.55);
+  lowerLobe.rotation.x = Math.PI + 0.85;
+  lowerLobe.scale.set(0.25, 1, 1);
+  tail.add(lowerLobe);
+  body.add(tail);
+
+  const pectoral = (side: number, phase: number) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.34, -0.18, 0.45);
+    pivot.rotation.z = side * 1.15;
+    const fin = mesh(cone(0.2, 0.75, 3), fins, 0, -0.36, -0.12);
+    fin.scale.set(0.25, 1, 1);
+    pivot.add(fin);
+    const lower = new THREE.Group();
+    pivot.add(lower);
+    return { pivot, phase, lower };
+  };
+  const legs = [pectoral(-1, 0), pectoral(1, 0.5)];
+  for (const leg of legs) body.add(leg.pivot);
+
+  const extras = addRingAndTrail(root, body, lane, 3.0);
+  const materials = [coat, fins, saddle, belly, ...mermaid.materials];
+  return {
+    root,
+    body,
+    neck,
+    head,
+    legs,
+    tail,
+    materials,
+    baseColors: materials.map((m) => m.color.clone()),
+    ...extras,
+    species: 'SHARK',
+    swimmer: true,
+    riderTail: mermaid.tail,
+    baseY: 1.05,
+    neckBase: Math.PI / 2,
+    neckSwing: 0.03,
+    height: 2.4,
+    gait: 0.12,
+    stride: 5.5,
+    cycle: Math.random(),
+    wobble: 0,
+    lastState: null,
+  };
+}
+
+export function buildOctopus(laneHex: string): AnimalRig {
+  const lane = new THREE.Color(laneHex);
+  const skinColor = lane.clone().lerp(new THREE.Color('#c4553d'), 0.35);
+  const coat = material(skinColor, { roughness: 0.6 });
+  const suckers = material(skinColor.clone().lerp(new THREE.Color('#ffe2cf'), 0.6));
+  const eyeWhite = material('#f7f3e8');
+  const pupil = material('#15110f');
+  const saddle = material(lane.clone().lerp(new THREE.Color('#ffffff'), 0.15), { roughness: 0.5 });
+
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  body.position.y = 1.2;
+  root.add(body);
+
+  const neck = new THREE.Group();
+  neck.position.set(0, 0.1, 0.1);
+  body.add(neck);
+  const head = new THREE.Group();
+  const mantle = mesh(
+    cached('octo-mantle', () => new THREE.SphereGeometry(0.6, 9, 7)),
+    coat,
+    0,
+    0.45,
+    -0.35,
+  );
+  mantle.scale.set(0.95, 1.05, 1.45);
+  mantle.rotation.x = -0.55;
+  head.add(mantle);
+  for (const side of [-1, 1]) {
+    head.add(
+      mesh(
+        cached('octo-eye', () => new THREE.SphereGeometry(0.13, 7, 5)),
+        eyeWhite,
+        side * 0.3,
+        0.2,
+        0.32,
+      ),
+    );
+    head.add(mesh(box(0.06, 0.12, 0.05), pupil, side * 0.32, 0.2, 0.44));
+  }
+  head.add(mesh(box(0.8, 0.05, 0.4), saddle, 0, 0.98, -0.45));
+  const mermaid = buildMermaid(lane, laneHex, 0.98, -0.35, 0.3);
+  head.add(mermaid.rider);
+  neck.add(head);
+
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.35, -1.05);
+  const siphon = mesh(cyl(0.08, 0.14, 0.3, 6), coat);
+  siphon.rotation.x = Math.PI / 2;
+  tail.add(siphon);
+  body.add(tail);
+
+  const legs: AnimalRig['legs'] = [];
+  for (let i = 0; i < 8; i += 1) {
+    const angle = ((i + 0.5) / 8) * Math.PI * 2;
+    const pivot = new THREE.Group();
+    pivot.position.set(Math.cos(angle) * 0.32, -0.05, Math.sin(angle) * 0.22 + 0.05);
+    pivot.rotation.y = -angle + Math.PI / 2;
+    pivot.rotation.z = 0.2;
+    pivot.add(mesh(cyl(0.11, 0.08, 0.55, 5), coat, 0, -0.27, 0));
+    pivot.add(mesh(box(0.06, 0.06, 0.06), suckers, 0, -0.35, 0.09));
+    const lower = new THREE.Group();
+    lower.position.set(0, -0.55, 0);
+    lower.add(mesh(cyl(0.08, 0.03, 0.6, 5), coat, 0, -0.3, 0));
+    lower.add(mesh(box(0.05, 0.05, 0.05), suckers, 0, -0.25, 0.07));
+    pivot.add(lower);
+    legs.push({ pivot, phase: (i % 2) * 0.5 + i * 0.04, lower });
+    body.add(pivot);
+  }
+
+  const extras = addRingAndTrail(root, body, lane, 2.6);
+  const materials = [coat, suckers, saddle, eyeWhite, ...mermaid.materials];
+  return {
+    root,
+    body,
+    neck,
+    head,
+    legs,
+    tail,
+    materials,
+    baseColors: materials.map((m) => m.color.clone()),
+    ...extras,
+    species: 'OCTOPUS',
+    swimmer: true,
+    riderTail: mermaid.tail,
+    baseY: 1.2,
+    neckBase: 0,
+    neckSwing: 0.06,
+    height: 3.0,
+    gait: 0.5,
+    stride: 4.2,
+    cycle: Math.random(),
+    wobble: 0,
+    lastState: null,
+  };
+}
+
+const BUILDERS: Record<Species, (laneHex: string) => AnimalRig> = {
+  HORSE: buildHorse,
+  GIRAFFE: buildGiraffe,
+  SHARK: buildShark,
+  OCTOPUS: buildOctopus,
+};
+
 export function buildAnimal(species: Species, laneHex: string): AnimalRig {
-  return species === 'GIRAFFE' ? buildGiraffe(laneHex) : buildHorse(laneHex);
+  return (BUILDERS[species] ?? buildHorse)(laneHex);
 }
 
 const GREY = new THREE.Color('#7d8580');
@@ -362,15 +653,20 @@ export function animateRig(rig: AnimalRig, state: EntrantState, speed: number, d
     leg.pivot.rotation.x = angle * amplitude;
     leg.lower.rotation.x = Math.max(0, -Math.cos((rig.cycle + leg.phase) * Math.PI * 2)) * amplitude * 1.1;
   }
-  const baseY = rig.species === 'GIRAFFE' ? 2.2 : 1.32;
-  const bob = Math.abs(Math.sin(rig.cycle * Math.PI * 2)) * 0.09 * effort;
+  const swim = rig.swimmer ? Math.sin(rig.cycle * Math.PI * 2) : 0;
+  const bob = rig.swimmer ? swim * 0.08 * effort : Math.abs(Math.sin(rig.cycle * Math.PI * 2)) * 0.09 * effort;
   const breathe = moving < 0.5 ? Math.sin(time * 2.2) * 0.015 : 0;
-  rig.body.position.y = baseY + bob + breathe - (state === 'TIRED' ? 0.08 : 0) - (state === 'DNF' ? 0.12 : 0);
-  const neckBase = rig.species === 'GIRAFFE' ? 0.42 : 0.7;
-  const neckSwing = Math.sin(rig.cycle * Math.PI * 2 + 0.6) * (rig.species === 'GIRAFFE' ? 0.12 : 0.08) * effort;
+  rig.body.position.y = rig.baseY + bob + breathe - (state === 'TIRED' ? 0.08 : 0) - (state === 'DNF' ? 0.12 : 0);
+  const neckSwing = Math.sin(rig.cycle * Math.PI * 2 + 0.6) * rig.neckSwing * effort;
   const droop = state === 'TIRED' ? 0.25 : state === 'DNF' ? 0.45 : 0;
-  rig.neck.rotation.x = neckBase + neckSwing + droop;
-  rig.tail.rotation.z = Math.sin(time * 3 + rig.cycle * 6) * 0.15;
+  rig.neck.rotation.x = rig.neckBase + neckSwing + (rig.swimmer ? droop * 0.3 : droop);
+  if (rig.swimmer) {
+    rig.tail.rotation.y = Math.sin(rig.cycle * Math.PI * 2) * (0.25 + 0.35 * effort) * (state === 'DNF' ? 0 : 1);
+    rig.body.rotation.y = -Math.sin(rig.cycle * Math.PI * 2) * 0.06 * effort;
+  } else {
+    rig.tail.rotation.z = Math.sin(time * 3 + rig.cycle * 6) * 0.15;
+  }
+  if (rig.riderTail) rig.riderTail.rotation.x = TAIL_REST + Math.sin(time * 4 + rig.cycle * Math.PI * 2) * 0.18;
 
   if (state === 'STUMBLED') rig.wobble = Math.min(1, rig.wobble + dt * 4);
   else rig.wobble = Math.max(0, rig.wobble - dt * 2);

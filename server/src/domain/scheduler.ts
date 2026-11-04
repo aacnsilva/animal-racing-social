@@ -1,7 +1,9 @@
 import { MINUTE_MS } from '../lib/time.ts';
+import { isSpecies, SPECIES, type Species } from './species.ts';
+
+export { isSpecies, type Species };
 
 export type RaceClass = 'SPRINT' | 'STANDARD' | 'ENDURANCE';
-export type Species = 'HORSE' | 'GIRAFFE';
 
 export type Programme = {
   racesPerHour: number;
@@ -75,10 +77,6 @@ export function isRaceClass(value: unknown): value is RaceClass {
   return RACE_CLASSES.some((cls) => cls === value);
 }
 
-export function isSpecies(value: unknown): value is Species {
-  return value === 'HORSE' || value === 'GIRAFFE';
-}
-
 function assertProgramme(value: unknown): asserts value is Programme {
   if (!isObject(value)) throw new Error('programme must be an object');
   if (!isInteger(value.racesPerHour) || value.racesPerHour < 1 || value.racesPerHour > 12)
@@ -91,7 +89,7 @@ function assertProgramme(value: unknown): asserts value is Programme {
   }
   const rotation = value.speciesRotation;
   if (!Array.isArray(rotation) || rotation.length === 0 || rotation.some((s) => !isSpecies(s))) {
-    throw new Error('speciesRotation must list HORSE/GIRAFFE');
+    throw new Error(`speciesRotation must list ${SPECIES.join('/')}`);
   }
   if (!isInteger(value.horizonHours) || value.horizonHours < 1 || value.horizonHours > 48)
     throw new Error('horizonHours must be 1..48');
