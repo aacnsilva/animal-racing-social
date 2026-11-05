@@ -285,6 +285,34 @@ async function fillHorizon(runtime: Runtime): Promise<void> {
   }
 }
 
+const STALE_RACES_SQL = `
+  SELECT r.race_id,
+         CASE WHEN split_part(r.engine_version, '+', 1) <> split_part(e.engine_version, '+', 1)
+              THEN 'ENGINE_RETIRED' ELSE 'MARKETS_OUTDATED' END AS reason
+  FROM racing.races r
+  JOIN racing.engine_versions e ON e.is_active
+  WHERE r.status IN ('SCHEDULED', 'OPEN') AND r.betting_closes_at > now()
+    AND (
+      split_part(r.engine_version, '+', 1) <> split_part(e.engine_version, '+', 1)
+      OR EXISTS (
+        SELECT 1 FROM market.markets m
+        JOIN market.market_templates t ON t.race_class = r.race_class AND t.is_active
+        WHERE m.race_id = r.race_id AND m.template_version < t.version
+      )
+    )
+  ORDER BY r.start_at
+  LIMIT 50`;
+
+async function relistStaleRaces(runtime: Runtime): Promise<void> {
+  const stale = await many<{ race_id: string; reason: string }>(runtime.pool, STALE_RACES_SQL);
+  if (stale.length === 0) return;
+  await withSpan('scheduler.relist_stale', { root: true, attributes: { 'ars.stale': stale.length } }, () =>
+    tx(runtime.pool, async (client) => {
+      for (const race of stale) await cancelRace(client, race.race_id, race.reason);
+    }),
+  );
+}
+
 async function lockAndExpire(runtime: Runtime): Promise<void> {
   const due = await one(
     runtime.pool,
@@ -461,7 +489,15 @@ async function cancelRace(client: Client, raceId: string, reason: string): Promi
 export async function start(): Promise<void> {
   const runtime = await bootstrap('scheduler', { outbox: ['racing'] });
   registerGauges(runtime);
-  every(envInt('SCHEDULER_INTERVAL_MS', 30_000), () => fillHorizon(runtime), runtime, 'fill horizon');
+  every(
+    envInt('SCHEDULER_INTERVAL_MS', 30_000),
+    async () => {
+      await relistStaleRaces(runtime);
+      await fillHorizon(runtime);
+    },
+    runtime,
+    'fill horizon',
+  );
   every(1000, () => lockAndExpire(runtime), runtime, 'lock races');
   runtime.consumers.push(
     await runConsumer({

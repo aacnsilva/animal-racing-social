@@ -11,7 +11,13 @@ export type TemplateEntry = {
   params?: Record<string, number>;
   every?: number;
   opens?: { at: 'OPEN' | 'START' };
-  closes?: { atLap?: 'last' | number; lapsBeforeEnd?: number; at?: 'LOCK'; ticksBeforeCheckpoint?: number };
+  closes?: {
+    atLap?: 'last' | number;
+    lapsBeforeEnd?: number;
+    lapsBeforeCheckpoint?: number;
+    at?: 'LOCK';
+    ticksBeforeCheckpoint?: number;
+  };
 };
 
 export type MarketSpec = {
@@ -46,19 +52,7 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
   const specs: MarketSpec[] = [];
   for (const entry of entries) {
     if (entry.type === 'LEADER_AT_LAP') {
-      const ticksBefore = entry.closes?.ticksBeforeCheckpoint ?? 6;
-      for (const lap of leaderLaps(laps, entry.every ?? 2)) {
-        specs.push({
-          type: entry.type,
-          params: { lap },
-          opensAt: 'START',
-          closesAtLap: lap,
-          closesAtLock: false,
-          ticksBeforeCheckpoint: ticksBefore,
-          opensRule: { at: 'START' },
-          closesRule: { ticksBeforeCheckpoint: ticksBefore, lap },
-        });
-      }
+      for (const lap of leaderLaps(laps, entry.every ?? 2)) specs.push(leaderSpec(entry, lap));
       continue;
     }
     const closesAtLap = closingLap(entry.closes, laps);
@@ -74,6 +68,36 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
     });
   }
   return specs;
+}
+
+function leaderSpec(entry: TemplateEntry, lap: number): MarketSpec {
+  const lapsBefore = entry.closes?.lapsBeforeCheckpoint;
+  if (lapsBefore === undefined) {
+    const ticksBefore = entry.closes?.ticksBeforeCheckpoint ?? 6;
+    return {
+      type: entry.type,
+      params: { lap },
+      opensAt: 'START',
+      closesAtLap: lap,
+      closesAtLock: false,
+      ticksBeforeCheckpoint: ticksBefore,
+      opensRule: { at: 'START' },
+      closesRule: { ticksBeforeCheckpoint: ticksBefore, lap },
+    };
+  }
+  const closesAtLap = lap - lapsBefore;
+  const preRaceOnly = closesAtLap <= 1;
+  const opensAt = entry.opens?.at === 'START' && !preRaceOnly ? 'START' : 'OPEN';
+  return {
+    type: entry.type,
+    params: { lap },
+    opensAt,
+    closesAtLap: preRaceOnly ? null : closesAtLap,
+    closesAtLock: preRaceOnly,
+    ticksBeforeCheckpoint: null,
+    opensRule: { at: opensAt },
+    closesRule: preRaceOnly ? { at: 'LOCK', lap } : { lapsBeforeCheckpoint: lapsBefore, lap },
+  };
 }
 
 function closingLap(closes: TemplateEntry['closes'], laps: number): number | null {
@@ -101,6 +125,9 @@ export function validateTemplate(entries: unknown): TemplateEntry[] {
     const lapsBeforeEnd = entry.closes?.lapsBeforeEnd;
     if (lapsBeforeEnd !== undefined && !(Number.isInteger(lapsBeforeEnd) && lapsBeforeEnd >= 0))
       throw new Error(`markets[${index}].closes.lapsBeforeEnd must be an integer ≥ 0`);
+    const lapsBeforeCheckpoint = entry.closes?.lapsBeforeCheckpoint;
+    if (lapsBeforeCheckpoint !== undefined && !(Number.isInteger(lapsBeforeCheckpoint) && lapsBeforeCheckpoint >= 1))
+      throw new Error(`markets[${index}].closes.lapsBeforeCheckpoint must be an integer ≥ 1`);
     if (entry.type === 'LEADER_AT_LAP' && !((entry.every ?? 0) >= 1))
       throw new Error(`markets[${index}].every must be ≥ 1`);
     return entry;
@@ -118,7 +145,7 @@ export function shouldCloseInRunning(
   tickMs: number,
 ): boolean {
   if (market.closesAtLap === null) return false;
-  if (market.type === 'LEADER_AT_LAP') {
+  if (market.type === 'LEADER_AT_LAP' && market.ticksBeforeCheckpoint !== null) {
     const leader = leaderOf(tick.entrants);
     if (!leader) return false;
     const checkpoint = market.closesAtLap * lapLength;
