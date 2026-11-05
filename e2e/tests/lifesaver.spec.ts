@@ -15,33 +15,33 @@ async function bust(subject: string, amount: number) {
 test('rescues a busted racer every time they lose every point', async ({ page }) => {
   const subject = uniqueSubject('sinker');
   await signIn(page, { subject });
-  await expect.poll(() => headerBalance(page)).toBe(10000);
+  await expect.poll(() => headerBalance(page)).toBe(1000);
   await page.goto('/wallet');
   await expect(page.getByTestId('lifesaver-tile')).toHaveAttribute('data-state', 'AFLOAT');
   await expect(page.getByTestId('lifesaver-open')).toHaveCount(0);
 
-  await bust(subject, 10000);
+  await bust(subject, 1000);
   await page.reload();
 
   const dialog = page.getByTestId('lifesaver-dialog');
   await expect(dialog).toHaveAttribute('data-phase', 'sinking');
   await page.getByTestId('lifesaver-throw').click();
   await expect(dialog).toHaveAttribute('data-phase', 'saved', { timeout: 15_000 });
-  await expect(page.getByTestId('lifesaver-balance')).toHaveText('5000');
+  await expect(page.getByTestId('lifesaver-balance')).toHaveText('500');
   await page.getByTestId('lifesaver-done').click();
   await expect(dialog).toHaveCount(0);
 
-  await expect.poll(() => headerBalance(page)).toBe(5000);
+  await expect.poll(() => headerBalance(page)).toBe(500);
   await expect(page.locator('[data-testid="ledger-row"][data-type="LIFESAVER"]')).toHaveCount(1);
   await expect(page.getByTestId('lifesaver-tile')).toContainText('used 1×');
 
-  await bust(subject, 5000);
+  await bust(subject, 500);
   const { api, token } = await apiSession(subject);
   const status = await call(api, token, 'GET', '/v1/me/rewards/lifesaver');
   expect(status.body).toMatchObject({ state: 'READY', claimable: true, usedCount: 1 });
   const again = await call(api, token, 'POST', '/v1/me/rewards/lifesaver');
   expect(again.status).toBe(200);
-  expect(again.body).toMatchObject({ amount: 5000, balance: 5000, balanceBefore: 0 });
+  expect(again.body).toMatchObject({ amount: 500, balance: 500, balanceBefore: 0 });
   const afterAgain = await call(api, token, 'GET', '/v1/me/rewards/lifesaver');
   expect(afterAgain.body).toMatchObject({ state: 'AFLOAT', claimable: false, usedCount: 2 });
 });

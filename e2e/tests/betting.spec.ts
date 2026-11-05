@@ -73,7 +73,7 @@ test('cashes out an open bet before the race', async ({ page }) => {
   expect(amount).toBeLessThan(200);
   await page.getByTestId('cashout-confirm').click();
   await expect(bet).toHaveAttribute('data-bet-status', 'CASHED_OUT');
-  await expect.poll(() => headerBalance(page)).toBe(10000 - 200 + amount);
+  await expect.poll(() => headerBalance(page)).toBe(1000 - 200 + amount);
 });
 
 test('rejects a stake above the balance', async ({ page }) => {
@@ -82,7 +82,7 @@ test('rejects a stake above the balance', async ({ page }) => {
   await page.getByTestId('stake-input').fill('20000');
   await page.getByTestId('place-bet').click();
   await expect(page.getByTestId('bet-slip-message')).toContainText(/enough points|insufficient/i);
-  await expect.poll(() => headerBalance(page)).toBe(10000);
+  await expect.poll(() => headerBalance(page)).toBe(1000);
   await expect(page.getByTestId('bet-slip')).toBeVisible();
   await expect(page.getByTestId('bet-slip-success')).toHaveCount(0);
 });

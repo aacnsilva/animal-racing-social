@@ -407,11 +407,11 @@ POST /v1/bets/{betId}/cashout          Idempotency-Key
 Ledger entry types: `SIGNUP_GRANT`, `DAILY_GRANT`, `BET_STAKE (−)`,
 `BET_PAYOUT (+)`, `BET_REFUND (+, void)`, `CASHOUT (+)`.
 Unique constraint `(type, refId)` makes every consumer idempotent.
-Amounts: **`SEASON_GRANT` = 10 000** points at season start (and on signup
+Amounts: **`SEASON_GRANT` = 1 000** points at season start (and on signup
 mid-season); **`DAILY_GRANT` = 50** points per day after that.
 Because all-in is allowed, `DAILY_GRANT` is the safety net that gets busted
 players back in the game. On top of that, a busted player (balance 0, no open
-bets) gets a free **`LIFESAVER` = 5 000** points every time (unlimited); paid lifesavers
+bets) gets a free **`LIFESAVER` = 500** points every time (unlimited); paid lifesavers
 are on the roadmap (see `platform.md` §3a).
 
 ## 8a. Seasons & leaderboards

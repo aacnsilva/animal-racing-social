@@ -435,9 +435,9 @@ CREATE TABLE season.seasons (                                   -- [G]
   starts_at       TIMESTAMPTZ NOT NULL,
   ends_at         TIMESTAMPTZ NOT NULL,
   last_race_at    TIMESTAMPTZ NOT NULL,         -- ends_at − 1 h (last race start)
-  starting_grant  BIGINT NOT NULL DEFAULT 10000,
+  starting_grant  BIGINT NOT NULL DEFAULT 1000,
   daily_grant     BIGINT NOT NULL DEFAULT 50,
-  lifesaver_grant BIGINT NOT NULL DEFAULT 5000 CHECK (lifesaver_grant > 0),
+  lifesaver_grant BIGINT NOT NULL DEFAULT 500 CHECK (lifesaver_grant > 0),
   CHECK (ends_at > starts_at),
   CHECK (last_race_at = ends_at - interval '1 hour'),
   EXCLUDE USING gist (tstzrange(starts_at, ends_at) WITH &&)

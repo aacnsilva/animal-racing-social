@@ -3,7 +3,7 @@ import { headerBalance, signIn, uniqueSubject } from './support.ts';
 
 test('signs in with the Google provider and gets the season grant', async ({ page }) => {
   await signIn(page, { provider: 'google', name: 'Gina Google' });
-  await expect.poll(() => headerBalance(page)).toBe(10000);
+  await expect.poll(() => headerBalance(page)).toBe(1000);
   await expect(page.getByTestId('nav-admin')).toHaveCount(0);
 });
 
@@ -16,11 +16,11 @@ test('signs in with the GitHub provider', async ({ page }) => {
 
 test('claims the daily reward once per day', async ({ page }) => {
   await signIn(page);
-  await expect.poll(() => headerBalance(page)).toBe(10000);
+  await expect.poll(() => headerBalance(page)).toBe(1000);
   await page.getByTestId('daily-reward-claim').click();
-  await expect.poll(() => headerBalance(page)).toBe(10050);
+  await expect.poll(() => headerBalance(page)).toBe(1050);
   await page.goto('/wallet');
-  await expect(page.getByTestId('wallet-balance')).toContainText(/10[,.\s]?050/);
+  await expect(page.getByTestId('wallet-balance')).toContainText(/1[,.\s]?050/);
   await expect(page.locator('[data-testid="ledger-row"][data-type="DAILY_GRANT"]')).toHaveCount(1);
   await expect(page.locator('[data-testid="ledger-row"][data-type="SEASON_GRANT"]')).toHaveCount(1);
   await expect(page.getByTestId('daily-reward-claim')).toBeDisabled();

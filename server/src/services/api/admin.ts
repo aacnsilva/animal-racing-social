@@ -150,7 +150,7 @@ function seasonInput(body: Record<string, unknown>) {
     name: v.str(body.name, 'name', { max: 60 }),
     startsAt,
     endsAt,
-    startingGrant: body.startingGrant === undefined ? 10000 : v.int(body.startingGrant, 'startingGrant', { min: 1 }),
+    startingGrant: body.startingGrant === undefined ? 1000 : v.int(body.startingGrant, 'startingGrant', { min: 1 }),
     dailyGrant: body.dailyGrant === undefined ? 50 : v.int(body.dailyGrant, 'dailyGrant', { min: 0 }),
     lifesaverGrant:
       body.lifesaverGrant === undefined

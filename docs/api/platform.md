@@ -52,13 +52,13 @@ POST /v1/me/rewards/daily   → 200 { amount, balance } | 409 ALREADY_CLAIMED
 ## 3a. Lifesaver (free rescue when busted)
 
 ```
-GET  /v1/me/rewards/lifesaver → { state, claimable, amount: 5000, usedCount, seasonId, usedAt }
+GET  /v1/me/rewards/lifesaver → { state, claimable, amount: 500, usedCount, seasonId, usedAt }
 POST /v1/me/rewards/lifesaver → 200 { amount, balance, balanceBefore }
                                 | 409 NOT_BUSTED | BETS_STILL_OPEN
 ```
 
 - A racer who has lost every point (balance 0 and no open bets) gets a **free
-  lifesaver every time it happens** (unlimited) worth `season.lifesaverGrant` (default 5 000 points).
+  lifesaver every time it happens** (unlimited) worth `season.lifesaverGrant` (default 500 points).
 - `state`: `AFLOAT` (still has points), `WAITING_ON_BETS` (balance 0 but bets may
   still pay out), `PENALIZED` (an admin penalty emptied the wallet), `READY`, `NO_SEASON`. `usedCount` and `usedAt` (latest) cover this season.
 - Ledger `LIFESAVER` with `refId = free:<seasonId>:<usedCount>`. The
