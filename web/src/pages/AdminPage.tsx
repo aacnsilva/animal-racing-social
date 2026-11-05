@@ -487,9 +487,9 @@ function Seasons() {
     name: '',
     startsAt: '',
     endsAt: '',
-    startingGrant: '10000',
+    startingGrant: '1000',
     dailyGrant: '50',
-    lifesaverGrant: '5000',
+    lifesaverGrant: '500',
   });
   const [result, setResult] = useState<Result>(null);
   const create = async () => {

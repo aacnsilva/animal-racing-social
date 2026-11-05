@@ -102,7 +102,7 @@ function RescueDialog() {
   const alive = useRef(true);
   const focusOnMount = useCallback((element: HTMLButtonElement | null) => element?.focus(), []);
   const reduced = reducedMotion();
-  const amount = claim?.amount ?? lifesaver?.amount ?? 5000;
+  const amount = claim?.amount ?? lifesaver?.amount ?? 500;
   const before = claim?.balanceBefore ?? wallet?.balance ?? 0;
   const after = claim?.balance ?? before + amount;
   const counted = useCountUp(before, after, phase === 'pulling' || phase === 'saved', reduced ? 0 : PULL_MS);

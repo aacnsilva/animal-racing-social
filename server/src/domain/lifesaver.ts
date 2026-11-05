@@ -1,4 +1,4 @@
-export const DEFAULT_LIFESAVER_GRANT = 5000;
+export const DEFAULT_LIFESAVER_GRANT = 500;
 
 export type LifesaverState = 'NO_SEASON' | 'AFLOAT' | 'WAITING_ON_BETS' | 'PENALIZED' | 'READY';
 

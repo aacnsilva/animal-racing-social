@@ -38,7 +38,7 @@ test('cancelling a race voids bets and refunds the stake', async ({ page, browse
   await signIn(page, { from: `/races/${raceId}` });
   await placeSingle(page, market(page, 'FINISH_POSITION', { position: 1 }), 300);
   await expect(page.getByTestId('my-bet').first()).toHaveAttribute('data-bet-status', 'ACCEPTED');
-  await expect.poll(() => headerBalance(page)).toBe(9700);
+  await expect.poll(() => headerBalance(page)).toBe(700);
 
   const adminContext = await browser.newContext();
   const adminPage = await adminContext.newPage();
@@ -50,7 +50,7 @@ test('cancelling a race voids bets and refunds the stake', async ({ page, browse
 
   await expect(page.getByTestId('race-status')).toHaveText(/CANCELLED/, { timeout: 30_000 });
   await expect(page.getByTestId('my-bet').first()).toHaveAttribute('data-bet-status', 'VOID', { timeout: 30_000 });
-  await expect.poll(() => headerBalance(page), { timeout: 30_000 }).toBe(10000);
+  await expect.poll(() => headerBalance(page), { timeout: 30_000 }).toBe(1000);
   await page.goto('/wallet');
   await expect(page.locator('[data-testid="ledger-row"][data-type="BET_REFUND"]')).toHaveCount(1);
 });
