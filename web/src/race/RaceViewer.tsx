@@ -9,7 +9,7 @@ import type { CameraMode, RaceScene } from './scene';
 import type { FeedItem, RaceStream } from './stream';
 
 const CAMERAS: { mode: CameraMode; label: string; short: string }[] = [
-  { mode: 'follow', label: 'Follow leader', short: 'Follow' },
+  { mode: 'follow', label: 'Follow', short: 'Follow' },
   { mode: 'tv', label: 'Trackside', short: 'Side' },
   { mode: 'overview', label: 'Overview', short: 'Overview' },
 ];
@@ -120,6 +120,9 @@ export function RaceViewer({
   const [mode, setMode] = useState<CameraMode>(() => readLocal<CameraMode>('ars.camera', 'follow'));
   const live = useMemo(() => new LivePlayback(race.tickMs), [race.tickMs]);
   const entrants = race.entrants ?? [];
+  const [focus, setFocus] = useState<{ raceId: string; entrantId: string } | null>(null);
+  const focusId =
+    focus?.raceId === race.id && entrants.some((e) => e.entrantId === focus.entrantId) ? focus.entrantId : null;
   const entrantKey = entrants.map((e) => `${e.entrantId}:${e.lane}`).join(',');
   const resultKey = entrants.map((e) => `${e.result?.officialPosition ?? ''}${e.result?.resultStatus ?? ''}`).join(',');
 
@@ -199,10 +202,19 @@ export function RaceViewer({
     else scene.setSource(staticFrames);
   }, [scene, replay, hasLiveTick, live, staticFrames]);
 
+  useEffect(() => {
+    scene?.setFocus(focusId);
+  }, [scene, focusId]);
+
   const chooseMode = (next: CameraMode) => {
     setMode(next);
     writeLocal('ars.camera', next);
     scene?.setCameraMode(next);
+  };
+
+  const chooseFocus = (entrantId: string) => {
+    setFocus(entrantId ? { raceId: race.id, entrantId } : null);
+    if (entrantId && mode === 'overview') chooseMode('follow');
   };
 
   const name = nameLookup(entrants);
@@ -272,20 +284,40 @@ export function RaceViewer({
             )}
           </div>
           {!webglError && (
-            <fieldset className="hud-cams" aria-label="Camera">
-              {CAMERAS.map((camera) => (
-                <button
-                  key={camera.mode}
-                  className={mode === camera.mode ? 'active' : ''}
-                  onClick={() => chooseMode(camera.mode)}
-                  aria-label={camera.label}
-                  title={camera.label}
+            <div className="hud-controls">
+              <fieldset className="hud-cams" aria-label="Camera">
+                {CAMERAS.map((camera) => (
+                  <button
+                    key={camera.mode}
+                    className={mode === camera.mode ? 'active' : ''}
+                    onClick={() => chooseMode(camera.mode)}
+                    aria-label={camera.label}
+                    title={camera.label}
+                  >
+                    <span className="hide-sm">{camera.label}</span>
+                    <span className="show-sm">{camera.short}</span>
+                  </button>
+                ))}
+              </fieldset>
+              <label className="hud-focus">
+                <span className="sr-only">Animal to follow</span>
+                <select
+                  value={focusId ?? ''}
+                  onChange={(e) => chooseFocus(e.target.value)}
+                  aria-label="Animal to follow"
+                  data-testid="camera-focus"
                 >
-                  <span className="hide-sm">{camera.label}</span>
-                  <span className="show-sm">{camera.short}</span>
-                </button>
-              ))}
-            </fieldset>
+                  <option value="">Leader</option>
+                  {entrants
+                    .toSorted((a, b) => a.lane - b.lane)
+                    .map((e) => (
+                      <option key={e.entrantId} value={e.entrantId}>
+                        {e.lane}. {e.animal.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
           )}
         </div>
         <div className="stack" style={{ gap: 8 }}>

@@ -66,6 +66,7 @@ export class RaceScene {
   private runners = new Map<string, Runner>();
   private source: FrameSource | null = null;
   private mode: CameraMode = 'follow';
+  private focusId: string | null = null;
   private raf = 0;
   private lastTime = 0;
   private elapsed = 0;
@@ -140,6 +141,14 @@ export class RaceScene {
       this.camera.updateProjectionMatrix();
       this.controls.update();
     }
+  }
+
+  setFocus(id: string | null): void {
+    const next = id && this.runners.has(id) ? id : null;
+    if (next === this.focusId) return;
+    this.runners.get(this.focusId ?? '')?.label.classList.remove('focused');
+    this.focusId = next;
+    if (next) this.runners.get(next)?.label.classList.add('focused');
   }
 
   resize(): void {
@@ -648,8 +657,9 @@ export class RaceScene {
       out.set(f.x + f.nx * this.track.laneOffset(midLane), f.y, f.z + f.nz * this.track.laneOffset(midLane));
       return f;
     }
+    const focused = this.focusId ? frame.entrants.find((e) => e.id === this.focusId) : undefined;
     const sorted = active.toSorted((a, b) => a.pos - b.pos);
-    const leader = sorted.find((e) => e.state !== 'FINISHED') ?? sorted[0];
+    const leader = focused ?? sorted.find((e) => e.state !== 'FINISHED') ?? sorted[0];
     const runner = this.runners.get(leader.id);
     const s = leader.dist + coast(leader.finishedForMs, leader.finishSpeed);
     const f = this.track.frame(s);
