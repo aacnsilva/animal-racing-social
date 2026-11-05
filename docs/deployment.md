@@ -112,7 +112,7 @@ fires regularly.
 
 Monte Carlo load is tunable in `.env`: `ODDS_RUNS_PRERACE`, `ODDS_RUNS_LIVE`,
 `ODDS_THREADS`. Live repricing aims to finish within `ODDS_LIVE_BUDGET_MS`
-(1000): each race's run count drops from `ODDS_RUNS_LIVE` towards
+(600): each race's run count drops from `ODDS_RUNS_LIVE` towards
 `ODDS_RUNS_LIVE_MIN` (500) while its remaining distance makes runs expensive.
 
 ## 5. Observability

@@ -65,7 +65,7 @@ async fn run() -> Res<()> {
         runs_prerace: config::number("ODDS_RUNS_PRERACE", 5000u32).max(1),
         runs_live: config::number("ODDS_RUNS_LIVE", 2000u32).max(1),
         runs_live_min: config::number("ODDS_RUNS_LIVE_MIN", 500u32).max(1),
-        live_budget_secs: f64::from(config::number("ODDS_LIVE_BUDGET_MS", 1000u32)) / 1000.0,
+        live_budget_secs: f64::from(config::number("ODDS_LIVE_BUDGET_MS", 600u32)) / 1000.0,
         threads: config::number("ODDS_THREADS", default_threads).max(1),
         stale_ms: config::number("ODDS_STALE_MS", 2500i64),
     };
