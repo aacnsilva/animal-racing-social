@@ -4,6 +4,7 @@ import {
   cashOutAmount,
   combinedPrice,
   harvilleProbability,
+  MAX_POINTS,
   payoutFor,
   priceFromProbability,
   tricastPrice,
@@ -65,5 +66,12 @@ void describe('payouts', () => {
   void it('values cash-out from current probabilities minus the margin', () => {
     assert.equal(cashOutAmount(100, [4.2], [0.25], 0.05), 99);
     assert.equal(cashOutAmount(200, [3.1, 1.8], [1, 0.5], 0.05), 530);
+  });
+
+  void it('caps payouts and cash-outs so they always fit a BIGINT column', () => {
+    assert.equal(payoutFor(9_000_000_000_000_000, 1917.95), MAX_POINTS);
+    assert.equal(payoutFor(1000, 1e24), MAX_POINTS);
+    assert.equal(cashOutAmount(1000, [1e24], [1], 0), MAX_POINTS);
+    assert.ok(MAX_POINTS < 2 ** 63);
   });
 });

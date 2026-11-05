@@ -1,3 +1,9 @@
+export const MAX_POINTS = Number.MAX_SAFE_INTEGER;
+
+export function capPoints(value: number): number {
+  return Math.min(MAX_POINTS, value);
+}
+
 export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -36,7 +42,7 @@ export function combinedPrice(prices: readonly number[]): number {
 }
 
 export function payoutFor(stake: number, lockedPrice: number): number {
-  return Math.floor(stake * lockedPrice + 1e-9);
+  return capPoints(Math.floor(stake * lockedPrice + 1e-9));
 }
 
 export function cashOutAmount(
@@ -46,5 +52,5 @@ export function cashOutAmount(
   margin: number,
 ): number {
   const fair = stake * product(lockedPrices) * product(probabilitiesNow);
-  return Math.max(0, Math.floor(fair * (1 - margin) + 1e-9));
+  return capPoints(Math.max(0, Math.floor(fair * (1 - margin) + 1e-9)));
 }

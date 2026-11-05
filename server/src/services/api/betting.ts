@@ -7,7 +7,13 @@ import { payload, Topics } from '../../lib/kafka.ts';
 import { enqueue } from '../../lib/outbox.ts';
 import { getJson, setJson } from '../../lib/redis.ts';
 import { comboViolation } from '../../domain/combo.ts';
-import { combinedPrice, harvilleProbability, priceFromProbability, tricastPrice } from '../../domain/pricing.ts';
+import {
+  combinedPrice,
+  harvilleProbability,
+  MAX_POINTS,
+  priceFromProbability,
+  tricastPrice,
+} from '../../domain/pricing.ts';
 import { instruments } from '../../lib/instruments.ts';
 import { activeSpan } from '../../lib/telemetry.ts';
 import { loadBet } from '../../read/bets.ts';
@@ -154,8 +160,12 @@ async function existingByKey(deps: Deps, userId: string, key: string) {
 }
 
 function stakeOf(raw: unknown): number {
-  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1)
-    throw new ApiError(422, 'STAKE_OUT_OF_RANGE', 'Stake must be a whole number of points, at least 1');
+  if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < 1)
+    throw new ApiError(
+      422,
+      'STAKE_OUT_OF_RANGE',
+      `Stake must be a whole number of points, between 1 and ${MAX_POINTS}`,
+    );
   return raw;
 }
 

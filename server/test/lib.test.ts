@@ -60,6 +60,10 @@ void describe('router & validation', () => {
       () => v.int(0, 'n', { min: 1 }),
       (error: unknown) => error instanceof ApiError && error.code === 'VALIDATION_FAILED',
     );
+    assert.throws(
+      () => v.int('9223372036854775807', 'n', { min: 1 }),
+      (error: unknown) => error instanceof ApiError && error.code === 'VALIDATION_FAILED',
+    );
     assert.equal(v.oneOf('ANY', 'p', ['NONE', 'ANY']), 'ANY');
     assert.throws(() => v.id('12a', 'id'));
   });

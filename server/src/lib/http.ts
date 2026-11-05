@@ -353,7 +353,7 @@ export const v = {
   },
   int(value: unknown, field: string, options: { min?: number; max?: number } = {}): number {
     const parsed = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
-    if (typeof parsed !== 'number' || !Number.isInteger(parsed)) invalid(field, 'must be an integer');
+    if (typeof parsed !== 'number' || !Number.isSafeInteger(parsed)) invalid(field, 'must be an integer');
     if (options.min !== undefined && parsed < options.min) invalid(field, `must be ≥ ${options.min}`);
     if (options.max !== undefined && parsed > options.max) invalid(field, `must be ≤ ${options.max}`);
     return parsed;
