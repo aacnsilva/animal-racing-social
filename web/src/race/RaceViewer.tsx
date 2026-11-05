@@ -100,6 +100,8 @@ export function RaceViewer({
   replayLoading,
   onWatchReplay,
   onExitReplay,
+  focusId,
+  onFocus,
 }: {
   race: Race;
   venue: Venue | null;
@@ -112,6 +114,8 @@ export function RaceViewer({
   replayLoading: boolean;
   onWatchReplay: () => void;
   onExitReplay: () => void;
+  focusId: string | null;
+  onFocus: (entrantId: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scene, setScene] = useState<RaceScene | null>(null);
@@ -120,9 +124,11 @@ export function RaceViewer({
   const [mode, setMode] = useState<CameraMode>(() => readLocal<CameraMode>('ars.camera', 'follow'));
   const live = useMemo(() => new LivePlayback(race.tickMs), [race.tickMs]);
   const entrants = race.entrants ?? [];
-  const [focus, setFocus] = useState<{ raceId: string; entrantId: string } | null>(null);
-  const focusId =
-    focus?.raceId === race.id && entrants.some((e) => e.entrantId === focus.entrantId) ? focus.entrantId : null;
+  const [seenFocus, setSeenFocus] = useState(focusId);
+  if (seenFocus !== focusId) {
+    setSeenFocus(focusId);
+    if (focusId && mode === 'overview') setMode('follow');
+  }
   const entrantKey = entrants.map((e) => `${e.entrantId}:${e.lane}`).join(',');
   const resultKey = entrants.map((e) => `${e.result?.officialPosition ?? ''}${e.result?.resultStatus ?? ''}`).join(',');
 
@@ -166,7 +172,6 @@ export function RaceViewer({
       try {
         created = createScene(SceneClass, container);
         if (!created) return;
-        created.setCameraMode(readLocal<CameraMode>('ars.camera', 'follow'));
         setScene(created);
         setWebglError(null);
       } catch (error) {
@@ -206,16 +211,10 @@ export function RaceViewer({
     scene?.setFocus(focusId);
   }, [scene, focusId]);
 
-  const chooseMode = (next: CameraMode) => {
-    setMode(next);
-    writeLocal('ars.camera', next);
-    scene?.setCameraMode(next);
-  };
-
-  const chooseFocus = (entrantId: string) => {
-    setFocus(entrantId ? { raceId: race.id, entrantId } : null);
-    if (entrantId && mode === 'overview') chooseMode('follow');
-  };
+  useEffect(() => {
+    writeLocal('ars.camera', mode);
+    scene?.setCameraMode(mode);
+  }, [scene, mode]);
 
   const name = nameLookup(entrants);
   const tickerSource: { key: string | number; text: string; tone: Tone }[] = [];
@@ -290,7 +289,7 @@ export function RaceViewer({
                   <button
                     key={camera.mode}
                     className={mode === camera.mode ? 'active' : ''}
-                    onClick={() => chooseMode(camera.mode)}
+                    onClick={() => setMode(camera.mode)}
                     aria-label={camera.label}
                     title={camera.label}
                   >
@@ -303,7 +302,7 @@ export function RaceViewer({
                 <span className="sr-only">Animal to follow</span>
                 <select
                   value={focusId ?? ''}
-                  onChange={(e) => chooseFocus(e.target.value)}
+                  onChange={(e) => onFocus(e.target.value || null)}
                   aria-label="Animal to follow"
                   data-testid="camera-focus"
                 >

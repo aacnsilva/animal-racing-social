@@ -37,6 +37,7 @@ export function RacePage({ id }: { id: string }) {
   const [replay, setReplay] = useState<ReplayPlayback | null>(null);
   const [replayLoading, setReplayLoading] = useState(false);
   const [section, setSection] = useState<Section | null>(null);
+  const [focus, setFocus] = useState<{ raceId: string; entrantId: string } | null>(null);
   const viewerAnchor = useRef<HTMLDivElement>(null);
   const now = useNow(1000);
 
@@ -153,6 +154,11 @@ export function RacePage({ id }: { id: string }) {
   const replayAvailable = finished;
   const fallbackSection: Section = finished ? 'result' : race.status === 'LIVE' ? 'race' : 'markets';
   const activeSection = section ?? fallbackSection;
+  const focusId =
+    focus?.raceId === race.id && (race.entrants ?? []).some((e) => e.entrantId === focus.entrantId)
+      ? focus.entrantId
+      : null;
+  const chooseFocus = (entrantId: string | null) => setFocus(entrantId ? { raceId: race.id, entrantId } : null);
   const sectionClass = (name: Section) => `race-section${activeSection === name ? '' : ' m-hide'}`;
   const sections: { id: Section; label: string; count?: number }[] = [
     ...(finished ? [{ id: 'result' as const, label: 'Result' }] : []),
@@ -183,6 +189,8 @@ export function RacePage({ id }: { id: string }) {
           replayAvailable={replayAvailable}
           replayLoading={replayLoading}
           onWatchReplay={() => void watchReplay()}
+          focusId={focusId}
+          onFocus={chooseFocus}
           onExitReplay={() => {
             replay?.pause();
             setReplay(null);
@@ -209,6 +217,8 @@ export function RacePage({ id }: { id: string }) {
             race={race}
             tick={displayTick}
             winMarket={replay || race.status !== 'LIVE' ? null : winMarket}
+            focusId={focusId}
+            onFocus={chooseFocus}
             title={
               replay
                 ? 'Replay standings'

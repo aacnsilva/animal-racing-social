@@ -129,11 +129,15 @@ export function Standings({
   tick,
   title,
   winMarket,
+  focusId,
+  onFocus,
 }: {
   race: Race;
   tick: RaceTick | null;
   title: string;
   winMarket?: Market | null;
+  focusId?: string | null;
+  onFocus?: (entrantId: string | null) => void;
 }) {
   const [gapMode, setGapMode] = useState<GapMode>(() =>
     readLocal<GapMode>(GAP_MODE_KEY, 'leader') === 'interval' ? 'interval' : 'leader',
@@ -177,9 +181,14 @@ export function Standings({
       )}
       <div className="standings" data-testid="standings">
         {rows.map((row) => (
-          <div
+          <button
+            type="button"
             key={row.id}
-            className={`standing-row${row.pos === 1 ? ' p1' : ''}`}
+            className={`standing-row${row.pos === 1 ? ' p1' : ''}${focusId === row.id ? ' focused' : ''}`}
+            aria-pressed={focusId === row.id}
+            title={focusId === row.id ? 'Following on camera (click to follow the leader)' : 'Follow on camera'}
+            onClick={() => onFocus?.(focusId === row.id ? null : row.id)}
+            disabled={!onFocus}
             data-testid="standing-row"
             data-entrant-id={row.id}
             data-pos={row.pos ?? ''}
@@ -218,7 +227,7 @@ export function Standings({
                 </span>
               )}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </section>

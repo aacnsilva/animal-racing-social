@@ -1944,8 +1944,27 @@ table.table {
   border-radius: 8px;
   background: var(--bg-2);
   border: 1px solid transparent;
-  font-size: 0.86rem;
   transition: transform 0.3s ease;
+  width: 100%;
+  font: inherit;
+  font-size: 0.86rem;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.standing-row:disabled {
+  cursor: default;
+}
+
+.standing-row:not(:disabled):hover {
+  border-color: var(--line-2);
+}
+
+.standing-row.focused,
+.standing-row.focused:hover {
+  border-color: var(--info);
+  background: var(--info-soft);
 }
 
 .standing-row .pos {
