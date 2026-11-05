@@ -18,7 +18,7 @@ WHERE t.is_active
   AND EXISTS (
     SELECT 1 FROM jsonb_array_elements(t.definition->'markets') entry
     WHERE entry->>'type' IN ('FINISH_POSITION', 'TOP_N', 'AGAINST_FINISH_POSITION', 'AGAINST_TOP_N')
-      AND NOT (entry->'closes' ? 'lapsBeforeHalf' OR entry->'closes'->>'at' = 'LOCK')
+      AND NOT (entry->'closes' ? 'lapsBeforeHalf' OR coalesce(entry->'closes'->>'at' = 'LOCK', false))
   );
 
 UPDATE market.market_templates t SET is_active = false
