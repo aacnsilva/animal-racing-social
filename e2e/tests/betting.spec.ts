@@ -9,7 +9,7 @@ test('places a pre-race win bet and sees it accepted and debited', async ({ page
   await expect(page.getByTestId('race-status')).toHaveText(/OPEN/);
   await placeSingle(page, market(page, 'FINISH_POSITION', { position: 1 }), 100);
   await expect(page.getByTestId('my-bet').first()).toHaveAttribute('data-bet-status', 'ACCEPTED');
-  await expect.poll(() => headerBalance(page)).toBe(9900);
+  await expect.poll(() => headerBalance(page)).toBe(900);
   await page.goto('/wallet');
   await expect(page.locator('[data-testid="ledger-row"][data-type="BET_STAKE"]')).toHaveCount(1);
   await page.getByTestId('nav-bets').click();
@@ -30,7 +30,7 @@ test('quotes and places a tricast', async ({ page }) => {
   await slip.getByTestId('stake-input').fill('25');
   await slip.getByTestId('place-bet').click();
   await expect(page.locator('[data-testid="my-bet"][data-bet-status="ACCEPTED"]')).toHaveCount(1);
-  await expect.poll(() => headerBalance(page)).toBe(9975);
+  await expect.poll(() => headerBalance(page)).toBe(975);
   await expect(slip).toBeHidden();
 });
 
@@ -46,7 +46,7 @@ test('builds a two-race combo and places it', async ({ page }) => {
   await combo.getByTestId('combo-stake').fill('50');
   await combo.getByTestId('place-combo').click();
   await expect(combo.getByTestId('combo-message')).toContainText(/accepted|placed/i);
-  await expect.poll(() => headerBalance(page)).toBe(9950);
+  await expect.poll(() => headerBalance(page)).toBe(950);
   await page.getByTestId('nav-bets').click();
   await expect(page.locator('[data-testid="my-bet"][data-bet-status="ACCEPTED"]')).toHaveCount(1);
   await expect(page.getByTestId('my-bet').first()).toContainText(/combo/i);

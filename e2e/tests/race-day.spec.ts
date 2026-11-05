@@ -11,7 +11,7 @@ test('a race day: bet, watch the live race in 3D, settle and verify fairness', a
   await expect(page.locator('[data-testid="my-bet"][data-bet-status="ACCEPTED"]')).toHaveCount(1);
   await placeSingle(page, market(page, 'TOP_N', { n: 3 }), 100, 1);
   await expect(page.locator('[data-testid="my-bet"][data-bet-status="ACCEPTED"]')).toHaveCount(2);
-  await expect.poll(() => headerBalance(page)).toBe(9800);
+  await expect.poll(() => headerBalance(page)).toBe(800);
 
   await expect(page.getByTestId('race-status')).toHaveText(/LOCKED/, { timeout: 90_000 });
   await expect(page.getByTestId('race-status')).toHaveText(/LIVE/, { timeout: 90_000 });

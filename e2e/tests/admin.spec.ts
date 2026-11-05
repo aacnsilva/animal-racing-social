@@ -73,7 +73,7 @@ test('admin grants a bonus and applies a cheating penalty the user can see', asy
     reason: 'Community race host',
   });
   expect(bonus.status).toBe(200);
-  expect(bonus.body).toMatchObject({ kind: 'BONUS', requested: 250, applied: 250, balance: 10250 });
+  expect(bonus.body).toMatchObject({ kind: 'BONUS', requested: 250, applied: 250, balance: 1250 });
 
   const invalid = await call(admin.api, admin.token, 'POST', `/v1/admin/users/${user.userId}/points`, {
     kind: 'PENALTY',
@@ -98,12 +98,12 @@ test('admin grants a bonus and applies a cheating penalty the user can see', asy
   await page.getByTestId('admin-points-amount').fill('20000');
   await page.getByTestId('admin-points-reason').fill('Multi-accounting');
   await page.getByTestId('admin-points-submit').click();
-  await expect(page.getByTestId('admin-user-result')).toContainText('Penalty of 10,250 pts applied');
+  await expect(page.getByTestId('admin-user-result')).toContainText('Penalty of 1,250 pts applied');
 
   const wallet = await call(user.api, user.token, 'GET', '/v1/me/wallet');
   expect(wallet.body.balance).toBe(0);
   const ledger = await call(user.api, user.token, 'GET', '/v1/me/wallet/ledger');
-  expect(ledger.body.items[0]).toMatchObject({ type: 'ADMIN_PENALTY', amount: -10250, note: 'Multi-accounting' });
+  expect(ledger.body.items[0]).toMatchObject({ type: 'ADMIN_PENALTY', amount: -1250, note: 'Multi-accounting' });
   expect(ledger.body.items[1]).toMatchObject({ type: 'ADMIN_BONUS', amount: 250, note: 'Community race host' });
 
   const lifesaver = await call(user.api, user.token, 'GET', '/v1/me/rewards/lifesaver');

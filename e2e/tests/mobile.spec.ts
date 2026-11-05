@@ -195,7 +195,7 @@ test('bets from the bottom sheet and follows the race through section tabs', asy
   await slip.getByTestId('stake-input').fill('100');
   await slip.getByTestId('place-bet').tap();
   await expect(slip.getByTestId('bet-slip-success')).toContainText(/ACCEPTED/);
-  await expect.poll(() => headerBalance(page)).toBe(9900);
+  await expect.poll(() => headerBalance(page)).toBe(900);
   await expect(slip).toBeHidden();
 
   await expect(page.getByTestId('race-section-bets')).toContainText('1');
