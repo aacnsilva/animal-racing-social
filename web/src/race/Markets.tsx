@@ -285,7 +285,7 @@ function TricastBuilder({
 }
 
 function closingNote(market: Market): string | null {
-  if (!market.closesAtLap) return market.type === 'LEADER_AT_LAP' ? 'Closes before the race starts' : null;
+  if (!market.closesAtLap) return 'Closes before the race starts';
   if (market.type === 'LEADER_AT_LAP' && market.closesAtLap === market.params.lap)
     return `Suspends just before lap ${market.params.lap} completes`;
   return `Closes at lap ${market.closesAtLap}`;

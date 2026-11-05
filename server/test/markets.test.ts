@@ -19,7 +19,7 @@ const templates: Record<string, { markets: TemplateEntry[] }> = JSON.parse(
 function closing(raceClass: string, laps: number) {
   return expandTemplate(templates[raceClass].markets, laps)
     .filter((s) => s.type !== 'TRICAST' && s.type !== 'LEADER_AT_LAP')
-    .map((s) => s.closesAtLap);
+    .map((s) => [s.type, s.closesAtLap, s.closesAtLock]);
 }
 
 function leaderSpecs(raceClass: string, laps: number) {
@@ -27,6 +27,9 @@ function leaderSpecs(raceClass: string, laps: number) {
     .filter((s) => s.type === 'LEADER_AT_LAP')
     .map((s) => [s.params.lap, s.opensAt, s.closesAtLap, s.closesAtLock]);
 }
+
+const preRace = (type: string) => [type, null, true];
+const atLap = (type: string, lap: number) => [type, lap, false];
 
 void describe('market templates', () => {
   void it('never offers a leader market on the final lap', () => {
@@ -43,15 +46,42 @@ void describe('market templates', () => {
       [2, 4, 6],
     );
     const win = specs.find((s) => s.type === 'FINISH_POSITION' && s.params.position === 1)!;
-    assert.equal(win.closesAtLap, 5);
+    assert.equal(win.closesAtLap, 2);
     assert.equal(win.opensAt, 'OPEN');
     assert.ok(specs.find((s) => s.type === 'TRICAST')!.closesAtLock);
   });
 
-  void it('closes finish markets laps before the end, scaled by race class', () => {
-    assert.deepEqual(new Set(closing('SPRINT', 3)), new Set([2]));
-    assert.deepEqual(new Set(closing('STANDARD', 8)), new Set([6]));
-    assert.deepEqual(new Set(closing('ENDURANCE', 12)), new Set([9]));
+  void it('closes finish markets one lap before half distance, pre-race only for sprints', () => {
+    const against = [preRace('AGAINST_FINISH_POSITION'), preRace('AGAINST_TOP_N')];
+    assert.deepEqual(closing('SPRINT', 3), [
+      preRace('FINISH_POSITION'),
+      preRace('FINISH_POSITION'),
+      preRace('FINISH_POSITION'),
+      preRace('TOP_N'),
+      ...against,
+    ]);
+    assert.deepEqual(closing('STANDARD', 8), [
+      atLap('FINISH_POSITION', 3),
+      atLap('FINISH_POSITION', 3),
+      atLap('FINISH_POSITION', 3),
+      atLap('TOP_N', 3),
+      ...against,
+    ]);
+    assert.deepEqual(closing('ENDURANCE', 12), [
+      atLap('FINISH_POSITION', 5),
+      atLap('FINISH_POSITION', 5),
+      atLap('FINISH_POSITION', 5),
+      atLap('TOP_N', 5),
+      ...against,
+    ]);
+    const short = expandTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { lapsBeforeHalf: 1 } }], 5)[0];
+    assert.deepEqual([short.closesAtLap, short.closesAtLock, short.closesRule.at], [null, true, 'LOCK']);
+    const locked = expandTemplate([{ type: 'AGAINST_TOP_N', params: { n: 3 }, closes: { at: 'LOCK' } }], 8)[0];
+    assert.deepEqual([locked.closesAtLap, locked.closesAtLock], [null, true]);
+    assert.throws(() => validateTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { lapsBeforeHalf: -1 } }]));
+  });
+
+  void it('still accepts the older lapsBeforeEnd and atLap cutoffs', () => {
     assert.equal(
       expandTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { lapsBeforeEnd: 9 } }], 3)[0].closesAtLap,
       1,

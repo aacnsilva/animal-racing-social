@@ -230,10 +230,10 @@ The Odds Engine's pre-race prices use current stats; form is informational
 
 | Type                      | Params              | Selection             | Window                                                                                                                  |
 | ------------------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `FINISH_POSITION`         | `position: 1\|2\|3` | entrant               | OPEN → closes at configured lap (default: last lap)                                                                     |
-| `TOP_N`                   | `n: 3`              | entrant               | OPEN → closes at configured lap                                                                                         |
-| `AGAINST_FINISH_POSITION` | `position: 1\|2\|3` | entrant               | same as `FINISH_POSITION`                                                                                               |
-| `AGAINST_TOP_N`           | `n: 3`              | entrant               | same as `TOP_N`                                                                                                         |
+| `FINISH_POSITION`         | `position: 1\|2\|3` | entrant               | OPEN → closes one lap before half distance (pre-race only for SPRINT)                                                   |
+| `TOP_N`                   | `n: 3`              | entrant               | same as `FINISH_POSITION`                                                                                               |
+| `AGAINST_FINISH_POSITION` | `position: 1\|2\|3` | entrant               | OPEN only (pre-race)                                                                                                    |
+| `AGAINST_TOP_N`           | `n: 3`              | entrant               | OPEN only (pre-race)                                                                                                    |
 | `TRICAST`                 | —                   | exact `[1st,2nd,3rd]` | OPEN only (pre-race)                                                                                                    |
 | `LEADER_AT_LAP`           | `lap: k`            | entrant               | opens with the race; closes when the leader starts lap `k - lapsBeforeCheckpoint` (at lock if that is lap 1 or earlier) |
 
@@ -257,10 +257,12 @@ class, not code:
 {
   "class": "STANDARD",
   "markets": [
-    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 2 } },
-    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeEnd": 2 } },
-    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 2 } },
-    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 2 } },
+    { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeHalf": 1 } },
+    { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeHalf": 1 } },
+    { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeHalf": 1 } },
+    { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeHalf": 1 } },
+    { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "at": "LOCK" } },
+    { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "at": "LOCK" } },
     { "type": "TRICAST", "closes": { "at": "LOCK" } },
     { "type": "LEADER_AT_LAP", "every": 2, "closes": { "lapsBeforeCheckpoint": 1 } },
   ],
@@ -268,10 +270,13 @@ class, not code:
 ```
 
 Default: all classes share the same markets; SPRINT omits `LEADER_AT_LAP`.
-Finish markets close `lapsBeforeEnd` laps before the finish, when the leader
-starts lap `laps − lapsBeforeEnd` (SPRINT 1, STANDARD 2, ENDURANCE 3), so
-nobody can back a near-certain result in the closing laps. `atLap: "last"`
-(close as the leader starts the final lap) is still accepted.
+Win, 2nd, 3rd and top-3 markets close `lapsBeforeHalf` laps before half
+distance, when the leader starts lap `⌊laps / 2⌋ − lapsBeforeHalf` (STANDARD and
+ENDURANCE use 1: an 8-lap race closes as the leader starts lap 3). A cutoff of
+lap 1 or earlier makes the market pre-race only, closing at lock. SPRINT finish
+markets are pre-race only (`closes: { at: "LOCK" }`), and against markets
+close at lock in every class. The older `lapsBeforeEnd` and `atLap: "last"`
+cutoffs are still accepted.
 Leader-at-lap markets open with the race and close `lapsBeforeCheckpoint`
 laps before their checkpoint (STANDARD 1, ENDURANCE 2): the lap-4 market closes
 as the leader starts lap 3. A market whose cutoff is lap 1 or earlier (the

@@ -1,35 +1,35 @@
 {
   "SPRINT": {
     "markets": [
-      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 1 } },
-      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeEnd": 1 } },
-      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 1 } },
-      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 1 } },
-      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 1 } },
-      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 1 } },
+      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "at": "LOCK" } },
+      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "at": "LOCK" } },
+      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "at": "LOCK" } },
+      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "at": "LOCK" } },
+      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "at": "LOCK" } },
+      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "at": "LOCK" } },
       { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } }
     ]
   },
   "STANDARD": {
     "markets": [
-      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 2 } },
-      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeEnd": 2 } },
-      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 2 } },
-      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 2 } },
-      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 2 } },
-      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 2 } },
+      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "at": "LOCK" } },
+      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "at": "LOCK" } },
       { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } },
       { "type": "LEADER_AT_LAP", "every": 2, "closes": { "lapsBeforeCheckpoint": 1 } }
     ]
   },
   "ENDURANCE": {
     "markets": [
-      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 3 } },
-      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeEnd": 3 } },
-      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 3 } },
-      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 3 } },
-      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeEnd": 3 } },
-      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 3 } },
+      { "type": "FINISH_POSITION", "params": { "position": 1 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "FINISH_POSITION", "params": { "position": 2 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeHalf": 1 } },
+      { "type": "AGAINST_FINISH_POSITION", "params": { "position": 1 }, "closes": { "at": "LOCK" } },
+      { "type": "AGAINST_TOP_N", "params": { "n": 3 }, "closes": { "at": "LOCK" } },
       { "type": "TRICAST", "params": {}, "closes": { "at": "LOCK" } },
       { "type": "LEADER_AT_LAP", "every": 2, "closes": { "lapsBeforeCheckpoint": 2 } }
     ]

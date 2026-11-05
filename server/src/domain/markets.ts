@@ -14,6 +14,7 @@ export type TemplateEntry = {
   closes?: {
     atLap?: 'last' | number;
     lapsBeforeEnd?: number;
+    lapsBeforeHalf?: number;
     lapsBeforeCheckpoint?: number;
     at?: 'LOCK';
     ticksBeforeCheckpoint?: number;
@@ -56,15 +57,18 @@ export function expandTemplate(entries: readonly TemplateEntry[], laps: number):
       continue;
     }
     const closesAtLap = closingLap(entry.closes, laps);
+    const preRaceOnly =
+      entry.closes?.at === 'LOCK' || (entry.closes?.lapsBeforeHalf !== undefined && closesAtLap === null);
+    const opensAt = entry.opens?.at === 'START' && !preRaceOnly ? 'START' : 'OPEN';
     specs.push({
       type: entry.type,
       params: { ...entry.params },
-      opensAt: entry.opens?.at === 'START' ? 'START' : 'OPEN',
+      opensAt,
       closesAtLap,
-      closesAtLock: entry.closes?.at === 'LOCK',
+      closesAtLock: preRaceOnly,
       ticksBeforeCheckpoint: null,
-      opensRule: { at: entry.opens?.at ?? 'OPEN' },
-      closesRule: entry.closes ?? {},
+      opensRule: { at: opensAt },
+      closesRule: preRaceOnly ? { ...entry.closes, at: 'LOCK' } : (entry.closes ?? {}),
     });
   }
   return specs;
@@ -101,6 +105,11 @@ function leaderSpec(entry: TemplateEntry, lap: number): MarketSpec {
 }
 
 function closingLap(closes: TemplateEntry['closes'], laps: number): number | null {
+  if (closes?.at === 'LOCK') return null;
+  if (closes?.lapsBeforeHalf !== undefined) {
+    const lap = Math.floor(laps / 2) - closes.lapsBeforeHalf;
+    return lap > 1 ? lap : null;
+  }
   if (closes?.lapsBeforeEnd !== undefined) return Math.max(1, laps - closes.lapsBeforeEnd);
   if (closes?.atLap === 'last') return laps;
   if (typeof closes?.atLap === 'number') return Math.min(closes.atLap, laps);
@@ -125,6 +134,9 @@ export function validateTemplate(entries: unknown): TemplateEntry[] {
     const lapsBeforeEnd = entry.closes?.lapsBeforeEnd;
     if (lapsBeforeEnd !== undefined && !(Number.isInteger(lapsBeforeEnd) && lapsBeforeEnd >= 0))
       throw new Error(`markets[${index}].closes.lapsBeforeEnd must be an integer ≥ 0`);
+    const lapsBeforeHalf = entry.closes?.lapsBeforeHalf;
+    if (lapsBeforeHalf !== undefined && !(Number.isInteger(lapsBeforeHalf) && lapsBeforeHalf >= 0))
+      throw new Error(`markets[${index}].closes.lapsBeforeHalf must be an integer ≥ 0`);
     const lapsBeforeCheckpoint = entry.closes?.lapsBeforeCheckpoint;
     if (lapsBeforeCheckpoint !== undefined && !(Number.isInteger(lapsBeforeCheckpoint) && lapsBeforeCheckpoint >= 1))
       throw new Error(`markets[${index}].closes.lapsBeforeCheckpoint must be an integer ≥ 1`);
