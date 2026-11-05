@@ -102,12 +102,8 @@ function MarketCardInner({
         <h3>{marketLabelOf(market)}</h3>
         <MarketStatusChip status={market.status} />
       </div>
-      {market.closesAtLap && market.type !== 'TRICAST' && market.status !== 'RESULTED' && (
-        <div className="tiny muted">
-          {market.type === 'LEADER_AT_LAP'
-            ? `Suspends just before lap ${market.params.lap} completes`
-            : `Closes at lap ${market.closesAtLap}`}
-        </div>
+      {market.type !== 'TRICAST' && market.status !== 'RESULTED' && closingNote(market) && (
+        <div className="tiny muted">{closingNote(market)}</div>
       )}
       {market.status === 'SUSPENDED' && <div className="market-veil">Suspended</div>}
       {market.status === 'VOID' && <div className="market-veil">Void · stakes refunded</div>}
@@ -288,10 +284,17 @@ function TricastBuilder({
   );
 }
 
+function closingNote(market: Market): string | null {
+  if (!market.closesAtLap) return market.type === 'LEADER_AT_LAP' ? 'Closes before the race starts' : null;
+  if (market.type === 'LEADER_AT_LAP' && market.closesAtLap === market.params.lap)
+    return `Suspends just before lap ${market.params.lap} completes`;
+  return `Closes at lap ${market.closesAtLap}`;
+}
+
 const GROUPS: { title: string; types: Market['type'][] }[] = [
   { title: 'Win & place', types: ['FINISH_POSITION', 'TOP_N'] },
   { title: 'Against · back them to miss', types: ['AGAINST_FINISH_POSITION', 'AGAINST_TOP_N'] },
-  { title: 'In-running · leader at lap', types: ['LEADER_AT_LAP'] },
+  { title: 'Leader at lap', types: ['LEADER_AT_LAP'] },
   { title: 'Tricast', types: ['TRICAST'] },
 ];
 
@@ -309,7 +312,6 @@ export function MarketsPanel({
   onPick: PickHandler;
 }) {
   const entrants = race.entrants ?? [];
-  const preRace = race.status === 'SCHEDULED' || race.status === 'OPEN' || race.status === 'LOCKED';
   const pendingLaps = markets
     .filter((m) => m.type === 'LEADER_AT_LAP' && m.status === 'PENDING')
     .map((m) => m.params.lap);
@@ -337,10 +339,7 @@ export function MarketsPanel({
         {GROUPS.map((group) => {
           const list = visible.filter((m) => group.types.includes(m.type));
           if (!list.length) {
-            if (
-              group.types[0] === 'LEADER_AT_LAP' &&
-              (pendingLaps.length > 0 || (preRace && race.class !== 'SPRINT' && markets.length > 0))
-            )
+            if (group.types[0] === 'LEADER_AT_LAP' && pendingLaps.length > 0)
               return (
                 <div key={group.title} className="notice info small">
                   Leader-at-lap markets{pendingLaps.length ? ` (laps ${pendingLaps.join(', ')})` : ''} open when the

@@ -22,6 +22,12 @@ function closing(raceClass: string, laps: number) {
     .map((s) => s.closesAtLap);
 }
 
+function leaderSpecs(raceClass: string, laps: number) {
+  return expandTemplate(templates[raceClass].markets, laps)
+    .filter((s) => s.type === 'LEADER_AT_LAP')
+    .map((s) => [s.params.lap, s.opensAt, s.closesAtLap, s.closesAtLock]);
+}
+
 void describe('market templates', () => {
   void it('never offers a leader market on the final lap', () => {
     assert.deepEqual(leaderLaps(7, 2), [2, 4, 6]);
@@ -52,6 +58,26 @@ void describe('market templates', () => {
     );
     assert.equal(expandTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { atLap: 'last' } }], 4)[0].closesAtLap, 4);
     assert.throws(() => validateTemplate([{ type: 'TOP_N', params: { n: 3 }, closes: { lapsBeforeEnd: -1 } }]));
+  });
+
+  void it('closes leader markets laps before their checkpoint, pre-race only when that is the start', () => {
+    assert.deepEqual(leaderSpecs('STANDARD', 7), [
+      [2, 'OPEN', null, true],
+      [4, 'OPEN', 3, false],
+      [6, 'OPEN', 5, false],
+    ]);
+    assert.deepEqual(leaderSpecs('ENDURANCE', 12).slice(0, 3), [
+      [2, 'OPEN', null, true],
+      [4, 'OPEN', 2, false],
+      [6, 'OPEN', 4, false],
+    ]);
+    const legacy = expandTemplate(
+      [{ type: 'LEADER_AT_LAP', every: 2, opens: { at: 'START' }, closes: { ticksBeforeCheckpoint: 6 } }],
+      7,
+    )[0];
+    assert.equal(legacy.closesAtLap, 2);
+    assert.equal(legacy.ticksBeforeCheckpoint, 6);
+    assert.throws(() => validateTemplate([{ type: 'LEADER_AT_LAP', every: 2, closes: { lapsBeforeCheckpoint: 0 } }]));
   });
 
   void it('omits leader markets for sprints', () => {
@@ -89,6 +115,12 @@ void describe('in-running rules', () => {
     const market = { type: 'LEADER_AT_LAP' as const, closesAtLap: 2, ticksBeforeCheckpoint: 6 };
     assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0], dist: 900 }] }, 500, 500), false);
     assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0], dist: 960 }] }, 500, 500), true);
+    assert.equal(shouldCloseInRunning(market, { lap: 3, entrants: [{ ...entrants[0], dist: 1001 }] }, 500, 500), true);
+  });
+
+  void it('closes lap-based leader markets when the leader starts the closing lap', () => {
+    const market = { type: 'LEADER_AT_LAP' as const, closesAtLap: 3, ticksBeforeCheckpoint: null };
+    assert.equal(shouldCloseInRunning(market, { lap: 2, entrants: [{ ...entrants[0], dist: 990 }] }, 500, 500), false);
     assert.equal(shouldCloseInRunning(market, { lap: 3, entrants: [{ ...entrants[0], dist: 1001 }] }, 500, 500), true);
   });
 

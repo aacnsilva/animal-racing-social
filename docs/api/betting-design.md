@@ -50,7 +50,7 @@ Scheduler ──► Race Engine ──(sealed script)──► Script Store
 | Race Engine      | Chooses track/laps for a target duration, simulates, seals the script. Stateless.                           |
 | Race Broadcaster | Publishes `RaceTick` at `startAt + tick × tickMs`. Many races run concurrently, one partition key per race. |
 | Odds Engine      | On each tick: Monte Carlo rest-of-race from revealed state → prices for every open market.                  |
-| Market Manager   | Opens/suspends/closes markets on race progress (e.g. opens `LEADER_AT_LAP`, suspends before checkpoints).   |
+| Market Manager   | Opens/suspends/closes markets on race progress (e.g. closes `LEADER_AT_LAP` laps before checkpoints).       |
 | Bet Service      | Validates bets and cash-outs, applies acceptance delay, reserves stake.                                     |
 | Settlement       | Results markets on `LapCompleted` / `RaceFinished`; emits `BetSettled`.                                     |
 | Wallet           | Consumes bet events, writes ledger entries.                                                                 |
@@ -228,14 +228,14 @@ The Odds Engine's pre-race prices use current stats; form is informational
 
 ## 5. Markets
 
-| Type                      | Params              | Selection             | Window                                                                                          |
-| ------------------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
-| `FINISH_POSITION`         | `position: 1\|2\|3` | entrant               | OPEN → closes at configured lap (default: last lap)                                             |
-| `TOP_N`                   | `n: 3`              | entrant               | OPEN → closes at configured lap                                                                 |
-| `AGAINST_FINISH_POSITION` | `position: 1\|2\|3` | entrant               | same as `FINISH_POSITION`                                                                       |
-| `AGAINST_TOP_N`           | `n: 3`              | entrant               | same as `TOP_N`                                                                                 |
-| `TRICAST`                 | —                   | exact `[1st,2nd,3rd]` | OPEN only (pre-race)                                                                            |
-| `LEADER_AT_LAP`           | `lap: k`            | entrant               | opened by Market Manager in-running; closes `suspendTicksBefore` ticks before lap `k` completes |
+| Type                      | Params              | Selection             | Window                                                                                                                  |
+| ------------------------- | ------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `FINISH_POSITION`         | `position: 1\|2\|3` | entrant               | OPEN → closes at configured lap (default: last lap)                                                                     |
+| `TOP_N`                   | `n: 3`              | entrant               | OPEN → closes at configured lap                                                                                         |
+| `AGAINST_FINISH_POSITION` | `position: 1\|2\|3` | entrant               | same as `FINISH_POSITION`                                                                                               |
+| `AGAINST_TOP_N`           | `n: 3`              | entrant               | same as `TOP_N`                                                                                                         |
+| `TRICAST`                 | —                   | exact `[1st,2nd,3rd]` | OPEN only (pre-race)                                                                                                    |
+| `LEADER_AT_LAP`           | `lap: k`            | entrant               | opens with the race; closes when the leader starts lap `k - lapsBeforeCheckpoint` (at lock if that is lap 1 or earlier) |
 
 `FINISH_POSITION{position:1}` is the plain win market.
 Against markets (`AGAINST_*`) back an entrant to miss the target: an
@@ -262,7 +262,7 @@ class, not code:
     { "type": "FINISH_POSITION", "params": { "position": 3 }, "closes": { "lapsBeforeEnd": 2 } },
     { "type": "TOP_N", "params": { "n": 3 }, "closes": { "lapsBeforeEnd": 2 } },
     { "type": "TRICAST", "closes": { "at": "LOCK" } },
-    { "type": "LEADER_AT_LAP", "every": 2, "opens": { "at": "START" }, "closes": { "ticksBeforeCheckpoint": 6 } },
+    { "type": "LEADER_AT_LAP", "every": 2, "closes": { "lapsBeforeCheckpoint": 1 } },
   ],
 }
 ```
@@ -272,7 +272,15 @@ Finish markets close `lapsBeforeEnd` laps before the finish, when the leader
 starts lap `laps − lapsBeforeEnd` (SPRINT 1, STANDARD 2, ENDURANCE 3), so
 nobody can back a near-certain result in the closing laps. `atLap: "last"`
 (close as the leader starts the final lap) is still accepted.
-Template changes apply to races scheduled afterwards.
+Leader-at-lap markets open with the race and close `lapsBeforeCheckpoint`
+laps before their checkpoint (STANDARD 1, ENDURANCE 2): the lap-4 market closes
+as the leader starts lap 3. A market whose cutoff is lap 1 or earlier (the
+lap-2 market) is pre-race only and closes at lock. The older
+`opens: START` + `closes.ticksBeforeCheckpoint` form is still accepted.
+Template changes apply to races whose markets are created afterwards. The
+scheduler cancels (refunding any bets) and relists upcoming races still on an
+older market template or on an engine version the odds engine can no longer
+price, so every listed race gets live odds and the current markets.
 
 **Tricast** has N×(N−1)×(N−2) combinations, so it isn't listed; clients request a
 quote: `POST /markets/{id}/quotes { order: [a,b,c] }`.
