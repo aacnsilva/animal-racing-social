@@ -578,6 +578,7 @@ export function buildLandVenue(track: TrackPath, surface: string, random: () => 
   const straights = track.ranges.filter((range) => range.type !== 'CURVE');
   const longest = straights.toSorted((a, b) => b.end - b.start - (a.end - a.start))[0] ?? track.ranges[0];
   let stand: { x: number; z: number; radius: number } | null = null;
+  let crowd: { bodies: THREE.InstancedMesh; heads: THREE.InstancedMesh; total: number } | null = null;
   if (longest) {
     const length = Math.min(96, (longest.end - longest.start) * 0.8);
     const frame = track.frame((longest.start + longest.end) / 2);
@@ -730,6 +731,7 @@ export function buildLandVenue(track: TrackPath, surface: string, random: () => 
     }
     bodies.count = count;
     heads.count = count;
+    crowd = { bodies, heads, total: count };
     bodies.castShadow = true;
     bodies.frustumCulled = false;
     heads.frustumCulled = false;
@@ -789,6 +791,7 @@ export function buildLandVenue(track: TrackPath, surface: string, random: () => 
     if (boardFrame) group.add(boardMesh);
   }
 
+  const thinned: { mesh: THREE.InstancedMesh; total: number; floor: number }[] = [];
   const placements: Placement[][] = [[], [], [], []];
   const target = Math.round(Math.min(700, Math.max(280, size * 2)));
   let guard = 0;
@@ -865,7 +868,8 @@ export function buildLandVenue(track: TrackPath, surface: string, random: () => 
   }
   kinds.forEach(([geometry, material, shadow, scale], i) => {
     for (const placement of placements[i]) placement.scale *= scale;
-    scatterInstances(group, geometry, material, placements[i], random, 0.14, shadow);
+    const mesh = scatterInstances(group, geometry, material, placements[i], random, 0.14, shadow);
+    if (mesh) thinned.push({ mesh, total: mesh.count, floor: 0.3 });
   });
 
   let tufts: THREE.InstancedMesh | null = null;
@@ -912,7 +916,17 @@ export function buildLandVenue(track: TrackPath, surface: string, random: () => 
       time.value = now;
     },
     setDetail: (detail) => {
-      if (tufts) tufts.count = Math.round(theme.tufts * Math.max(0, Math.min(1, detail)));
+      const d = Math.max(0, Math.min(1, detail));
+      const sparse = detail < 0 ? 0.4 : 1;
+      for (const item of thinned) {
+        item.mesh.count = Math.round(item.total * (item.floor + (1 - item.floor) * d) * sparse);
+      }
+      if (crowd) {
+        const people = Math.round(crowd.total * (0.35 + 0.65 * d) * sparse);
+        crowd.bodies.count = people;
+        crowd.heads.count = people;
+      }
+      if (tufts) tufts.count = Math.round(theme.tufts * d);
     },
   };
 }

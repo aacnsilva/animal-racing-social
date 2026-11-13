@@ -68,14 +68,22 @@ class FinishPass extends Pass {
   }
 }
 
-export type Tier = { pixelRatio: number; bloom: boolean; shadow: number; detail: number };
+export type Tier = { pixelRatio: number; bloom: boolean; shadow: number; detail: number; direct?: boolean };
 
 const TIERS: Tier[] = [
   { pixelRatio: 2, bloom: true, shadow: 2048, detail: 1 },
   { pixelRatio: 1.5, bloom: true, shadow: 2048, detail: 0.6 },
   { pixelRatio: 1.25, bloom: false, shadow: 1024, detail: 0.3 },
   { pixelRatio: 1, bloom: false, shadow: 1024, detail: 0 },
+  { pixelRatio: 0.5, bloom: false, shadow: 0, detail: -1, direct: true },
 ];
+
+export function softwareRendered(renderer: THREE.WebGLRenderer): boolean {
+  const gl = renderer.getContext();
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  const name: unknown = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  return typeof name === 'string' && /swiftshader|llvmpipe|software|basic render/i.test(name);
+}
 
 export class Pipeline {
   readonly finish = new FinishPass();
@@ -90,12 +98,17 @@ export class Pipeline {
   private height = 1;
   onTier: ((tier: Tier) => void) | null = null;
 
-  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
+  private scene: THREE.Scene;
+  private camera: THREE.Camera;
+
+  constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, software: boolean) {
     this.renderer = renderer;
+    this.scene = scene;
+    this.camera = camera;
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
     const cores = navigator.hardwareConcurrency || 4;
-    this.level = coarse ? (cores >= 8 ? 1 : 2) : cores <= 4 ? 1 : 0;
-    const samples = Math.min(4, renderer.capabilities.maxSamples);
+    this.level = software ? TIERS.length - 1 : coarse ? (cores >= 8 ? 1 : 2) : cores <= 4 ? 1 : 0;
+    const samples = software ? 0 : Math.min(4, renderer.capabilities.maxSamples);
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples });
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
@@ -113,28 +126,37 @@ export class Pipeline {
     this.height = height;
     const ratio = Math.min(window.devicePixelRatio || 1, this.tier.pixelRatio);
     this.renderer.setPixelRatio(ratio);
+    this.renderer.toneMapping = this.tier.direct ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
     this.renderer.setSize(width, height, false);
-    this.composer.setPixelRatio(ratio);
-    this.composer.setSize(width, height);
+    if (this.tier.direct) {
+      this.composer.setPixelRatio(1);
+      this.composer.setSize(1, 1);
+    } else {
+      this.composer.setPixelRatio(ratio);
+      this.composer.setSize(width, height);
+    }
     this.bloom.enabled = this.tier.bloom;
   }
 
   render(dt: number): void {
-    this.composer.render(dt);
-    if (dt <= 0 || dt > 0.25) return;
-    this.settle += dt;
-    if (this.settle < 2.5) return;
-    this.average += (dt - this.average) * 0.05;
-    if (this.average > 1 / 48) this.slow += dt;
+    if (this.tier.direct) {
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.scene, this.camera);
+    } else this.composer.render(dt);
+    if (dt <= 0 || this.level >= TIERS.length - 1) return;
+    this.settle += Math.min(dt, 0.5);
+    if (this.settle < 2) return;
+    const sample = Math.min(dt, 1);
+    this.average += (sample - this.average) * (sample > 0.1 ? 0.3 : 0.05);
+    if (this.average > 1 / 48) this.slow += Math.min(dt, 0.5);
     else this.slow = Math.max(0, this.slow - dt * 0.5);
-    if (this.slow > 1.5 && this.level < TIERS.length - 1) {
-      this.level += 1;
-      this.slow = 0;
-      this.settle = 1;
-      this.average = 1 / 60;
-      this.setSize(this.width, this.height);
-      this.onTier?.(this.tier);
-    }
+    if (this.slow <= 1.5) return;
+    this.level = this.average > 0.12 ? TIERS.length - 1 : this.level + 1;
+    this.slow = 0;
+    this.settle = 0.5;
+    this.average = 1 / 60;
+    this.setSize(this.width, this.height);
+    this.onTier?.(this.tier);
   }
 
   dispose(): void {

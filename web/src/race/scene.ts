@@ -7,7 +7,7 @@ import { bakeAtmosphere, sunSprite, type Atmosphere } from './atmosphere';
 import { rng } from './geometry';
 import { Particles, PARTICLE_STYLES } from './particles';
 import type { Frame, FrameEntrant, FrameSource } from './playback';
-import { Pipeline } from './post';
+import { Pipeline, softwareRendered } from './post';
 import { buildLandVenue, type LandVenue } from './terrain';
 import { buildWaterVenue, waterTheme } from './water';
 
@@ -103,6 +103,11 @@ export class RaceScene {
   private mode: CameraMode = 'follow';
   private focusId: string | null = null;
   private raf = 0;
+  private pending: THREE.Object3D[] = [];
+  private batch = 1;
+  private previous = 0;
+  private rested = 0;
+  private timer = 0;
   private lastTime = 0;
   private elapsed = 0;
   private resizeObserver: ResizeObserver;
@@ -157,7 +162,8 @@ export class RaceScene {
         facing = Math.atan2(-f.nx, -f.nz) + 0.7;
       }
     }
-    this.atmosphere = bakeAtmosphere(this.renderer, options.surface, options.venueId.length, facing);
+    const software = softwareRendered(this.renderer);
+    this.atmosphere = bakeAtmosphere(this.renderer, options.surface, options.venueId.length, facing, software);
     const look = this.atmosphere.look;
     this.renderer.toneMappingExposure = look.exposure;
     this.sun = new THREE.DirectionalLight(look.sunColor, look.sunIntensity);
@@ -168,7 +174,7 @@ export class RaceScene {
         new THREE.Color(look.sunColor).multiplyScalar(look.sunIntensity / Math.PI + 0.3 * look.ambient),
       );
     }
-    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera);
+    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera, software);
     this.buildEnvironment(options);
     this.buildRunners(options);
     this.scene.add(this.particles.points);
@@ -178,7 +184,18 @@ export class RaceScene {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
     this.resize();
+    this.scene.traverse((object) => {
+      if (
+        object.visible &&
+        (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Sprite)
+      ) {
+        object.visible = false;
+        this.pending.push(object);
+      }
+    });
+    this.pending.reverse();
     this.lastTime = performance.now();
+    this.previous = this.lastTime;
     this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -220,6 +237,7 @@ export class RaceScene {
 
   dispose(): void {
     cancelAnimationFrame(this.raf);
+    window.clearTimeout(this.timer);
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.scene.traverse((object) => {
@@ -241,7 +259,9 @@ export class RaceScene {
   private applyTier(): void {
     const tier = this.pipeline.tier;
     this.land?.setDetail(tier.detail);
-    if (this.sun.shadow.mapSize.x !== tier.shadow) {
+    this.sun.castShadow = tier.shadow > 0;
+    this.renderer.shadowMap.enabled = tier.shadow > 0;
+    if (tier.shadow > 0 && this.sun.shadow.mapSize.x !== tier.shadow) {
       this.sun.shadow.mapSize.set(tier.shadow, tier.shadow);
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
@@ -600,7 +620,13 @@ export class RaceScene {
   }
 
   private loop = (now: number): void => {
-    this.raf = requestAnimationFrame(this.loop);
+    const began = performance.now();
+    if (this.pending.length) {
+      for (let i = 0; i < this.batch && this.pending.length; i += 1) {
+        const next = this.pending.pop();
+        if (next) next.visible = true;
+      }
+    }
     const dt = Math.min(0.1, Math.max(0, (now - this.lastTime) / 1000));
     this.lastTime = now;
     this.elapsed += dt;
@@ -625,5 +651,18 @@ export class RaceScene {
     this.pipeline.render(dt);
     this.updateLabels();
     this.onFrame?.(frame);
+    const wall = began - this.previous - this.rested;
+    this.previous = began;
+    const cost = Math.max(performance.now() - began, Math.min(2000, wall) - 17);
+    this.batch = cost < 16 ? Math.min(64, this.batch * 2) : Math.max(1, this.batch >> 1);
+    if (cost > 34) {
+      this.rested = Math.min(500, cost * 1.5);
+      this.timer = window.setTimeout(() => {
+        this.raf = requestAnimationFrame(this.loop);
+      }, this.rested);
+    } else {
+      this.rested = 0;
+      this.raf = requestAnimationFrame(this.loop);
+    }
   };
 }
