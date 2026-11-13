@@ -52,6 +52,21 @@ export class Input {
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
     });
+    const guard = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.gp-panel, .gp-tools')) return;
+      event.preventDefault();
+      window.getSelection()?.removeAllRanges();
+    };
+    for (const type of ['selectstart', 'contextmenu', 'dblclick', 'gesturestart'])
+      root.addEventListener(type, guard, { passive: false });
+    const stage = root.querySelector<HTMLElement>('[data-hud="stage"]');
+    stage?.addEventListener('touchstart', guard, { passive: false });
+    this.cleanup.push(() => {
+      for (const type of ['selectstart', 'contextmenu', 'dblclick', 'gesturestart'])
+        root.removeEventListener(type, guard);
+      stage?.removeEventListener('touchstart', guard);
+    });
     for (const button of root.querySelectorAll<HTMLElement>('[data-control]')) {
       const action = button.dataset.control;
       if (action !== 'left' && action !== 'right' && action !== 'down' && action !== 'boost') continue;
@@ -68,12 +83,16 @@ export class Input {
       button.addEventListener('pointercancel', end);
       button.addEventListener('lostpointercapture', end);
       button.addEventListener('contextmenu', block);
+      button.addEventListener('touchstart', block, { passive: false });
+      button.addEventListener('touchend', block, { passive: false });
       this.cleanup.push(() => {
         button.removeEventListener('pointerdown', start);
         button.removeEventListener('pointerup', end);
         button.removeEventListener('pointercancel', end);
         button.removeEventListener('lostpointercapture', end);
         button.removeEventListener('contextmenu', block);
+        button.removeEventListener('touchstart', block);
+        button.removeEventListener('touchend', block);
       });
     }
   }

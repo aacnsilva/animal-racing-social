@@ -154,6 +154,8 @@ export class Game {
   private dust: Dust;
   private focus = new THREE.Vector3();
   private pending: THREE.Object3D[] = [];
+  private warm = 0;
+  private ready = false;
   private batch = 1;
   private previous = 0;
   private rested = 0;
@@ -253,6 +255,7 @@ export class Game {
       'streaks',
       'draft',
       'board',
+      'loading',
     ])
       this.hud[name] = root.querySelector<HTMLElement>(`[data-hud="${name}"]`);
     this.buildBoard();
@@ -895,12 +898,20 @@ export class Game {
     const frameMs = now - this.last;
     this.last = now;
     const dt = Math.min(0.05, frameMs / 1000);
-    if (!this.paused) {
+    if (!this.ready && this.pending.length === 0) {
+      this.warm += 1;
+      if (this.warm > 3) {
+        this.ready = true;
+        this.hud.loading?.classList.add('done');
+      }
+    }
+    const holding = !this.ready && this.setup.startAt === null;
+    if (!this.paused && !holding) {
       this.elapsed += dt;
       if (this.setup.startAt === null) this.localClock += dt * 1000;
     }
     const clock = this.clock();
-    if (!this.paused) {
+    if (!this.paused && !holding) {
       this.simulate(dt, clock);
       this.updateOthers(clock, dt);
       this.particles.update(dt);

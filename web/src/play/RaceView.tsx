@@ -52,17 +52,22 @@ export function RaceView({ setup, room, you, client, onFinished, onRestart, onEx
   useEffect(() => {
     const element = root.current;
     if (!element) return undefined;
-    let instance: Game;
-    try {
-      instance = new Game(element, setup, { onFinish: (result) => finished(result) });
-    } catch {
-      queueMicrotask(() => setFailed(true));
-      return undefined;
-    }
-    game.current = instance;
-    client?.setWorldHandler((serverTime, list) => instance.applyWorld(serverTime, list));
-    document.documentElement.classList.add('gp-lock');
+    let instance: Game | null = null;
     let wake: { release: () => Promise<void> } | null = null;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        try {
+          instance = new Game(element, setup, { onFinish: (result) => finished(result) });
+        } catch {
+          setFailed(true);
+          return;
+        }
+        const started = instance;
+        game.current = started;
+        client?.setWorldHandler((serverTime, list) => started.applyWorld(serverTime, list));
+      });
+    });
+    document.documentElement.classList.add('gp-lock');
     if ('wakeLock' in navigator)
       navigator.wakeLock
         .request('screen')
@@ -72,9 +77,10 @@ export function RaceView({ setup, room, you, client, onFinished, onRestart, onEx
         })
         .catch(() => undefined);
     return () => {
+      cancelAnimationFrame(frame);
       client?.setWorldHandler(null);
       game.current = null;
-      instance.dispose();
+      instance?.dispose();
       document.documentElement.classList.remove('gp-lock');
       void wake?.release().catch(() => undefined);
     };
@@ -135,6 +141,11 @@ export function RaceView({ setup, room, you, client, onFinished, onRestart, onEx
     >
       <div className="gp-stage" data-hud="stage" />
       <div className="gp-streaks" data-hud="streaks" aria-hidden />
+      <div className="gp-loading" data-hud="loading" data-testid="gp-loading">
+        <i aria-hidden />
+        <b>{track.name}</b>
+        <span>Warming up the grid…</span>
+      </div>
       {failed && (
         <div className="gp-panel-wrap">
           <div className="gp-panel">

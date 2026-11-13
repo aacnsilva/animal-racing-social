@@ -4711,6 +4711,59 @@ html.gp-lock body {
   font-variant-numeric: tabular-nums;
 }
 
+.gp-root *,
+.gp-root *::before,
+.gp-root *::after {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.gp-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: radial-gradient(circle at 50% 40%, #16302a, #05090c 75%);
+  transition: opacity 0.45s ease;
+}
+
+.gp-loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gp-loading i {
+  width: 54px;
+  height: 54px;
+  border: 5px solid rgba(255, 255, 255, 0.16);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: gp-turn 0.8s linear infinite;
+  will-change: transform;
+}
+
+.gp-loading b {
+  font-size: 1.5rem;
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gp-loading span {
+  color: var(--text-2);
+  font-size: 0.9rem;
+}
+
+@keyframes gp-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .gp-stage,
 .gp-canvas {
   position: absolute;
@@ -5132,7 +5185,6 @@ html.gp-lock body {
   background: rgba(14, 24, 21, 0.94);
   color: var(--text);
   box-shadow: var(--shadow);
-  user-select: text;
 }
 
 .gp-panel.wide {
