@@ -10,6 +10,7 @@ import type { RaceSetup } from './game';
 import { isTouchDevice } from './input';
 import { ArcadeClient } from './net';
 import type { RoomConfig, RoomView } from './protocol';
+import { prewarmTrack } from './prewarm';
 import { RaceView, type RaceOutcome } from './RaceView';
 import { ANIMALS, buildGrid, fmtRaceTime, isSpecies, SLOT_COLORS, SPECIES_ORDER, type Difficulty } from './roster';
 import { loadTrack, trackDef, TRACKS, type TrackId } from './tracks';
@@ -413,6 +414,11 @@ export function PlayPage({ code }: { code?: string }) {
   };
 
   useEffect(() => () => client.close(), [client]);
+
+  const warmTrack = net.room?.config.trackId ?? prefs.trackId;
+  useEffect(() => {
+    prewarmTrack(warmTrack);
+  }, [warmTrack]);
 
   const wantedCode = code?.toUpperCase() ?? null;
   const roomCode = net.room?.code ?? null;

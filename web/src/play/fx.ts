@@ -15,6 +15,7 @@ export class Particles {
   private size = new Float32Array(MAX);
   private gravity = new Float32Array(MAX);
   private cursor = 0;
+  private live = 0;
   private scratch = new THREE.Color();
 
   constructor() {
@@ -62,6 +63,7 @@ export class Particles {
   ): void {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % MAX;
+    this.live += 1;
     this.position.set([x, y, z], i * 3);
     this.velocity.set([vx, vy, vz], i * 3);
     this.scratch.set(color);
@@ -73,12 +75,15 @@ export class Particles {
   }
 
   update(dt: number): void {
+    if (this.live === 0) return;
+    let live = 0;
     for (let i = 0; i < MAX; i++) {
       if (this.life[i] <= 0) {
         this.misc[i * 2 + 1] = 0;
         continue;
       }
       this.life[i] -= dt;
+      live += 1;
       const t = Math.max(0, this.life[i] / this.span[i]);
       this.velocity[i * 3 + 1] -= this.gravity[i] * dt;
       this.position[i * 3] += this.velocity[i * 3] * dt;
@@ -87,6 +92,8 @@ export class Particles {
       this.misc[i * 2] = this.size[i] * (1.6 - t * 0.6);
       this.misc[i * 2 + 1] = t * 0.6;
     }
+    this.live = live;
+    this.points.visible = true;
     this.geometry.getAttribute('position').needsUpdate = true;
     this.geometry.getAttribute('aColor').needsUpdate = true;
     this.geometry.getAttribute('aMisc').needsUpdate = true;

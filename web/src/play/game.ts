@@ -157,6 +157,9 @@ export class Game {
   private focus = new THREE.Vector3();
   private pending: THREE.Object3D[] = [];
   private warm = 0;
+  private software = false;
+  private compiling = false;
+  private lastFov = 0;
   private began = 0;
   private startAt = 0;
   private ready = false;
@@ -208,6 +211,7 @@ export class Game {
     this.startAt = setup.startAt ?? 0;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: false, stencil: false, powerPreference: 'high-performance' });
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.NoToneMapping;
@@ -225,7 +229,9 @@ export class Game {
         facing = Math.atan2(-frame.nx, -frame.nz) + 0.7;
       }
     }
-    const software = softwareRendered(this.renderer);
+    const software =
+      softwareRendered(this.renderer) && !(import.meta.env.DEV && window.location.search.includes('forcegpu'));
+    this.software = software;
     this.atmosphere = bakeAtmosphere(this.renderer, this.track.def.surface, this.track.def.id.length, facing, software);
     const look = this.atmosphere.look;
     this.renderer.toneMappingExposure = look.exposure;
@@ -271,16 +277,30 @@ export class Game {
     this.resizeObserver.observe(root);
     this.resize();
     if (import.meta.env.DEV) Object.assign(window, { __gp: this });
-    this.scene.traverse((object) => {
-      if (
-        object.visible &&
-        (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Sprite)
-      ) {
-        object.visible = false;
-        this.pending.push(object);
-      }
-    });
-    this.pending.reverse();
+    if (software) {
+      this.scene.traverse((object) => {
+        if (
+          object.visible &&
+          (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Sprite)
+        ) {
+          object.visible = false;
+          this.pending.push(object);
+        }
+      });
+      this.pending.reverse();
+    } else {
+      this.compiling = true;
+      const linear = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+      this.renderer.setRenderTarget(linear);
+      void this.renderer
+        .compileAsync(this.scene, this.camera)
+        .catch(() => undefined)
+        .finally(() => {
+          this.compiling = false;
+          linear.dispose();
+        });
+      this.renderer.setRenderTarget(null);
+    }
     this.last = performance.now();
     this.began = this.last;
     this.previous = this.last;
@@ -817,7 +837,10 @@ export class Game {
     const fast = body.boosting || body.padTime > 0 ? 1 : 0;
     const wanted = (portrait ? 78 : 60) + ratio * 7 + Math.max(fast * 9, this.fovKick * 12);
     this.camera.fov += (wanted - this.camera.fov) * Math.min(1, dt * 4);
-    this.camera.updateProjectionMatrix();
+    if (Math.abs(this.camera.fov - this.lastFov) > 0.02) {
+      this.lastFov = this.camera.fov;
+      this.camera.updateProjectionMatrix();
+    }
     const rumble = this.shake * 0.35 + (body.offroad && body.speed > 6 ? 0.06 : 0) + fast * 0.03;
     this.camera.position.set(
       this.camPos.x + (Math.random() - 0.5) * rumble,
@@ -852,7 +875,7 @@ export class Game {
       hud.streaks.style.opacity = String(Math.min(1, fast * Math.min(1, body.speed / 20)));
     }
     this.hudFrame += 1;
-    if (this.hudFrame % 2 === 0) this.drawMinimap();
+    if (this.hudFrame % 3 === 0) this.drawMinimap();
     if (this.hudFrame % 6 !== 0) return;
     const rows = this.standings();
     const mine = rows.find((row) => row.me);
@@ -902,6 +925,11 @@ export class Game {
 
   private loop = (now: number): void => {
     if (this.disposed) return;
+    if (this.compiling && now - this.began < WARM_LIMIT_MS) {
+      this.last = now;
+      this.raf = requestAnimationFrame(this.loop);
+      return;
+    }
     const began = performance.now();
     for (let i = 0; i < this.batch && this.pending.length; i++) {
       const next = this.pending.pop();
@@ -961,7 +989,7 @@ export class Game {
     this.previous = began;
     const cost = Math.max(performance.now() - began, Math.min(2000, wall) - 17);
     this.batch = cost < 16 ? Math.min(64, this.batch * 2) : Math.max(1, this.batch >> 1);
-    if (cost > 34) {
+    if (this.software && cost > 34) {
       this.rested = Math.min(500, cost * 1.5);
       this.timer = window.setTimeout(() => {
         this.raf = requestAnimationFrame(this.loop);
@@ -991,7 +1019,8 @@ export class Game {
     this.pipeline.dispose();
     this.atmosphere.dispose();
     this.renderer.dispose();
-    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
+    const renderer = this.renderer;
+    window.setTimeout(() => renderer.forceContextLoss(), 1500);
   }
 }

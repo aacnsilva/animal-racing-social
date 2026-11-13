@@ -121,6 +121,28 @@ function readTexel(
   );
 }
 
+function readHorizon(renderer: THREE.WebGLRenderer, target: THREE.WebGLCubeRenderTarget): [THREE.Color, THREE.Color][] {
+  const left = 40;
+  const bottom = 118;
+  const width = 177;
+  const height = 21;
+  const buffer = new Uint16Array(width * height * 4);
+  const pairs: [THREE.Color, THREE.Color][] = [];
+  const texel = (x: number, y: number) => {
+    const i = ((y - bottom) * width + (x - left)) * 4;
+    return new THREE.Color(
+      THREE.DataUtils.fromHalfFloat(buffer[i]),
+      THREE.DataUtils.fromHalfFloat(buffer[i + 1]),
+      THREE.DataUtils.fromHalfFloat(buffer[i + 2]),
+    );
+  };
+  for (const face of [0, 1, 4, 5]) {
+    renderer.readRenderTargetPixels(target, left, bottom, width, height, buffer, face);
+    for (const x of [40, 128, 216]) pairs.push([texel(x, 118), texel(x, 138)]);
+  }
+  return pairs;
+}
+
 const luma = (c: THREE.Color) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
 
 export function bakeAtmosphere(
@@ -172,13 +194,7 @@ export function bakeAtmosphere(
   new THREE.CubeCamera(1, 3000, ambient).update(renderer, stage);
 
   const rows: number[] = [];
-  for (const face of [0, 1, 4, 5]) {
-    for (const x of [40, 128, 216]) {
-      const low = readTexel(renderer, ambient, face, x, 118);
-      const high = readTexel(renderer, ambient, face, x, 138);
-      rows.push(Math.max(luma(low), luma(high)));
-    }
-  }
+  for (const [low, high] of readHorizon(renderer, ambient)) rows.push(Math.max(luma(low), luma(high)));
   rows.sort((a, b) => a - b);
   const typical = rows[Math.floor(rows.length / 2)];
   const zenith = readTexel(renderer, ambient, 2, 128, 128);
@@ -190,13 +206,9 @@ export function bakeAtmosphere(
 
   const horizon = new THREE.Color(0, 0, 0);
   let counted = 0;
-  for (const face of [0, 1, 4, 5]) {
-    for (const x of [40, 128, 216]) {
-      const low = readTexel(renderer, ambient, face, x, 118);
-      const high = readTexel(renderer, ambient, face, x, 138);
-      horizon.add(luma(low) > luma(high) ? low : high);
-      counted += 1;
-    }
+  for (const [low, high] of readHorizon(renderer, ambient)) {
+    horizon.add(luma(low) > luma(high) ? low : high);
+    counted += 1;
   }
   horizon.multiplyScalar(1 / counted);
   const haze = horizon

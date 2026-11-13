@@ -15,6 +15,7 @@ export function AnimalPreview({ species, color }: { species: Species; color: str
     } catch {
       return undefined;
     }
+    renderer.debug.checkShaderErrors = import.meta.env.DEV;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.append(renderer.domElement);
@@ -56,8 +57,14 @@ export function AnimalPreview({ species, color }: { species: Species; color: str
     let raf = 0;
     let last = performance.now();
     let time = 0;
+    let visible = true;
+    const watcher = new IntersectionObserver((entries) => {
+      visible = entries.some((entry) => entry.isIntersecting);
+    });
+    watcher.observe(container);
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
+      if (!visible || document.hidden || now - last < 30) return;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       time += dt;
@@ -70,13 +77,14 @@ export function AnimalPreview({ species, color }: { species: Species; color: str
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      watcher.disconnect();
       discMaterial.dispose();
       rimMaterial.dispose();
       discGeometry.dispose();
       rimGeometry.dispose();
       renderer.dispose();
-      renderer.forceContextLoss();
       renderer.domElement.remove();
+      window.setTimeout(() => renderer.forceContextLoss(), 1500);
     };
   }, [species, color]);
 

@@ -132,6 +132,7 @@ export class RaceScene {
     this.container = container;
     this.species = options.species;
     this.renderer = new THREE.WebGLRenderer({ antialias: false, stencil: false, powerPreference: 'high-performance' });
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.NoToneMapping;

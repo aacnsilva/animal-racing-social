@@ -83,6 +83,8 @@ export function App({ authError }: { authError: string | null }) {
 
   useEffect(() => {
     void loadSeason();
+    const timer = window.setTimeout(() => void import('./play/PlayPage').catch(() => undefined), 2500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
