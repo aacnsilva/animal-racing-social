@@ -4729,12 +4729,12 @@ html.gp-lock body {
   justify-content: center;
   gap: 10px;
   background: radial-gradient(circle at 50% 40%, #16302a, #05090c 75%);
+  pointer-events: none;
   transition: opacity 0.45s ease;
 }
 
 .gp-loading.done {
   opacity: 0;
-  pointer-events: none;
 }
 
 .gp-loading i {

@@ -21,6 +21,7 @@ test('anyone can start a solo grand prix without signing in', async ({ page }) =
   await expect(race.locator('canvas.gp-canvas')).toBeVisible({ timeout: 120_000 });
   await expect(page.getByTestId('gp-lap')).toHaveText('1/1', { timeout: 60_000 });
 
+  await expect(page.getByTestId('gp-loading')).toHaveClass(/done/, { timeout: 120_000 });
   await page.getByTestId('gp-menu').click({ timeout: 120_000 });
   await expect(page.getByTestId('gp-pause')).toBeVisible({ timeout: 60_000 });
   await page.getByTestId('gp-quit').click({ timeout: 60_000 });

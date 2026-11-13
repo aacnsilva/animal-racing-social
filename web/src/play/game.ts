@@ -81,6 +81,7 @@ type Racer = {
 
 const INTERP_DELAY_MS = 150;
 const SEND_MS = 80;
+const WARM_LIMIT_MS = 12_000;
 const pose: Pose = { x: 0, z: 0, heading: 0, tx: 0, tz: 0, nx: 0, nz: 0 };
 const botState: BotState = { s: 0, lat: 0, speed: 0, boosting: false };
 
@@ -156,6 +157,7 @@ export class Game {
   private focus = new THREE.Vector3();
   private pending: THREE.Object3D[] = [];
   private warm = 0;
+  private began = 0;
   private startAt = 0;
   private ready = false;
   private batch = 1;
@@ -280,6 +282,7 @@ export class Game {
     });
     this.pending.reverse();
     this.last = performance.now();
+    this.began = this.last;
     this.previous = this.last;
     this.raf = requestAnimationFrame(this.loop);
   }
@@ -907,9 +910,9 @@ export class Game {
     const frameMs = now - this.last;
     this.last = now;
     const dt = Math.min(0.05, frameMs / 1000);
-    if (!this.ready && this.pending.length === 0) {
-      this.warm += 1;
-      if (this.warm > 3) {
+    if (!this.ready) {
+      if (this.pending.length === 0) this.warm += 1;
+      if (this.warm > 3 || now - this.began > WARM_LIMIT_MS) {
         this.ready = true;
         this.hud.loading?.classList.add('done');
         this.events.onReady();
