@@ -2,10 +2,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { laneColor, laneText, surfaceColors, TrackPath } from '../lib/track';
 import type { Segment, Species } from '../lib/types';
-import { animateRig, buildAnimal, type AnimalRig } from './animals';
-import { rng, stripGeometry, wallGeometry } from './geometry';
+import { buildAnimal, type AnimalRig } from './animals';
+import { bakeAtmosphere, sunSprite, type Atmosphere } from './atmosphere';
+import { rng } from './geometry';
+import { Particles, PARTICLE_STYLES } from './particles';
 import type { Frame, FrameEntrant, FrameSource } from './playback';
-import { buildWaterVenue, waterTheme, type WaterTheme } from './water';
+import { Pipeline } from './post';
+import { buildLandVenue, type LandVenue } from './terrain';
+import { buildWaterVenue, waterTheme } from './water';
 
 export type CameraMode = 'follow' | 'tv' | 'overview';
 
@@ -27,9 +31,14 @@ type Runner = {
   tag: HTMLSpanElement;
   tagText: string;
   world: THREE.Vector3;
+  lean: number;
+  pitch: number;
+  emit: number;
+  jitter: number;
 };
 
 const UP = new THREE.Vector3(0, 1, 0);
+const AHEAD = { x: 0, y: 0, z: 0, tx: 1, tz: 0, nx: 0, nz: 1 };
 
 function checkerTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -45,6 +54,32 @@ function checkerTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;
   texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function bannerTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#10161a';
+  ctx.fillRect(0, 0, 1024, 64);
+  for (const start of [0, 832]) {
+    for (let x = 0; x < 12; x += 1) {
+      for (let y = 0; y < 4; y += 1) {
+        ctx.fillStyle = (x + y) % 2 ? '#10161a' : '#f6f4ec';
+        ctx.fillRect(start + x * 16, y * 16, 16, 16);
+      }
+    }
+  }
+  ctx.fillStyle = '#f6f4ec';
+  ctx.font = '800 44px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('F I N I S H', 512, 34);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
   return texture;
 }
 
@@ -75,26 +110,26 @@ export class RaceScene {
   private camTarget = new THREE.Vector3();
   private snapCamera = true;
   private sun: THREE.DirectionalLight;
+  private sunOffset = new THREE.Vector3(60, 110, 40);
+  private atmosphere: Atmosphere;
+  private pipeline: Pipeline;
+  private land: LandVenue | null = null;
+  private sunDisc: THREE.Sprite | null = null;
+  private particles: Particles;
+  private aquatic: boolean;
   private species: Species;
   private disposables: { dispose: () => void }[] = [];
   private animateWater: ((time: number) => void) | null = null;
-  private waterFog: {
-    level: number;
-    below: boolean | null;
-    water: { color: THREE.Color; near: number; far: number };
-    air: { color: THREE.Color; near: number; far: number };
-  } | null = null;
+  private patchWater: (<T extends THREE.Material>(material: T, caustics?: number) => T) | null = null;
   onFrame: ((frame: Frame | null) => void) | null = null;
 
   constructor(container: HTMLElement, options: SceneOptions) {
     this.container = container;
     this.species = options.species;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, stencil: false, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.domElement.className = 'viewer-canvas';
     container.appendChild(this.renderer.domElement);
 
@@ -112,9 +147,33 @@ export class RaceScene {
     this.controls.enabled = false;
     this.renderer.domElement.style.touchAction = 'pan-y';
 
-    this.sun = new THREE.DirectionalLight('#fff4e0', 2.2);
+    this.aquatic = waterTheme(options.surface) !== null;
+    let facing: number | null = null;
+    if (!this.aquatic) {
+      const straights = this.track.ranges.filter((range) => range.type !== 'CURVE');
+      const longest = straights.toSorted((x, y) => y.end - y.start - (x.end - x.start))[0];
+      if (longest) {
+        const f = this.track.frame((longest.start + longest.end) / 2);
+        facing = Math.atan2(-f.nx, -f.nz) + 0.7;
+      }
+    }
+    this.atmosphere = bakeAtmosphere(this.renderer, options.surface, options.venueId.length, facing);
+    const look = this.atmosphere.look;
+    this.renderer.toneMappingExposure = look.exposure;
+    this.sun = new THREE.DirectionalLight(look.sunColor, look.sunIntensity);
+    this.sunOffset.copy(this.atmosphere.sunDirection).multiplyScalar(170);
+    this.particles = new Particles(PARTICLE_STYLES[this.aquatic ? 'WATER' : options.surface] ?? PARTICLE_STYLES.GRASS);
+    if (!this.aquatic) {
+      this.particles.setLight(
+        new THREE.Color(look.sunColor).multiplyScalar(look.sunIntensity / Math.PI + 0.3 * look.ambient),
+      );
+    }
+    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera);
     this.buildEnvironment(options);
     this.buildRunners(options);
+    this.scene.add(this.particles.points);
+    this.pipeline.onTier = () => this.applyTier();
+    this.applyTier();
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -154,7 +213,7 @@ export class RaceScene {
   resize(): void {
     const width = Math.max(1, this.container.clientWidth);
     const height = Math.max(1, this.container.clientHeight);
-    this.renderer.setSize(width, height, false);
+    this.pipeline.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }
@@ -171,10 +230,34 @@ export class RaceScene {
       } else if (material instanceof THREE.Material) material.dispose();
     });
     for (const item of this.disposables) item.dispose();
+    this.pipeline.dispose();
+    this.atmosphere.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.labelLayer.remove();
+  }
+
+  private applyTier(): void {
+    const tier = this.pipeline.tier;
+    this.land?.setDetail(tier.detail);
+    if (this.sun.shadow.mapSize.x !== tier.shadow) {
+      this.sun.shadow.mapSize.set(tier.shadow, tier.shadow);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+  }
+
+  private soak(object: THREE.Object3D): void {
+    const patch = this.patchWater;
+    if (!patch) return;
+    object.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const material: unknown = child.material;
+      for (const item of Array.isArray(material) ? material : [material]) {
+        if (item instanceof THREE.MeshStandardMaterial) patch(item);
+      }
+    });
   }
 
   private add<T extends THREE.Object3D>(object: T): T {
@@ -186,26 +269,27 @@ export class RaceScene {
     const colors = surfaceColors(options.surface);
     const track = this.track;
     const size = track.size;
-    const cx = track.centerX;
-    const cz = track.centerZ;
     const random = rng(options.venueId);
 
     const theme = waterTheme(options.surface);
-    this.scene.background = new THREE.Color(colors.sky);
-    this.scene.fog = new THREE.Fog(colors.fog, size * 2.2, size * 6.5);
+    const look = this.atmosphere.look;
+    this.scene.background = this.atmosphere.background;
+    this.scene.backgroundIntensity = look.skyGain * this.atmosphere.gain;
+    this.scene.environment = this.atmosphere.environment;
+    this.scene.environmentIntensity = look.ambient * this.atmosphere.gain;
 
-    this.add(new THREE.HemisphereLight(colors.sky, colors.ground, 1.1));
+    this.add(new THREE.HemisphereLight(colors.sky, colors.ground, 0.18));
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
     const shadowCam = this.sun.shadow.camera;
-    shadowCam.left = -45;
-    shadowCam.right = 45;
-    shadowCam.top = 45;
-    shadowCam.bottom = -45;
+    shadowCam.left = -34;
+    shadowCam.right = 34;
+    shadowCam.top = 34;
+    shadowCam.bottom = -34;
     shadowCam.near = 1;
-    shadowCam.far = 400;
-    this.sun.shadow.bias = -0.0008;
-    this.sun.shadow.normalBias = 0.06;
+    shadowCam.far = 380;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.05;
+    this.sun.shadow.radius = 2.5;
     this.add(this.sun);
     this.add(this.sun.target);
 
@@ -214,381 +298,107 @@ export class RaceScene {
       this.add(water.group);
       this.disposables.push(...water.textures);
       this.animateWater = water.animate;
-      const underwaterFar: Record<WaterTheme, number> = { POOL: 150, AQUARIUM: 130, OPEN_SEA: 110 };
-      this.waterFog = {
-        level: water.level,
-        below: null,
-        water: { color: new THREE.Color(colors.fog), near: 2, far: underwaterFar[theme] },
-        air: { color: new THREE.Color(colors.sky), near: size * 1.5, far: size * 6 },
-      };
+      this.patchWater = water.patchMaterial;
+      water.setSun(this.atmosphere.sunDirection);
+      const air = water.fog.air;
+      this.scene.fog = new THREE.Fog(air.color, air.near, air.far);
+      if (water.indoor) {
+        this.scene.background = new THREE.Color(water.background.air ?? '#05080b');
+        this.scene.backgroundIntensity = 1;
+      }
     } else {
-      const groundMat = new THREE.MeshStandardMaterial({ color: colors.ground, roughness: 1, flatShading: true });
-      const ground = new THREE.Mesh(new THREE.CircleGeometry(size * 5, 64), groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      ground.position.set(cx, -0.05, cz);
-      ground.receiveShadow = true;
-      this.add(ground);
-
-      const infieldPoints = track.samples(2).map((s) => {
-        const p = track.point(s, track.innerOffset() - 0.8);
-        return new THREE.Vector2(p.x, -p.z);
-      });
-      const infield = new THREE.Mesh(
-        new THREE.ShapeGeometry(new THREE.Shape(infieldPoints)),
-        new THREE.MeshStandardMaterial({ color: colors.infield, roughness: 1, side: THREE.DoubleSide }),
-      );
-      infield.rotation.x = -Math.PI / 2;
-      infield.position.y = 0.0;
-      infield.receiveShadow = true;
-      this.add(infield);
-
-      const trackMat = new THREE.MeshStandardMaterial({
-        color: colors.track,
-        roughness: options.surface === 'ICE' ? 0.25 : 0.95,
-        metalness: options.surface === 'ICE' ? 0.15 : 0,
-      });
-      const ribbon = new THREE.Mesh(
-        stripGeometry(track, track.innerOffset(), track.outerOffset(), 0.04, 0.04, 1),
-        trackMat,
-      );
-      ribbon.receiveShadow = true;
-      this.add(ribbon);
-
-      const lineMat = new THREE.MeshBasicMaterial({
-        color: '#ffffff',
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
-      });
-      for (let lane = 1; lane < track.lanes; lane += 1) {
-        const offset = track.laneOffset(lane) + 0.7;
-        this.add(new THREE.Mesh(stripGeometry(track, offset - 0.04, offset + 0.04, 0.06, 0.06, 1), lineMat));
-      }
-
-      const railMat = new THREE.MeshStandardMaterial({ color: '#f7f7f2', roughness: 0.6, side: THREE.DoubleSide });
-      for (const lateral of [track.innerOffset() - 0.3, track.outerOffset() + 0.3]) {
-        this.add(new THREE.Mesh(wallGeometry(track, lateral, 0.92, 1.06, 1, true), railMat));
-        const posts = track.samples(6);
-        const postMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 1.05, 0.08), railMat, posts.length);
-        const m = new THREE.Matrix4();
-        const p = { x: 0, y: 0, z: 0 };
-        posts.forEach((s, i) => {
-          track.point(s, lateral, p);
-          m.makeTranslation(p.x, p.y + 0.52, p.z);
-          postMesh.setMatrixAt(i, m);
-        });
-        postMesh.castShadow = true;
-        this.add(postMesh);
-      }
-    }
-
-    if (track.maxY > 0.05) {
-      const skirtMat = new THREE.MeshStandardMaterial({
-        color: colors.accent,
-        roughness: 1,
-        side: THREE.DoubleSide,
-        flatShading: true,
-      });
-      for (const lateral of [track.innerOffset() - 0.6, track.outerOffset() + 0.6]) {
-        this.add(new THREE.Mesh(wallGeometry(track, lateral, -0.05, 0.04, 1, false), skirtMat));
-      }
-      this.add(
-        new THREE.Mesh(stripGeometry(track, track.innerOffset() - 0.6, track.innerOffset(), 0.04, 0.04, 1), skirtMat),
-      );
-      this.add(
-        new THREE.Mesh(stripGeometry(track, track.outerOffset(), track.outerOffset() + 0.6, 0.04, 0.04, 1), skirtMat),
-      );
+      this.scene.fog = new THREE.FogExp2(this.atmosphere.haze, (0.42 * look.haze) / (size * 2.6));
+      this.land = buildLandVenue(track, options.surface, random, options.venueId);
+      this.add(this.land.group);
+      this.sunDisc = this.add(sunSprite(this.atmosphere));
+      const map = this.sunDisc.material.map;
+      if (map) this.disposables.push(map);
     }
 
     const checker = checkerTexture();
-    this.disposables.push(checker);
-    const finishMat = new THREE.MeshBasicMaterial({ map: checker });
+    const banner = bannerTexture();
+    this.disposables.push(checker, banner);
     const finishGeometry = new THREE.BufferGeometry();
-    const a = track.point(-0.7, track.innerOffset());
-    const b = track.point(-0.7, track.outerOffset());
-    const c = track.point(0.7, track.innerOffset());
-    const d = track.point(0.7, track.outerOffset());
-    finishGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(
-        [a.x, a.y + 0.07, a.z, b.x, b.y + 0.07, b.z, c.x, c.y + 0.07, c.z, d.x, d.y + 0.07, d.z],
-        3,
-      ),
-    );
-    finishGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 1, 1], 2));
-    finishGeometry.setIndex([0, 2, 1, 1, 2, 3]);
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const index: number[] = [];
+    const steps = 12;
+    for (let i = 0; i <= steps; i += 1) {
+      const lateral = track.innerOffset() + ((track.outerOffset() - track.innerOffset()) * i) / steps;
+      const back = track.point(-0.7, lateral);
+      positions.push(back.x, back.y + 0.075, back.z);
+      const front = track.point(0.7, lateral);
+      positions.push(front.x, front.y + 0.075, front.z);
+      uvs.push(i / steps, 0, i / steps, 1);
+      if (i > 0) {
+        const base = (i - 1) * 2;
+        index.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      }
+    }
+    finishGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    finishGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    finishGeometry.setIndex(index);
     finishGeometry.computeVertexNormals();
-    const finish = new THREE.Mesh(finishGeometry, finishMat);
-    finish.material.side = THREE.DoubleSide;
+    const finish = new THREE.Mesh(
+      finishGeometry,
+      new THREE.MeshStandardMaterial({
+        map: checker,
+        roughness: 0.85,
+        side: THREE.DoubleSide,
+        transparent: theme !== null,
+        opacity: theme ? 0.85 : 1,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -3,
+      }),
+    );
+    finish.receiveShadow = true;
     this.add(finish);
 
-    const gantryMat = new THREE.MeshStandardMaterial({ color: '#20302a', roughness: 0.5 });
-    const inner = track.point(0, track.innerOffset() - 1.2);
-    const outer = track.point(0, track.outerOffset() + 1.2);
+    const steel = new THREE.MeshStandardMaterial({ color: '#d9dde0', roughness: 0.35, metalness: 0.85 });
+    const inner = track.point(0, track.innerOffset() - 1.3);
+    const outer = track.point(0, track.outerOffset() + 1.3);
+    const top = Math.max(inner.y, outer.y) + 7.4;
     for (const p of [inner, outer]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 7, 8), gantryMat);
-      post.position.set(p.x, p.y + 3.5, p.z);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, top - p.y + 0.6, 12), steel);
+      post.position.set(p.x, (top + p.y + 0.6) / 2 - 0.3, p.z);
       post.castShadow = true;
       this.add(post);
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.3, 14), steel);
+      foot.position.set(p.x, p.y + 0.15, p.z);
+      this.add(foot);
     }
     const span = Math.hypot(outer.x - inner.x, outer.z - inner.z);
-    const banner = new THREE.Mesh(new THREE.BoxGeometry(span, 1.1, 0.25), [
-      gantryMat,
-      gantryMat,
-      gantryMat,
-      gantryMat,
-      new THREE.MeshBasicMaterial({ map: checker }),
-      new THREE.MeshBasicMaterial({ map: checker }),
-    ]);
-    banner.position.set((inner.x + outer.x) / 2, Math.max(inner.y, outer.y) + 6.6, (inner.z + outer.z) / 2);
-    banner.rotation.y = Math.atan2(-(outer.z - inner.z), outer.x - inner.x);
-    banner.castShadow = true;
-    this.add(banner);
-
-    if (!theme) {
-      this.buildGrandstand(random);
-      this.buildDecor(options.surface, random, colors);
+    const yaw = Math.atan2(-(outer.z - inner.z), outer.x - inner.x);
+    const middle = new THREE.Vector3((inner.x + outer.x) / 2, top, (inner.z + outer.z) / 2);
+    for (const offset of [0.55, -0.55]) {
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, span + 0.6, 8), steel);
+      beam.position.copy(middle).setY(top + offset);
+      beam.rotation.set(0, yaw, Math.PI / 2);
+      beam.castShadow = true;
+      this.add(beam);
     }
-  }
-
-  private buildGrandstand(random: () => number): void {
-    const track = this.track;
-    const straights = track.ranges.filter((range) => range.type !== 'CURVE');
-    const longest = straights.toSorted((x, y) => y.end - y.start - (x.end - x.start))[0] ?? track.ranges[0];
-    if (!longest) return;
-    const length = Math.min(90, (longest.end - longest.start) * 0.8);
-    const mid = (longest.start + longest.end) / 2;
-    const frame = track.frame(mid);
-    const group = new THREE.Group();
-    group.position.set(frame.x, frame.y, frame.z);
-    group.rotation.y = Math.atan2(frame.tx, frame.tz);
-    const side = track.winding;
-    const base = track.outerOffset() + 6;
-    const standMat = new THREE.MeshStandardMaterial({ color: '#d9dcd6', roughness: 0.85, flatShading: true });
-    const seatMat = new THREE.MeshStandardMaterial({ color: '#2f6f5e', roughness: 0.8, flatShading: true });
-    const tiers = 6;
-    for (let i = 0; i < tiers; i += 1) {
-      const tier = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.7 * (i + 1), length), i % 2 ? seatMat : standMat);
-      tier.position.set(side * (base + i * 2.2), 0.35 * (i + 1), 0);
-      tier.castShadow = true;
-      tier.receiveShadow = true;
-      group.add(tier);
-    }
-    const roof = new THREE.Mesh(
-      new THREE.BoxGeometry(tiers * 2.2 + 2, 0.3, length + 2),
-      new THREE.MeshStandardMaterial({ color: '#b8452f', roughness: 0.6 }),
-    );
-    roof.position.set(side * (base + (tiers - 1) * 1.1), 0.7 * tiers + 3.2, 0);
-    roof.rotation.z = side * -0.08;
-    roof.castShadow = true;
-    group.add(roof);
-    const postGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.7 * tiers + 3.2, 6);
-    for (const z of [-length / 2, 0, length / 2]) {
-      const post = new THREE.Mesh(postGeometry, standMat);
-      post.position.set(side * (base + (tiers - 1) * 2.2 + 1), (0.7 * tiers + 3.2) / 2, z);
-      group.add(post);
-    }
-    const crowdColors = ['#e63946', '#f1faee', '#457b9d', '#ffb703', '#2a9d8f', '#e76f51', '#8338ec', '#fb8500'];
-    const perTier = Math.floor(length / 1.1);
-    const crowd = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.45, 0.7, 0.45),
-      new THREE.MeshStandardMaterial({ roughness: 0.8 }),
-      tiers * perTier,
-    );
-    const m = new THREE.Matrix4();
-    const color = new THREE.Color();
-    let index = 0;
-    for (let i = 0; i < tiers; i += 1) {
-      for (let j = 0; j < perTier; j += 1) {
-        if (random() < 0.25) continue;
-        m.makeTranslation(
-          side * (base + i * 2.2 + (random() - 0.5) * 0.6),
-          0.7 * (i + 1) + 0.35,
-          -length / 2 + j * 1.1 + 0.5,
-        );
-        crowd.setMatrixAt(index, m);
-        crowd.setColorAt(index, color.set(crowdColors[Math.floor(random() * crowdColors.length)]));
-        index += 1;
-      }
-    }
-    crowd.count = index;
-    group.add(crowd);
-    this.add(group);
-  }
-
-  private buildDecor(surface: string, random: () => number, colors: ReturnType<typeof surfaceColors>): void {
-    const track = this.track;
-    const size = track.size;
-    const cx = track.centerX;
-    const cz = track.centerZ;
-    const reference = track.samples(3).map((s) => ({ s, f: track.frame(s) }));
-    const placements: { x: number; z: number; y: number; scale: number; rot: number }[] = [];
-    const target = Math.round(Math.min(260, Math.max(90, size * 0.9)));
-    let guard = 0;
-    while (placements.length < target && guard < target * 30) {
-      guard += 1;
-      const x = cx + (random() - 0.5) * size * 2.4;
-      const z = cz + (random() - 0.5) * size * 2.4;
-      let best = Infinity;
-      let side = 0;
-      let nearY = 0;
-      for (const { f } of reference) {
-        const dx = x - f.x;
-        const dz = z - f.z;
-        const dist = dx * dx + dz * dz;
-        if (dist < best) {
-          best = dist;
-          side = dx * f.nx + dz * f.nz;
-          nearY = f.y;
-        }
-      }
-      const distance = Math.sqrt(best);
-      const clearance = side > 0 ? track.outerOffset() + 7 : -track.innerOffset() + 5;
-      if (distance < clearance) continue;
-      if (side > 0 && distance < track.outerOffset() + 26 && random() < 0.7) continue;
-      placements.push({
-        x,
-        z,
-        y: distance < clearance + 6 ? nearY * 0.3 : 0,
-        scale: 0.7 + random() * 0.8,
-        rot: random() * Math.PI * 2,
-      });
-    }
-
-    type Part = {
-      geometry: THREE.BufferGeometry;
-      color: string;
-      y: number;
-      sx?: number;
-      sy?: number;
-      sz?: number;
-      tilt?: number;
-    };
-    const kinds: Part[][] = [];
-    const trunk = '#6b4a2f';
-    switch (surface) {
-      case 'SAND':
-        kinds.push(
-          [
-            { geometry: new THREE.CylinderGeometry(0.18, 0.28, 6, 5), color: '#8a6a43', y: 3, tilt: 0.12 },
-            { geometry: new THREE.ConeGeometry(2.4, 1.2, 6), color: '#3f8a3a', y: 6.2 },
-          ],
-          [{ geometry: new THREE.SphereGeometry(4, 7, 4), color: colors.accent, y: 0, sy: 0.35 }],
-          [
-            { geometry: new THREE.CylinderGeometry(0.35, 0.4, 3, 6), color: '#4f8a43', y: 1.5 },
-            { geometry: new THREE.CylinderGeometry(0.2, 0.22, 1.4, 6), color: '#4f8a43', y: 1.9, tilt: 1.2 },
-          ],
-        );
-        break;
-      case 'ICE':
-        kinds.push(
-          [
-            { geometry: new THREE.CylinderGeometry(0.2, 0.25, 1.4, 5), color: '#5a4636', y: 0.7 },
-            { geometry: new THREE.ConeGeometry(1.8, 4.5, 6), color: '#2f5d4a', y: 3.3 },
-            { geometry: new THREE.ConeGeometry(1.0, 1.8, 6), color: '#f4fbff', y: 5.1 },
-          ],
-          [{ geometry: new THREE.DodecahedronGeometry(1.4, 0), color: '#bfe3f2', y: 0.6, sy: 0.8 }],
-        );
-        break;
-      case 'DIRT':
-        kinds.push(
-          [{ geometry: new THREE.DodecahedronGeometry(1.6, 0), color: '#8c7a63', y: 0.8, sy: 0.7 }],
-          [
-            { geometry: new THREE.CylinderGeometry(0.2, 0.3, 2, 5), color: trunk, y: 1 },
-            { geometry: new THREE.ConeGeometry(1.6, 4, 6), color: '#46663a', y: 3.6 },
-          ],
-          [{ geometry: new THREE.IcosahedronGeometry(0.9, 0), color: '#8f8a4a', y: 0.5, sy: 0.7 }],
-        );
-        break;
-      case 'MUD':
-        kinds.push(
-          [
-            { geometry: new THREE.CylinderGeometry(0.25, 0.35, 3, 5), color: '#4e3a28', y: 1.5 },
-            { geometry: new THREE.IcosahedronGeometry(2.4, 0), color: '#2f5a2a', y: 4.2 },
-          ],
-          [{ geometry: new THREE.CylinderGeometry(2.2, 2.2, 0.05, 10), color: '#3d3122', y: 0.02 }],
-          [{ geometry: new THREE.ConeGeometry(0.5, 1.6, 5), color: '#5f7a3a', y: 0.8 }],
-        );
-        break;
-      default:
-        kinds.push(
-          [
-            { geometry: new THREE.CylinderGeometry(0.22, 0.3, 2.4, 5), color: trunk, y: 1.2 },
-            { geometry: new THREE.IcosahedronGeometry(2.1, 0), color: '#3d7f35', y: 3.8 },
-          ],
-          [
-            { geometry: new THREE.CylinderGeometry(0.2, 0.28, 2, 5), color: trunk, y: 1 },
-            { geometry: new THREE.ConeGeometry(1.7, 4.2, 7), color: '#2f6b33', y: 3.8 },
-          ],
-          [{ geometry: new THREE.IcosahedronGeometry(1.0, 0), color: '#4f9440', y: 0.5, sy: 0.75 }],
-        );
-    }
-
-    const assigned: (typeof placements)[] = kinds.map(() => []);
-    placements.forEach((placement, i) => assigned[i % kinds.length].push(placement));
-    const matrix = new THREE.Matrix4();
-    const quaternion = new THREE.Quaternion();
-    const euler = new THREE.Euler();
-    const position = new THREE.Vector3();
-    const scale = new THREE.Vector3();
-    kinds.forEach((parts, kindIndex) => {
-      const list = assigned[kindIndex];
-      if (!list.length) return;
-      for (const part of parts) {
-        const instanced = new THREE.InstancedMesh(
-          part.geometry,
-          new THREE.MeshStandardMaterial({ color: part.color, flatShading: true, roughness: 0.9 }),
-          list.length,
-        );
-        list.forEach((placement, i) => {
-          euler.set(part.tilt ?? 0, placement.rot, 0);
-          quaternion.setFromEuler(euler);
-          position.set(placement.x, placement.y + part.y * placement.scale, placement.z);
-          scale.set(
-            (part.sx ?? 1) * placement.scale,
-            (part.sy ?? 1) * placement.scale,
-            (part.sz ?? 1) * placement.scale,
-          );
-          matrix.compose(position, quaternion, scale);
-          instanced.setMatrixAt(i, matrix);
-        });
-        instanced.castShadow = part.y > 1;
-        instanced.receiveShadow = true;
-        this.add(instanced);
-      }
+    const face = new THREE.MeshStandardMaterial({
+      map: banner,
+      roughness: 0.6,
+      emissive: '#ffffff',
+      emissiveMap: banner,
+      emissiveIntensity: theme ? 0.5 : 0.12,
     });
-
-    const hills = 18;
-    const hillMesh = new THREE.InstancedMesh(
-      new THREE.ConeGeometry(1, 1, 5),
-      new THREE.MeshStandardMaterial({
-        color: surface === 'ICE' ? '#dfeef5' : colors.accent,
-        flatShading: true,
-        roughness: 1,
-      }),
-      hills,
-    );
-    for (let i = 0; i < hills; i += 1) {
-      const angle = (i / hills) * Math.PI * 2 + random() * 0.3;
-      const radius = size * (2.2 + random() * 0.8);
-      const h = size * (0.12 + random() * 0.18);
-      const w = size * (0.35 + random() * 0.3);
-      euler.set(0, random() * Math.PI, 0);
-      quaternion.setFromEuler(euler);
-      position.set(cx + Math.cos(angle) * radius, h / 2 - 0.1, cz + Math.sin(angle) * radius);
-      scale.set(w, h, w);
-      matrix.compose(position, quaternion, scale);
-      hillMesh.setMatrixAt(i, matrix);
-    }
-    this.add(hillMesh);
+    const dark = new THREE.MeshStandardMaterial({ color: '#12181c', roughness: 0.6 });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(span - 0.4, 0.95, 0.14), [dark, dark, dark, dark, face, face]);
+    board.position.copy(middle);
+    board.rotation.y = yaw;
+    board.castShadow = true;
+    this.add(board);
+    for (const item of [steel, dark, face]) this.patchWater?.(item);
   }
 
   private buildRunners(options: SceneOptions): void {
     for (const entrant of options.entrants) {
       const rig = buildAnimal(options.species, laneColor(entrant.lane));
-      rig.root.traverse((object) => {
-        object.castShadow = true;
-      });
+      rig.root.rotation.order = 'YXZ';
+      this.soak(rig.root);
       this.add(rig.root);
       const label = document.createElement('div');
       label.className = 'vlabel';
@@ -610,6 +420,10 @@ export class RaceScene {
         tag,
         tagText: '',
         world: new THREE.Vector3(),
+        lean: 0,
+        pitch: 0,
+        emit: 0,
+        jitter: (entrant.lane * 0.618) % 1,
       });
     }
   }
@@ -620,14 +434,53 @@ export class RaceScene {
     const f = this.track.frame(s);
     const x = f.x + f.nx * lateral;
     const z = f.z + f.nz * lateral;
-    runner.rig.root.position.set(x, f.y + 0.04, z);
-    runner.rig.root.rotation.y = Math.atan2(f.tx, f.tz);
-    runner.world.set(x, f.y, z);
+    const span = 1.6;
+    const ahead = this.track.frame(s + span, AHEAD);
+    const heading = Math.atan2(f.tx, f.tz);
+    let turn = Math.atan2(ahead.tx, ahead.tz) - heading;
+    if (turn > Math.PI) turn -= Math.PI * 2;
+    if (turn < -Math.PI) turn += Math.PI * 2;
     const speed =
       entrant.state === 'FINISHED'
         ? Math.max(0, entrant.finishSpeed * (1 - Math.min(1, (entrant.finishedForMs ?? 0) / 6000))) + 2
         : entrant.speed;
-    animateRig(runner.rig, entrant.state, speed, dt, this.elapsed);
+    const moving = entrant.state === 'DNF' ? 0 : speed;
+    const leanTarget = Math.max(
+      -0.3,
+      Math.min(0.3, ((-turn / span) * moving * moving * (this.aquatic ? 0.9 : 0.42)) / 9.81),
+    );
+    const pitchTarget = -Math.atan2(ahead.y - f.y, span);
+    const ease = 1 - Math.exp(-dt * 5);
+    runner.lean += (leanTarget - runner.lean) * ease;
+    runner.pitch += (pitchTarget - runner.pitch) * ease;
+    runner.rig.root.position.set(x, f.y + 0.04, z);
+    runner.rig.root.rotation.set(runner.pitch, heading, runner.lean);
+    runner.world.set(x, f.y, z);
+    runner.rig.update(entrant.state, speed, dt, this.elapsed);
+    const style = this.particles.style;
+    if (moving > 3 && dt > 0) {
+      runner.emit += dt * moving * style.rate * (entrant.state === 'SPRINTING' ? 1.5 : 1);
+      while (runner.emit >= 1) {
+        runner.emit -= 1;
+        runner.jitter = (runner.jitter * 7.13 + 0.31) % 1;
+        const a = runner.jitter;
+        const b = (a * 5.7 + 0.13) % 1;
+        const c = (b * 3.9 + 0.57) % 1;
+        const back = 0.2 + a * 1.3;
+        const sideways = (b - 0.5) * 0.7;
+        const drift = -moving * (this.aquatic ? 0.02 : 0.12) * c;
+        this.particles.emit(
+          x - f.tx * back + f.nx * sideways,
+          f.y + (this.aquatic ? 0.7 + c * 0.9 : 0.06),
+          z - f.tz * back + f.nz * sideways,
+          f.tx * drift + f.nx * (b - 0.5) * style.spread,
+          style.lift * (0.4 + a * 0.8),
+          f.tz * drift + f.nz * (b - 0.5) * style.spread,
+          this.elapsed,
+          0.6 + c * 0.8,
+        );
+      }
+    }
     const tag =
       entrant.state === 'SPRINTING'
         ? 'SPRINT'
@@ -683,9 +536,9 @@ export class RaceScene {
     if (this.mode === 'follow') {
       desiredPos
         .copy(focus)
-        .addScaledVector(tangent, -15 * tall)
+        .addScaledVector(tangent, -13.5 * tall)
         .addScaledVector(normal, 6)
-        .addScaledVector(UP, 6.5 * tall);
+        .addScaledVector(UP, 5.8 * tall);
       desiredTarget
         .copy(focus)
         .addScaledVector(tangent, 9)
@@ -715,8 +568,15 @@ export class RaceScene {
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camTarget);
     this.camera.updateProjectionMatrix();
-    this.sun.position.copy(focus).add(new THREE.Vector3(60, 110, 40));
-    this.sun.target.position.copy(focus);
+    this.aimSun(focus);
+  }
+
+  private aimSun(focus: THREE.Vector3): void {
+    const snap = 0.5;
+    const x = Math.round(focus.x / snap) * snap;
+    const z = Math.round(focus.z / snap) * snap;
+    this.sun.target.position.set(x, focus.y, z);
+    this.sun.position.set(x, focus.y, z).add(this.sunOffset);
   }
 
   private updateLabels(): void {
@@ -725,7 +585,7 @@ export class RaceScene {
     const v = new THREE.Vector3();
     for (const runner of this.runners.values()) {
       v.copy(runner.world);
-      v.y += runner.rig.height + 0.5;
+      v.y += runner.rig.height + 0.3;
       v.project(this.camera);
       if (v.z > 1 || v.x < -1.2 || v.x > 1.2 || v.y < -1.2 || v.y > 1.2) {
         runner.label.style.display = 'none';
@@ -737,20 +597,6 @@ export class RaceScene {
       runner.label.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
       runner.label.style.zIndex = String(Math.round((1 - v.z) * 10000));
     }
-  }
-
-  private updateWaterFog(): void {
-    const water = this.waterFog;
-    const fog = this.scene.fog;
-    if (!water || !(fog instanceof THREE.Fog) || !(this.scene.background instanceof THREE.Color)) return;
-    const below = this.camera.position.y < water.level;
-    if (below === water.below) return;
-    water.below = below;
-    const look = below ? water.water : water.air;
-    fog.color.copy(look.color);
-    fog.near = look.near;
-    fog.far = look.far;
-    this.scene.background.copy(look.color);
   }
 
   private loop = (now: number): void => {
@@ -769,12 +615,14 @@ export class RaceScene {
     if (this.mode === 'overview') {
       const focus = new THREE.Vector3();
       this.focusPoint(frame, focus);
-      this.sun.position.copy(focus).add(new THREE.Vector3(60, 110, 40));
-      this.sun.target.position.copy(focus);
+      this.aimSun(focus);
     }
     this.updateCamera(frame, dt);
-    this.updateWaterFog();
-    this.renderer.render(this.scene, this.camera);
+    this.land?.update(this.elapsed);
+    this.sunDisc?.position.copy(this.camera.position).addScaledVector(this.atmosphere.sunDirection, 1500);
+    this.particles.setViewport(this.renderer.domElement.height, this.camera.fov);
+    this.particles.update(this.elapsed);
+    this.pipeline.render(dt);
     this.updateLabels();
     this.onFrame?.(frame);
   };
