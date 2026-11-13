@@ -16,6 +16,13 @@ const KEYS: Record<string, 'left' | 'right' | 'up' | 'down' | 'boost'> = {
 
 const block = (event: Event) => event.preventDefault();
 
+function guard(event: Event): void {
+  const target = event.target;
+  if (target instanceof Element && target.closest('.gp-panel, .gp-tools')) return;
+  event.preventDefault();
+  window.getSelection()?.removeAllRanges();
+}
+
 export function isTouchDevice(): boolean {
   return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 }
@@ -52,12 +59,6 @@ export class Input {
       window.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
     });
-    const guard = (event: Event) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest('.gp-panel, .gp-tools')) return;
-      event.preventDefault();
-      window.getSelection()?.removeAllRanges();
-    };
     for (const type of ['selectstart', 'contextmenu', 'dblclick', 'gesturestart'])
       root.addEventListener(type, guard, { passive: false });
     const stage = root.querySelector<HTMLElement>('[data-hud="stage"]');
