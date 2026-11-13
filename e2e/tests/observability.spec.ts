@@ -10,6 +10,7 @@ const GRAFANA = `${BASE_URL}/grafana`;
 const GRAFANA_AUTH = `Basic ${Buffer.from(`admin:${process.env.GRAFANA_ADMIN_PASSWORD ?? 'admin'}`).toString('base64')}`;
 const APP_SERVICES = [
   'api',
+  'arcade',
   'sse',
   'wallet',
   'scheduler',
