@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { ComboSlip } from './components/ComboSlip';
 import { Header } from './components/Header';
 import { LifesaverRescue } from './components/Lifesaver';
@@ -27,12 +27,16 @@ import { RacePage } from './pages/RacePage';
 import { VenuePage, VenuesPage } from './pages/VenuesPage';
 import { WalletPage } from './pages/WalletPage';
 
+const PlayPage = lazy(() => import('./play/PlayPage').then((module) => ({ default: module.PlayPage })));
+
 type Route = [string, (params: Record<string, string>) => ReactNode, string];
 
 const ROUTES: Route[] = [
   ['/', () => <RaceCardPage view="upcoming" />, 'Race card'],
   ['/results', () => <RaceCardPage view="results" />, 'Results'],
   ['/races/:id', (p) => <RacePage key={p.id} id={p.id} />, 'Race'],
+  ['/play', () => <PlayPage />, 'Grand Prix'],
+  ['/play/room/:code', (p) => <PlayPage code={p.code} />, 'Grand Prix'],
   ['/bets', () => <MyBetsPage />, 'My bets'],
   ['/wallet', () => <WalletPage />, 'Wallet'],
   ['/leaderboards', () => <LeaderboardsPage />, 'Leaderboards'],
@@ -159,7 +163,9 @@ export function App({ authError }: { authError: string | null }) {
           </button>
         </div>
       )}
-      <main className="main">{content}</main>
+      <main className="main">
+        <Suspense fallback={<div className="card empty">Loading…</div>}>{content}</Suspense>
+      </main>
       <footer className="footer">
         Animal Racing Social is a portfolio project. Fictional animals, fictional points: no real money, prizes or
         wagering of any kind.

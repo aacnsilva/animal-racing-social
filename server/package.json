@@ -22,11 +22,13 @@
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "@redis/client": "6.3.1",
     "kafkajs": "2.2.4",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "ws": "8.23.0"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "@types/pg": "8.23.1",
+    "@types/ws": "8.18.2",
     "ts-proto": "2.18.3",
     "typescript": "6.0.2"
   },

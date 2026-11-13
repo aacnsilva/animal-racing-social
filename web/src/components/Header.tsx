@@ -8,7 +8,7 @@ import { Link, useLocation } from '../lib/router';
 import { Avatar, Logo, ProviderIcon } from './ui';
 import { LifesaverBuoyButton } from './Lifesaver';
 
-type TabIconName = 'races' | 'bets' | 'wallet' | 'ranks' | 'more';
+type TabIconName = 'races' | 'play' | 'bets' | 'wallet' | 'ranks' | 'more';
 
 const NAV: {
   to: string;
@@ -23,6 +23,13 @@ const NAV: {
     testId: 'nav-races',
     match: (path) => path === '/' || path === '/results' || path.startsWith('/races'),
     tab: { id: 'races', label: 'Races', icon: 'races' },
+  },
+  {
+    to: '/play',
+    label: 'Play',
+    testId: 'nav-play',
+    match: (path) => path.startsWith('/play'),
+    tab: { id: 'play', label: 'Play', icon: 'play' },
   },
   {
     to: '/bets',
@@ -51,6 +58,7 @@ const NAV: {
 
 const TAB_ICON: Record<TabIconName, string> = {
   races: 'M5 21V4h11l-2 4 2 4H5',
+  play: 'M6 11h4M8 9v4M15 12h.01M18 10h.01M6.5 6h11a4.5 4.5 0 0 1 4.4 5.4l-.8 4.2a2.9 2.9 0 0 1-5 1.4L14.5 15h-5l-1.6 2a2.9 2.9 0 0 1-5-1.4l-.8-4.2A4.5 4.5 0 0 1 6.5 6z',
   bets: 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4zM14 5v2M14 11v2M14 17v2',
   wallet: 'M4 7a2 2 0 0 1 2-2h11v4M4 7v10a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2zM16 14h1',
   ranks: 'M3 20h18M5 20v-6h4v6M10 20V8h4v12M15 20v-9h4v9',

@@ -240,6 +240,18 @@ export function RaceCardPage({ view }: { view: 'upcoming' | 'results' }) {
           </Link>
         </div>
       </div>
+      {view === 'upcoming' && (
+        <Link to="/play" className="gp-promo" data-testid="gp-promo" style={{ marginBottom: 14 }}>
+          <span className="emoji" aria-hidden>
+            🏁
+          </span>
+          <span className="copy">
+            <b>Animal Grand Prix</b>
+            <span>Take the reins yourself: race solo or against friends.</span>
+          </span>
+          <span className="go">Play ›</span>
+        </Link>
+      )}
       {view === 'upcoming' ? (
         <Upcoming species={species} raceClass={raceClass} />
       ) : (

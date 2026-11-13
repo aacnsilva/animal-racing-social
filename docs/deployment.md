@@ -12,7 +12,7 @@ git push main ──► GitHub Actions
                    │        └─ on main: push server/engine/web/alloy/jaeger/grafana images to GHCR (sha-<commit>, latest)
                    └─ deploy (if DEPLOY_ENABLED): scp deploy files → ssh → deploy.sh sha-<commit>
 VPS /opt/ars ──► docker compose -f compose.prod.yml pull && up -d --wait
-                   Caddy (80/443, automatic HTTPS) → web assets, /v1 → api, /v1/races/*/stream → sse, /grafana → Grafana
+                   Caddy (80/443, automatic HTTPS) → web assets, /v1 → api, /v1/races/*/stream → sse, /v1/arcade/ws → arcade, /grafana → Grafana
 ```
 
 ## 1. Prepare the VPS (once)

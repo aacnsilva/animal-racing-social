@@ -138,6 +138,16 @@ services:
       DATABASE_URL: postgres://ars_sse:ars@postgres:5432/ars
     healthcheck: *health
 
+  arcade:
+    <<: *server
+    command: ['arcade']
+    environment:
+      PORT: '3003'
+      JWT_SECRET: dev-only-jwt-secret-not-for-production
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=development
+    healthcheck: *health
+
   wallet:
     <<: *server
     command: ['wallet']
@@ -274,10 +284,11 @@ services:
       SITE_ADDRESS: ':80'
       API_UPSTREAM: api:3000
       SSE_UPSTREAM: sse:3001
+      ARCADE_UPSTREAM: arcade:3003
       GRAFANA_UPSTREAM: grafana:3000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
       OTEL_SERVICE_NAME: caddy
-    depends_on: [api, sse]
+    depends_on: [api, sse, arcade]
 
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.154.0

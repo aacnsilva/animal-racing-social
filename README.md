@@ -19,6 +19,16 @@ The project exists to showcase backend architecture at scale, with two halves th
 - **Exactly-once-ish settlement** with per-schema transactional outboxes, idempotent consumers and a dead-letter queue with replay.
 - **Live updates** pushed to browsers over Server-Sent Events (one stream per race), rendered in 3D with three.js.
 
+## Animal Grand Prix: race it yourself (implemented)
+
+`/play` is an arcade racer built on the same three.js animal rigs: pick a horse, giraffe, shark or octopus and drive it around four circuits against up to nine rivals.
+
+- **Solo** needs no sign-in: bots follow a deterministic plan derived from the race seed.
+- **Multiplayer** needs a sign-in: create a room, share the 5-letter code or the `/play/room/CODE` link, up to 10 racers, bots fill the empty grid slots.
+- **Netcode**: the `arcade` service keeps rooms in memory and speaks JSON over one WebSocket (`/v1/arcade/ws`). Each client simulates its own animal and sends ~12 samples per second; the server relays them, owns the lobby, the start clock and the finish order, and clamps reported finish times to its own clock. Bots are computed identically on every client from the shared seed and the synced clock, so they cost no bandwidth.
+- **Auth**: the API issues a 60-second ticket (`POST /v1/arcade/ticket`) that the socket presents in its first message, so the `arcade` service needs no database.
+- **Mobile first**: touch steering, auto-run, dynamic resolution scaling and three quality tiers (`?quality=low|medium|high` forces one).
+
 ## Social side: sharding and redundancy (planned)
 
 - **Sharded storage** for users, posts, follows and comments (shard key by user id), with a routing layer.
@@ -44,24 +54,24 @@ API ─bet.commands─► Bet worker ─debit─► Wallet ─wallet.events─�
                     Settlement ─► Combo aggregator ─┘           Notification ─► SSE gateway ─► browser
 ```
 
-| Path                                               | What                                                                                                                                                                                  |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`docs/api`](docs/api)                             | Design: betting & racing, race engine, platform APIs, Kafka events, OpenAPI                                                                                                           |
-| [`docs/db`](docs/db)                               | Data model and the original DDL                                                                                                                                                       |
-| [`docs/implementation.md`](docs/implementation.md) | Contracts between services, engine and web (what the code implements)                                                                                                                 |
-| [`docs/deployment.md`](docs/deployment.md)         | CI/CD and VPS operations                                                                                                                                                              |
-| [`docs/observability.md`](docs/observability.md)   | Observability design: traces, logs, metrics, SLOs, alerts                                                                                                                             |
-| `proto/`                                           | Protobuf event schemas (single source of truth for Rust and TypeScript)                                                                                                               |
-| `engine/`                                          | Rust: `race-engine-core`, `race-engine`, `race-broadcaster`, `odds-engine`                                                                                                            |
-| `server/`                                          | TypeScript services on Node 22 (`api`, `sse`, `scheduler`, `stable`, `market-manager`, `bet-worker`, `settlement`, `combo-aggregator`, `wallet`, `season`, `notification`, `migrate`) |
-| `web/`                                             | React + three.js client (Vite), served by Caddy                                                                                                                                       |
-| `mock-oauth/`                                      | Fake Google/GitHub OAuth provider (PKCE) for local runs and tests                                                                                                                     |
-| `e2e/`                                             | Playwright UI tests, desktop and mobile                                                                                                                                               |
-| `db/`                                              | SQL migrations and per-service role grants                                                                                                                                            |
-| `shared/`                                          | Venues, species, market templates, programme, engine params                                                                                                                           |
-| `deploy/`                                          | Production compose, VPS setup, deploy and backup scripts                                                                                                                              |
+| Path                                               | What                                                                                                                                                                                            |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`docs/api`](docs/api)                             | Design: betting & racing, race engine, platform APIs, Kafka events, OpenAPI                                                                                                                     |
+| [`docs/db`](docs/db)                               | Data model and the original DDL                                                                                                                                                                 |
+| [`docs/implementation.md`](docs/implementation.md) | Contracts between services, engine and web (what the code implements)                                                                                                                           |
+| [`docs/deployment.md`](docs/deployment.md)         | CI/CD and VPS operations                                                                                                                                                                        |
+| [`docs/observability.md`](docs/observability.md)   | Observability design: traces, logs, metrics, SLOs, alerts                                                                                                                                       |
+| `proto/`                                           | Protobuf event schemas (single source of truth for Rust and TypeScript)                                                                                                                         |
+| `engine/`                                          | Rust: `race-engine-core`, `race-engine`, `race-broadcaster`, `odds-engine`                                                                                                                      |
+| `server/`                                          | TypeScript services on Node 22 (`api`, `sse`, `arcade`, `scheduler`, `stable`, `market-manager`, `bet-worker`, `settlement`, `combo-aggregator`, `wallet`, `season`, `notification`, `migrate`) |
+| `web/`                                             | React + three.js client (Vite), served by Caddy                                                                                                                                                 |
+| `mock-oauth/`                                      | Fake Google/GitHub OAuth provider (PKCE) for local runs and tests                                                                                                                               |
+| `e2e/`                                             | Playwright UI tests, desktop and mobile                                                                                                                                                         |
+| `db/`                                              | SQL migrations and per-service role grants                                                                                                                                                      |
+| `shared/`                                          | Venues, species, market templates, programme, engine params                                                                                                                                     |
+| `deploy/`                                          | Production compose, VPS setup, deploy and backup scripts                                                                                                                                        |
 
-Stack: Kafka 3.9 (KRaft), PostgreSQL 16, Redis 7, Rust, Node 22 (TypeScript run directly, no build step), React, three.js, Caddy. Runtime npm dependencies of the services: `pg`, `kafkajs`, `@redis/client`, `@bufbuild/protobuf` and the OpenTelemetry SDK.
+Stack: Kafka 3.9 (KRaft), PostgreSQL 16, Redis 7, Rust, Node 22 (TypeScript run directly, no build step), React, three.js, Caddy. Runtime npm dependencies of the services: `pg`, `kafkajs`, `@redis/client`, `@bufbuild/protobuf`, `ws` and the OpenTelemetry SDK.
 
 Observability: OpenTelemetry traces and metrics from every service, JSON logs with trace ids, collected by Grafana Alloy into VictoriaMetrics, VictoriaLogs and Jaeger, with Grafana dashboards and alerts to Discord. See [`docs/observability.md`](docs/observability.md).
 

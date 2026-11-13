@@ -3,6 +3,7 @@ import { Router, serve } from '../../lib/http.ts';
 import { bootstrap } from '../../lib/runtime.ts';
 import { gauge } from '../../lib/telemetry.ts';
 import { adminRoutes } from './admin.ts';
+import { arcadeRoutes } from './arcade.ts';
 import { authRoutes } from './auth.ts';
 import { bettingRoutes } from './betting.ts';
 import { catalogRoutes } from './catalog.ts';
@@ -26,6 +27,7 @@ export function buildRouter(deps: Deps): Router {
   meRoutes(router, deps);
   catalogRoutes(router, deps);
   adminRoutes(router, deps);
+  arcadeRoutes(router, deps);
   return router;
 }
 

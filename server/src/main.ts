@@ -5,6 +5,7 @@ const services: Record<string, () => Promise<{ start: () => Promise<void> }>> = 
   migrate: () => import('./services/migrate.ts'),
   api: () => import('./services/api/main.ts'),
   sse: () => import('./services/sse/main.ts'),
+  arcade: () => import('./services/arcade/main.ts'),
   scheduler: () => import('./services/scheduler/main.ts'),
   stable: () => import('./services/stable/main.ts'),
   'market-manager': () => import('./services/market-manager/main.ts'),

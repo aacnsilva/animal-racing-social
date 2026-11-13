@@ -9,6 +9,10 @@
 		}
 	}
 
+	handle /v1/arcade/ws {
+		reverse_proxy {$ARCADE_UPSTREAM:arcade:3003}
+	}
+
 	handle /v1/* {
 		tracing {
 			span edge

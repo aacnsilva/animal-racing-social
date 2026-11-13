@@ -195,6 +195,7 @@ const FLOWS: [RegExp, string][] = [
   [/^\/v1\/bets\/combos$/, 'combo'],
   [/^\/v1\/markets\/:marketId\/bets$/, 'bet'],
   [/^\/v1\/auth\//, 'auth'],
+  [/^\/v1\/arcade\//, 'arcade'],
   [/^\/v1\/me\/rewards\/daily$/, 'daily-reward'],
   [/^\/internal\//, 'internal'],
 ];

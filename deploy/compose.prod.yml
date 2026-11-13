@@ -145,6 +145,17 @@ services:
       DATABASE_URL: postgres://ars_sse:${DB_SERVICE_PASSWORD}@postgres:5432/ars
     healthcheck: *health
 
+  arcade:
+    <<: *server
+    command: ['arcade']
+    mem_limit: 128m
+    environment:
+      PORT: '3003'
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=production,service.version=${IMAGE_TAG:-latest}
+    healthcheck: *health
+
   wallet:
     <<: *server
     command: ['wallet']
@@ -275,13 +286,14 @@ services:
       SITE_ADDRESS: ${DOMAIN}
       API_UPSTREAM: api:3000
       SSE_UPSTREAM: sse:3001
+      ARCADE_UPSTREAM: arcade:3003
       GRAFANA_UPSTREAM: grafana:3000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
       OTEL_SERVICE_NAME: caddy
     volumes:
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [api, sse]
+    depends_on: [api, sse, arcade]
 
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.154.0

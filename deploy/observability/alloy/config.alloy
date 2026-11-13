@@ -193,6 +193,12 @@ prometheus.exporter.blackbox "health" {
 	}
 
 	target {
+		name    = "arcade"
+		address = "http://arcade:3003/healthz"
+		module  = "http_2xx"
+	}
+
+	target {
 		name    = "wallet"
 		address = "http://wallet:3002/healthz"
 		module  = "http_2xx"
