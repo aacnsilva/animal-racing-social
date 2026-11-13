@@ -166,18 +166,15 @@ async fn open_markets(
             .await
             .context("insert market")?;
         let selections = insert_selections(client, race_id, market_id, market).await?;
-        let params_map = params
-            .as_object()
-            .map(|object| {
-                object
-                    .iter()
-                    .map(|(key, value)| {
-                        let number = i32::try_from(value.as_i64().unwrap_or(0)).unwrap_or(0);
-                        (key.clone(), number)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let params_map = params.as_object().map_or_default(|object| {
+            object
+                .iter()
+                .map(|(key, value)| {
+                    let number = i32::try_from(value.as_i64().unwrap_or(0)).unwrap_or(0);
+                    (key.clone(), number)
+                })
+                .collect()
+        });
         let opened = MarketOpened {
             market_id,
             race_id,
@@ -437,8 +434,7 @@ fn summary(payload: &Payload) -> String {
                 .entrants
                 .iter()
                 .find(|entrant| entrant.pos == 1)
-                .map(|entrant| entrant.id.clone())
-                .unwrap_or_default();
+                .map_or_default(|entrant| entrant.id.clone());
             let events: Vec<String> = tick
                 .events
                 .iter()
@@ -507,8 +503,7 @@ async fn watch(args: &[String]) -> Res<()> {
         }
         let key = message
             .key()
-            .map(|key| String::from_utf8_lossy(key).to_string())
-            .unwrap_or_default();
+            .map_or_default(|key| String::from_utf8_lossy(key).to_string());
         println!(
             "{} {} key={} {} {}",
             envelope.occurred_at,
