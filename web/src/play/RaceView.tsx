@@ -220,13 +220,12 @@ export function RaceView({ setup, room, you, client, onFinished, onRestart, onEx
             <i data-hud="stamina" />
           </div>
         </div>
-        <div className="gp-pad left">
-          <button type="button" data-control="left" aria-label="Steer left">
-            ◀
-          </button>
-          <button type="button" data-control="right" aria-label="Steer right">
-            ▶
-          </button>
+        <div className="gp-stick" data-stick data-testid="gp-stick">
+          <div className="gp-stick-base">
+            <span aria-hidden>‹</span>
+            <i />
+            <span aria-hidden>›</span>
+          </div>
         </div>
         <div className="gp-pad right">
           <button type="button" data-control="down" className="brake" aria-label="Brake">

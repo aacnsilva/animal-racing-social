@@ -5091,8 +5091,65 @@ html.gp-lock body {
   display: flex;
 }
 
-.gp-pad.left {
-  left: calc(env(safe-area-inset-left, 0px) + 14px);
+.gp-stick {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 56%;
+  height: 46%;
+  display: none;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.gp-root.touch .gp-stick {
+  display: block;
+}
+
+.gp-stick-base {
+  position: absolute;
+  left: var(--bx, calc(env(safe-area-inset-left, 0px) + 96px));
+  top: var(--by, calc(100% - env(safe-area-inset-bottom, 0px) - 86px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 176px;
+  height: 84px;
+  margin: -42px 0 0 -88px;
+  padding: 0 12px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-radius: 42px;
+  background: rgba(6, 12, 16, 0.32);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.7rem;
+  font-weight: 900;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.gp-stick-base i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #cfd6da 60%, #9aa5ab);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  transform: translateX(var(--kx, 0px));
+  transition: transform 0.12s ease-out;
+  will-change: transform;
+}
+
+.gp-stick.held .gp-stick-base {
+  border-color: var(--accent);
+  background: rgba(6, 12, 16, 0.5);
+}
+
+.gp-stick.held .gp-stick-base i {
+  transition: none;
 }
 
 .gp-pad.right {

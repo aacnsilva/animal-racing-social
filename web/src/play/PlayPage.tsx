@@ -657,7 +657,8 @@ export function PlayPage({ code }: { code?: string }) {
         </div>
         <ul>
           <li>
-            <b>Steer</b> with ◀ ▶ on touch, or the arrow keys / A and D. On touch your animal runs by itself.
+            <b>Steer</b> by dragging the stick left or right on touch, or with the arrow keys / A and D. On touch your
+            animal runs by itself.
           </li>
           <li>
             <b>Boost</b> burns stamina. Golden treats refill it, glowing pads fire you forward for free.

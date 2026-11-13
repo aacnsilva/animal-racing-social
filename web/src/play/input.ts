@@ -15,6 +15,7 @@ const KEYS: Record<string, 'left' | 'right' | 'up' | 'down' | 'boost'> = {
 };
 
 const block = (event: Event) => event.preventDefault();
+const STICK_RADIUS = 58;
 
 function guard(event: Event): void {
   const target = event.target;
@@ -33,6 +34,7 @@ export class Input {
   boostEdge = false;
   private held = { left: false, right: false, up: false, down: false, boost: false };
   private steer = 0;
+  private stick: number | null = null;
   private cleanup: (() => void)[] = [];
 
   constructor(root: HTMLElement, touch: boolean) {
@@ -49,6 +51,7 @@ export class Input {
     const keydown = onKey(true);
     const keyup = onKey(false);
     const blur = () => {
+      this.stick = null;
       this.held = { left: false, right: false, up: false, down: false, boost: false };
     };
     window.addEventListener('keydown', keydown);
@@ -68,6 +71,67 @@ export class Input {
         root.removeEventListener(type, guard);
       stage?.removeEventListener('touchstart', guard);
     });
+    const zone = root.querySelector<HTMLElement>('[data-stick]');
+    if (zone) {
+      let pointer: number | null = null;
+      let origin = 0;
+      const place = (x: number | null, y: number | null, knob: number) => {
+        if (x === null || y === null) {
+          zone.style.removeProperty('--bx');
+          zone.style.removeProperty('--by');
+        } else {
+          zone.style.setProperty('--bx', `${x}px`);
+          zone.style.setProperty('--by', `${y}px`);
+        }
+        zone.style.setProperty('--kx', `${knob}px`);
+        zone.classList.toggle('held', x !== null);
+      };
+      const down = (event: PointerEvent) => {
+        if (pointer !== null) return;
+        event.preventDefault();
+        pointer = event.pointerId;
+        zone.setPointerCapture(event.pointerId);
+        const rect = zone.getBoundingClientRect();
+        origin = event.clientX;
+        this.stick = 0;
+        place(event.clientX - rect.left, Math.max(rect.height - 120, event.clientY - rect.top), 0);
+      };
+      const move = (event: PointerEvent) => {
+        if (event.pointerId !== pointer) return;
+        event.preventDefault();
+        const offset = Math.max(-STICK_RADIUS, Math.min(STICK_RADIUS, event.clientX - origin));
+        origin = event.clientX - offset;
+        const raw = offset / STICK_RADIUS;
+        this.stick = Math.abs(raw) < 0.08 ? 0 : -raw;
+        const rect = zone.getBoundingClientRect();
+        zone.style.setProperty('--bx', `${origin - rect.left}px`);
+        zone.style.setProperty('--kx', `${offset}px`);
+      };
+      const up = (event: PointerEvent) => {
+        if (event.pointerId !== pointer) return;
+        pointer = null;
+        this.stick = null;
+        place(null, null, 0);
+      };
+      zone.addEventListener('pointerdown', down);
+      zone.addEventListener('pointermove', move);
+      zone.addEventListener('pointerup', up);
+      zone.addEventListener('pointercancel', up);
+      zone.addEventListener('lostpointercapture', up);
+      zone.addEventListener('touchstart', block, { passive: false });
+      zone.addEventListener('touchmove', block, { passive: false });
+      zone.addEventListener('contextmenu', block);
+      this.cleanup.push(() => {
+        zone.removeEventListener('pointerdown', down);
+        zone.removeEventListener('pointermove', move);
+        zone.removeEventListener('pointerup', up);
+        zone.removeEventListener('pointercancel', up);
+        zone.removeEventListener('lostpointercapture', up);
+        zone.removeEventListener('touchstart', block);
+        zone.removeEventListener('touchmove', block);
+        zone.removeEventListener('contextmenu', block);
+      });
+    }
     for (const button of root.querySelectorAll<HTMLElement>('[data-control]')) {
       const action = button.dataset.control;
       if (action !== 'left' && action !== 'right' && action !== 'down' && action !== 'boost') continue;
@@ -104,8 +168,9 @@ export class Input {
   }
 
   update(dt: number): Controls {
-    const target = (this.held.left ? 1 : 0) - (this.held.right ? 1 : 0);
-    const rate = target === 0 ? 7 : Math.sign(target) !== Math.sign(this.steer) ? 11 : 5.5;
+    const keys = (this.held.left ? 1 : 0) - (this.held.right ? 1 : 0);
+    const target = this.stick ?? keys;
+    const rate = this.stick !== null ? 14 : target === 0 ? 7 : Math.sign(target) !== Math.sign(this.steer) ? 11 : 5.5;
     const delta = target - this.steer;
     this.steer += Math.sign(delta) * Math.min(Math.abs(delta), rate * dt);
     this.controls.steer = this.steer;
