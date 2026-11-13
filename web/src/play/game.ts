@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Species } from '../lib/types';
-import { animateRig, buildAnimal, type AnimalRig } from '../race/animals';
+import { buildAnimal, type AnimalRig } from '../race/animals';
 import { Sound } from './audio';
 import { botAt, planBot, type BotPlan, type BotState } from './bots';
 import { Particles } from './fx';
@@ -176,6 +176,7 @@ export class Game {
   private messageUntil = 0;
   private lastSend = 0;
   private lastStride = 0;
+  private gait = 0;
   private wasBoosting = false;
   private bumpCooldown = 0;
   private hudFrame = 0;
@@ -304,15 +305,10 @@ export class Game {
       });
       const geometry = new THREE.SphereGeometry(1, 16, 12);
       const bubble = new THREE.Mesh(geometry, material);
-      if (rig.swimmer) {
-        bubble.scale.set(1.5, 1.35, 2.3);
-        bubble.position.y = rig.species === 'OCTOPUS' ? 0.5 : 0.1;
-        rig.body.add(bubble);
-      } else {
-        bubble.scale.setScalar(0.62);
-        bubble.position.set(0, 0.28, 0.02);
-        rig.head.add(bubble);
-      }
+      const tall = Math.max(1.5, rig.height * 0.62);
+      bubble.scale.set(1.45, tall, tall > 2.4 ? 1.9 : 2.4);
+      bubble.position.y = tall * 0.92;
+      rig.root.add(bubble);
       this.disposables.push(() => {
         geometry.dispose();
         material.dispose();
@@ -717,13 +713,7 @@ export class Game {
       if (racer.kind === 'me')
         racer.rig.root.rotation.z = -this.input.controls.steer * 0.1 * Math.min(1, racer.speed / 20);
       const done = racer.finishMs !== null && racer.speed < 2;
-      animateRig(
-        racer.rig,
-        done ? 'FINISHED' : racer.boosting ? 'SPRINTING' : 'RUNNING',
-        racer.speed,
-        dt,
-        this.elapsed,
-      );
+      racer.rig.update(done ? 'FINISHED' : racer.boosting ? 'SPRINTING' : 'RUNNING', racer.speed, dt, this.elapsed);
 
       const dx = racer.x - this.camera.position.x;
       const dz = racer.z - this.camera.position.z;
@@ -944,8 +934,9 @@ export class Game {
       this.particles.update(dt);
       for (const treat of this.world.treats)
         if (!treat.mesh.visible && this.elapsed >= treat.readyAt) treat.mesh.visible = true;
-      const stride = Math.floor(this.me.rig.cycle * 2);
-      if (stride !== this.lastStride && this.body.speed > 4 && !this.aquatic && !this.me.rig.swimmer)
+      this.gait += (dt * this.body.speed) / 3.2;
+      const stride = Math.floor(this.gait);
+      if (stride !== this.lastStride && this.body.speed > 4 && !this.aquatic && this.stats.habitat === 'TERRAIN')
         this.sound.step(Math.min(1, this.body.speed / 30));
       this.lastStride = stride;
       this.sound.setWind(Math.min(1.2, this.body.speed / 32));

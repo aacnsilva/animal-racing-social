@@ -1,3 +1,4 @@
+import { LANE_COLORS } from '../lib/track';
 import type { Species } from '../lib/types';
 import type { Habitat } from './tracks';
 
@@ -88,18 +89,7 @@ export function isSpecies(value: unknown): value is Species {
   return SPECIES_ORDER.some((entry) => entry === value);
 }
 
-export const SLOT_COLORS = [
-  '#ff4d5e',
-  '#3d9bff',
-  '#ffd23f',
-  '#3ddc97',
-  '#b47bff',
-  '#ff8a3d',
-  '#3de0e8',
-  '#ff6fc8',
-  '#c8e04a',
-  '#f2f2f2',
-];
+export const SLOT_COLORS = LANE_COLORS;
 
 const BOT_NAMES = [
   'Thunderhoof',

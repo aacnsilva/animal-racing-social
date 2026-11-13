@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { Species } from '../lib/types';
-import { animateRig, buildAnimal } from '../race/animals';
+import { buildAnimal } from '../race/animals';
 
 export function AnimalPreview({ species, color }: { species: Species; color: string }) {
   const host = useRef<HTMLDivElement>(null);
@@ -62,7 +62,7 @@ export function AnimalPreview({ species, color }: { species: Species; color: str
       last = now;
       time += dt;
       turntable.rotation.y = time * 0.6 + 0.6;
-      animateRig(rig, 'RUNNING', 15, dt, time);
+      rig.update('RUNNING', 15, dt, time);
       renderer.render(scene, camera);
     };
     raf = requestAnimationFrame(loop);
@@ -70,8 +70,8 @@ export function AnimalPreview({ species, color }: { species: Species; color: str
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
-      for (const material of [...rig.materials, rig.ringMaterial, rig.trailMaterial, discMaterial, rimMaterial])
-        material.dispose();
+      discMaterial.dispose();
+      rimMaterial.dispose();
       discGeometry.dispose();
       rimGeometry.dispose();
       renderer.dispose();
