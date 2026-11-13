@@ -32,6 +32,7 @@ function canFullscreen(): boolean {
 export function RaceView({ setup, room, you, client, onFinished, onRestart, onExit, onLobby }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const game = useRef<Game | null>(null);
+  const latestStart = useRef(0);
   const [summary, setSummary] = useState<FinishSummary | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [rows, setRows] = useState<ResultRow[]>([]);
@@ -57,13 +58,17 @@ export function RaceView({ setup, room, you, client, onFinished, onRestart, onEx
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
         try {
-          instance = new Game(element, setup, { onFinish: (result) => finished(result) });
+          instance = new Game(element, setup, {
+            onFinish: (result) => finished(result),
+            onReady: () => client?.send({ t: 'ready' }),
+          });
         } catch {
           setFailed(true);
           return;
         }
         const started = instance;
         game.current = started;
+        started.setStartAt(latestStart.current);
         client?.setWorldHandler((serverTime, list) => started.applyWorld(serverTime, list));
       });
     });
@@ -88,6 +93,8 @@ export function RaceView({ setup, room, you, client, onFinished, onRestart, onEx
 
   useEffect(() => {
     if (!room) return;
+    latestStart.current = room.startAt;
+    game.current?.setStartAt(room.startAt);
     for (const player of room.players) game.current?.setRemoteFinish(player.slot, player.finishMs);
   }, [room]);
 

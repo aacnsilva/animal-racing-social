@@ -151,6 +151,10 @@ export class Hub {
       case 'start':
         error = room.start(userId, now, this.random);
         break;
+      case 'ready':
+        if (!room.ready(userId)) return;
+        room.tick(now);
+        break;
       case 'finish':
         if (!room.finish(userId, message.ms, now)) return;
         room.tick(now);

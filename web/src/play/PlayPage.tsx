@@ -456,7 +456,7 @@ export function PlayPage({ code }: { code?: string }) {
           seed: current.seed,
           grid,
           meSlot: me.slot,
-          countdownMs: 6000,
+          countdownMs: 4000,
           startAt: current.startAt,
           serverNow: client.serverNow,
           sendSample: (sample) => client.send({ t: 's', d: sample }),

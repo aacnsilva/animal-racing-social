@@ -4968,6 +4968,10 @@ html.gp-lock body {
   color: var(--turf);
 }
 
+.gp-message[data-tone='wait'] {
+  font-size: clamp(1.3rem, 6vw, 2.4rem);
+}
+
 .gp-message[data-tone='gold'] {
   color: var(--accent);
 }

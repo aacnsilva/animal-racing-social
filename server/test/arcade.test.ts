@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { COUNTDOWN_MS, FINISH_GRACE_MS, MIN_LAP_MS, normalizeCode, parseSample, Room } from '../src/domain/arcade.ts';
+import {
+  COUNTDOWN_MS,
+  FINISH_GRACE_MS,
+  LOAD_LIMIT_MS,
+  MIN_LAP_MS,
+  normalizeCode,
+  parseSample,
+  Room,
+} from '../src/domain/arcade.ts';
 import { signJwt } from '../src/lib/crypto.ts';
 import { Hub, type Socket } from '../src/services/arcade/hub.ts';
 
@@ -72,8 +80,15 @@ void describe('arcade room', () => {
       room.start('a', 1000, () => 0.5),
       null,
     );
+    assert.equal(room.phase, 'LOADING');
+    assert.equal(room.startAt, 0);
+    assert.equal(room.ready('a'), true);
+    assert.equal(room.ready('a'), false);
+    assert.equal(room.tick(1500), false);
+    room.ready('b');
+    assert.equal(room.tick(2000), true);
     assert.equal(room.phase, 'COUNTDOWN');
-    assert.equal(room.startAt, 1000 + COUNTDOWN_MS);
+    assert.equal(room.startAt, 2000 + COUNTDOWN_MS);
     assert.equal(room.configure('a', { laps: 3 })?.code, 'RACE_IN_PROGRESS');
   });
 
@@ -83,6 +98,9 @@ void describe('arcade room', () => {
     room.join('b', 'B', 'SHARK');
     room.configure('a', { laps: 1 });
     room.start('a', 0);
+    room.ready('a');
+    room.ready('b');
+    room.tick(0);
     assert.equal(room.tick(COUNTDOWN_MS - 1), false);
     assert.equal(room.tick(COUNTDOWN_MS), true);
     assert.equal(room.phase, 'RACING');
@@ -110,11 +128,37 @@ void describe('arcade room', () => {
     room.join('a', 'A', 'HORSE');
     room.configure('a', { laps: 1 });
     room.start('a', 0);
+    room.ready('a');
+    room.tick(0);
     room.tick(COUNTDOWN_MS);
     assert.equal(room.finish('a', 1, COUNTDOWN_MS + 60_000), true);
     assert.equal(room.players.get('a')?.finishMs, 57_000);
     assert.equal(room.tick(COUNTDOWN_MS + 60_001), true);
     assert.equal(room.phase, 'RESULTS');
+  });
+
+  void it('waits for slow loaders only up to the limit and never for racers who left', () => {
+    const room = new Room('ABCDE', 'a', 0);
+    room.join('a', 'A', 'HORSE');
+    room.join('b', 'B', 'SHARK');
+    room.join('c', 'C', 'GIRAFFE');
+    room.start('a', 0);
+    room.ready('a');
+    assert.equal(room.tick(LOAD_LIMIT_MS - 1), false);
+    room.leave('c', LOAD_LIMIT_MS - 1);
+    assert.equal(room.tick(LOAD_LIMIT_MS - 1), false);
+    assert.equal(room.tick(LOAD_LIMIT_MS), true);
+    assert.equal(room.phase, 'COUNTDOWN');
+    assert.equal(room.startAt, LOAD_LIMIT_MS + COUNTDOWN_MS);
+
+    const quick = new Room('FGHJK', 'a', 0);
+    quick.join('a', 'A', 'HORSE');
+    quick.join('b', 'B', 'SHARK');
+    quick.start('a', 0);
+    quick.ready('a');
+    quick.leave('b', 500);
+    assert.equal(quick.tick(600), true);
+    assert.equal(quick.startAt, 600 + COUNTDOWN_MS);
   });
 
   void it('keeps racers who drop mid-race and passes the host on', () => {
@@ -172,7 +216,12 @@ void describe('arcade hub', () => {
     assert.equal(guest.last('error')?.code, 'FORBIDDEN');
     hub.handle(host.socket, JSON.stringify({ t: 'config', laps: 1, bots: 3 }), 0);
     hub.handle(host.socket, JSON.stringify({ t: 'start' }), 1000);
+    assert.equal(roomOf(guest.last('room')).phase, 'LOADING');
+    hub.handle(host.socket, JSON.stringify({ t: 'ready' }), 1000);
+    assert.equal(roomOf(guest.last('room')).phase, 'LOADING');
+    hub.handle(guest.socket, JSON.stringify({ t: 'ready' }), 1000);
     assert.equal(roomOf(guest.last('room')).phase, 'COUNTDOWN');
+    assert.equal(roomOf(guest.last('room')).startAt, 1000 + COUNTDOWN_MS);
     hub.handle(guest.socket, JSON.stringify({ t: 's', d: [5, 6, 0.5, 20, 12, 1] }), 1100);
     hub.tick(1150);
     assert.deepEqual(host.last('w')?.l, [[1, 5, 6, 0.5, 20, 12, 1]]);

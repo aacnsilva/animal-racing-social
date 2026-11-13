@@ -40,6 +40,7 @@ export type FinishSummary = { place: number; timeMs: number; bestLapMs: number |
 
 export type GameEvents = {
   onFinish: (summary: FinishSummary) => void;
+  onReady: () => void;
 };
 
 type Net = {
@@ -155,6 +156,7 @@ export class Game {
   private focus = new THREE.Vector3();
   private pending: THREE.Object3D[] = [];
   private warm = 0;
+  private startAt = 0;
   private ready = false;
   private batch = 1;
   private previous = 0;
@@ -201,6 +203,7 @@ export class Game {
     this.distance = setup.laps * this.track.length;
     this.aquatic = this.track.def.habitat === 'AQUATIC';
     this.localClock = -setup.countdownMs;
+    this.startAt = setup.startAt ?? 0;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: false, stencil: false, powerPreference: 'high-performance' });
     this.renderer.shadowMap.enabled = true;
@@ -423,8 +426,12 @@ export class Game {
 
   clock(): number {
     const { startAt, serverNow } = this.setup;
-    if (startAt !== null && serverNow) return serverNow() - startAt;
-    return this.localClock;
+    if (startAt === null || !serverNow) return this.localClock;
+    return this.startAt > 0 ? serverNow() - this.startAt : -this.setup.countdownMs;
+  }
+
+  setStartAt(startAt: number): void {
+    if (startAt > 0) this.startAt = startAt;
   }
 
   setPaused(paused: boolean): void {
@@ -821,7 +828,8 @@ export class Game {
     const body = this.body;
     const hud = this.hud;
     let count = '';
-    if (clock < 0) count = clock > -3000 ? String(Math.ceil(-clock / 1000)) : 'READY';
+    if (this.setup.startAt !== null && this.startAt <= 0) count = 'WAIT';
+    else if (clock < 0) count = clock > -3000 ? String(Math.ceil(-clock / 1000)) : 'READY';
     else if (clock < 1000) count = 'GO!';
     if (count !== this.countShown) {
       this.countShown = count;
@@ -829,6 +837,7 @@ export class Game {
         this.say('GO!', 1, 'go');
         this.sound.beep(true);
       } else if (count === 'READY') this.say('GET READY', 60, '');
+      else if (count === 'WAIT') this.say('WAITING FOR RACERS', 120, 'wait');
       else if (count) {
         this.say(count, 1, 'count');
         this.sound.beep(false);
@@ -903,6 +912,7 @@ export class Game {
       if (this.warm > 3) {
         this.ready = true;
         this.hud.loading?.classList.add('done');
+        this.events.onReady();
       }
     }
     const holding = !this.ready && this.setup.startAt === null;

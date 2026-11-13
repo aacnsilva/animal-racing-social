@@ -8,7 +8,8 @@ export const ARCADE_DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD'] as const;
 export type ArcadeDifficulty = (typeof ARCADE_DIFFICULTIES)[number];
 
 export const MAX_RACERS = 10;
-export const COUNTDOWN_MS = 6000;
+export const COUNTDOWN_MS = 4000;
+export const LOAD_LIMIT_MS = 25_000;
 export const FINISH_GRACE_MS = 45_000;
 export const RACE_LIMIT_MS = 8 * 60_000;
 export const RESULTS_LINGER_MS = 10 * 60_000;
@@ -17,7 +18,7 @@ export const MIN_LAP_MS = 12_000;
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 5;
 
-export type Phase = 'LOBBY' | 'COUNTDOWN' | 'RACING' | 'RESULTS';
+export type Phase = 'LOBBY' | 'LOADING' | 'COUNTDOWN' | 'RACING' | 'RESULTS';
 
 export type RoomConfig = { trackId: ArcadeTrack; laps: number; bots: number; difficulty: ArcadeDifficulty };
 
@@ -30,6 +31,7 @@ export type Player = {
   species: ArcadeSpecies;
   connected: boolean;
   racing: boolean;
+  loaded: boolean;
   finishMs: number | null;
   sample: Sample | null;
   sampleAt: number;
@@ -51,6 +53,7 @@ export type RoomView = {
     species: ArcadeSpecies;
     connected: boolean;
     racing: boolean;
+    loaded: boolean;
     finishMs: number | null;
   }[];
 };
@@ -134,6 +137,7 @@ export class Room {
           species: p.species,
           connected: p.connected,
           racing: p.racing,
+          loaded: p.loaded,
           finishMs: p.finishMs,
         })),
     };
@@ -162,6 +166,7 @@ export class Room {
       species,
       connected: true,
       racing: false,
+      loaded: false,
       finishMs: null,
       sample: null,
       sampleAt: 0,
@@ -175,7 +180,8 @@ export class Room {
   leave(id: string, now: number): void {
     const player = this.players.get(id);
     if (!player) return;
-    const midRace = (this.phase === 'COUNTDOWN' || this.phase === 'RACING') && player.racing;
+    const midRace =
+      (this.phase === 'LOADING' || this.phase === 'COUNTDOWN' || this.phase === 'RACING') && player.racing;
     if (midRace) {
       player.connected = false;
       player.sample = null;
@@ -231,18 +237,26 @@ export class Room {
     if (id !== this.hostId) return { code: 'FORBIDDEN', message: 'Only the host can start the race' };
     if (this.phase !== 'LOBBY') return { code: 'RACE_IN_PROGRESS', message: 'The race is already under way' };
     this.clampBots();
-    this.phase = 'COUNTDOWN';
+    this.phase = 'LOADING';
     this.phaseAt = now;
     this.raceNo += 1;
     this.seed = Math.floor(random() * 0x7fffffff);
-    this.startAt = now + COUNTDOWN_MS;
+    this.startAt = 0;
     this.firstFinishAt = 0;
     for (const player of this.players.values()) {
       player.racing = player.connected;
+      player.loaded = false;
       player.finishMs = null;
       player.sample = null;
     }
     return null;
+  }
+
+  ready(id: string): boolean {
+    const player = this.players.get(id);
+    if (this.phase !== 'LOADING' || !player?.racing || player.loaded) return false;
+    player.loaded = true;
+    return true;
   }
 
   sample(id: string, value: unknown, now: number): void {
@@ -286,6 +300,14 @@ export class Room {
   }
 
   tick(now: number): boolean {
+    if (this.phase === 'LOADING') {
+      const waiting = [...this.players.values()].some((p) => p.racing && p.connected && !p.loaded);
+      if (waiting && now - this.phaseAt < LOAD_LIMIT_MS) return false;
+      this.phase = 'COUNTDOWN';
+      this.phaseAt = now;
+      this.startAt = now + COUNTDOWN_MS;
+      return true;
+    }
     if (this.phase === 'COUNTDOWN' && now >= this.startAt) {
       this.phase = 'RACING';
       this.phaseAt = now;

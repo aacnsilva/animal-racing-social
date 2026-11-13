@@ -26,6 +26,7 @@ The project exists to showcase backend architecture at scale, with two halves th
 - **Solo** needs no sign-in: bots follow a deterministic plan derived from the race seed.
 - **Multiplayer** needs a sign-in: create a room, share the 5-letter code or the `/play/room/CODE` link, up to 10 racers, bots fill the empty grid slots.
 - **Netcode**: the `arcade` service keeps rooms in memory and speaks JSON over one WebSocket (`/v1/arcade/ws`). Each client simulates its own animal and sends ~12 samples per second; the server relays them, owns the lobby, the start clock and the finish order, and clamps reported finish times to its own clock. Bots are computed identically on every client from the shared seed and the synced clock, so they cost no bandwidth.
+- **Fair starts**: when the host starts a race every client loads the venue first and reports ready; the countdown begins once all racers are ready, or after 25 seconds for anyone still loading.
 - **Auth**: the API issues a 60-second ticket (`POST /v1/arcade/ticket`) that the socket presents in its first message, so the `arcade` service needs no database.
 - **Rendering**: the game runs on the same stack as the race viewer: the procedural land and sea venues, baked sky with image-based lighting, skinned animal rigs and the HDR bloom pipeline with quality tiers that step down on slow devices.
 - **Mobile first**: touch steering, auto-run, portrait and landscape layouts.

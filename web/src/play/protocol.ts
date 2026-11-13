@@ -2,7 +2,7 @@ import type { Species } from '../lib/types';
 import type { Difficulty } from './roster';
 import type { TrackId } from './tracks';
 
-export type Phase = 'LOBBY' | 'COUNTDOWN' | 'RACING' | 'RESULTS';
+export type Phase = 'LOBBY' | 'LOADING' | 'COUNTDOWN' | 'RACING' | 'RESULTS';
 
 export type RoomConfig = { trackId: TrackId; laps: number; bots: number; difficulty: Difficulty };
 
@@ -13,6 +13,7 @@ export type RoomPlayer = {
   species: Species;
   connected: boolean;
   racing: boolean;
+  loaded: boolean;
   finishMs: number | null;
 };
 
@@ -41,6 +42,7 @@ export type ClientMessage =
   | { t: 'pick'; species: Species }
   | ({ t: 'config' } & Partial<RoomConfig>)
   | { t: 'start' }
+  | { t: 'ready' }
   | { t: 's'; d: [number, number, number, number, number, number] }
   | { t: 'finish'; ms: number }
   | { t: 'lobby' }
