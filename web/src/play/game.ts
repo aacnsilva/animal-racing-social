@@ -3,7 +3,7 @@ import type { Species } from '../lib/types';
 import { buildAnimal, type AnimalRig } from '../race/animals';
 import { bakeAtmosphere, type Atmosphere } from '../race/atmosphere';
 import { PARTICLE_STYLES, Particles as Dust } from '../race/particles';
-import { Pipeline } from '../race/post';
+import { Pipeline, softwareRendered } from '../race/post';
 import { Sound } from './audio';
 import { botAt, planBot, type BotPlan, type BotState } from './bots';
 import { Particles } from './fx';
@@ -153,6 +153,11 @@ export class Game {
   private pipeline: Pipeline;
   private dust: Dust;
   private focus = new THREE.Vector3();
+  private pending: THREE.Object3D[] = [];
+  private batch = 1;
+  private previous = 0;
+  private rested = 0;
+  private timer = 0;
   private camHeading = 0;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
@@ -213,7 +218,8 @@ export class Game {
         facing = Math.atan2(-frame.nx, -frame.nz) + 0.7;
       }
     }
-    this.atmosphere = bakeAtmosphere(this.renderer, this.track.def.surface, this.track.def.id.length, facing);
+    const software = softwareRendered(this.renderer);
+    this.atmosphere = bakeAtmosphere(this.renderer, this.track.def.surface, this.track.def.id.length, facing, software);
     const look = this.atmosphere.look;
     this.renderer.toneMappingExposure = look.exposure;
     this.dust = new Dust(PARTICLE_STYLES[this.aquatic ? 'WATER' : this.track.def.surface] ?? PARTICLE_STYLES.GRASS);
@@ -221,11 +227,11 @@ export class Game {
       this.dust.setLight(
         new THREE.Color(look.sunColor).multiplyScalar(look.sunIntensity / Math.PI + 0.3 * look.ambient),
       );
-    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera);
+    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera, software);
     this.world = buildWorld(this.scene, this.track, this.atmosphere);
     this.scene.add(this.dust.points, this.particles.points);
-    this.pipeline.onTier = (tier) => this.world.setDetail(tier.detail, tier.shadow);
-    this.world.setDetail(this.pipeline.tier.detail, this.pipeline.tier.shadow);
+    this.pipeline.onTier = () => this.applyTier();
+    this.applyTier();
 
     for (const entry of setup.grid) this.racers.push(this.spawn(entry));
     this.me = this.racers.find((racer) => racer.kind === 'me') ?? this.racers[0];
@@ -257,8 +263,25 @@ export class Game {
     this.resizeObserver.observe(root);
     this.resize();
     if (import.meta.env.DEV) Object.assign(window, { __gp: this });
+    this.scene.traverse((object) => {
+      if (
+        object.visible &&
+        (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Sprite)
+      ) {
+        object.visible = false;
+        this.pending.push(object);
+      }
+    });
+    this.pending.reverse();
     this.last = performance.now();
+    this.previous = this.last;
     this.raf = requestAnimationFrame(this.loop);
+  }
+
+  private applyTier(): void {
+    const tier = this.pipeline.tier;
+    this.renderer.shadowMap.enabled = tier.shadow > 0;
+    this.world.setDetail(tier.detail, tier.shadow);
   }
 
   private spawn(entry: GridEntry): Racer {
@@ -689,8 +712,9 @@ export class Game {
       const dz = racer.z - this.camera.position.z;
       const near = dx * dx + dz * dz < 80 * 80;
       if (racer.label) {
-        racer.label.visible = near;
-        const shrink = Math.max(0.3, Math.min(1, Math.sqrt(dx * dx + dz * dz) / 26));
+        const away = Math.sqrt(dx * dx + dz * dz);
+        racer.label.visible = near && away > 6;
+        const shrink = Math.max(0.12, Math.min(1, away / 30));
         racer.label.scale.set(3.4 * shrink, 0.85 * shrink, 1);
       }
       const style = this.dust.style;
@@ -863,7 +887,11 @@ export class Game {
 
   private loop = (now: number): void => {
     if (this.disposed) return;
-    this.raf = requestAnimationFrame(this.loop);
+    const began = performance.now();
+    for (let i = 0; i < this.batch && this.pending.length; i++) {
+      const next = this.pending.pop();
+      if (next) next.visible = true;
+    }
     const frameMs = now - this.last;
     this.last = now;
     const dt = Math.min(0.05, frameMs / 1000);
@@ -905,11 +933,25 @@ export class Game {
     this.particles.setViewport(scale);
     this.updateHud(clock);
     this.pipeline.render(dt);
+    const wall = began - this.previous - this.rested;
+    this.previous = began;
+    const cost = Math.max(performance.now() - began, Math.min(2000, wall) - 17);
+    this.batch = cost < 16 ? Math.min(64, this.batch * 2) : Math.max(1, this.batch >> 1);
+    if (cost > 34) {
+      this.rested = Math.min(500, cost * 1.5);
+      this.timer = window.setTimeout(() => {
+        this.raf = requestAnimationFrame(this.loop);
+      }, this.rested);
+    } else {
+      this.rested = 0;
+      this.raf = requestAnimationFrame(this.loop);
+    }
   };
 
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.raf);
+    window.clearTimeout(this.timer);
     this.resizeObserver.disconnect();
     this.input.dispose();
     this.sound.dispose();

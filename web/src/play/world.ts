@@ -338,7 +338,8 @@ export function buildWorld(scene: THREE.Scene, track: Track, atmosphere: Atmosph
     },
     setDetail: (detail, shadow) => {
       land?.setDetail(detail);
-      if (sun.shadow.mapSize.x !== shadow) {
+      sun.castShadow = shadow > 0;
+      if (shadow > 0 && sun.shadow.mapSize.x !== shadow) {
         sun.shadow.mapSize.set(shadow, shadow);
         sun.shadow.map?.dispose();
         sun.shadow.map = null;
