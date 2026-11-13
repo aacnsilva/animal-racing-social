@@ -388,8 +388,8 @@ impl<'a> Sim<'a> {
         for index in 0..count {
             self.draw_pull_up(index, streams);
         }
-        for index in 0..count {
-            self.runners[index].stumble_budget = streams.incident().exponential();
+        for runner in self.runners.iter_mut().take(count) {
+            runner.stumble_budget = streams.incident().exponential();
         }
     }
 
