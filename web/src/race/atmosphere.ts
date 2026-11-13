@@ -128,6 +128,7 @@ export function bakeAtmosphere(
   surface: string,
   seed: number,
   facing: number | null,
+  lite: boolean,
 ): Atmosphere {
   const look = lookFor(surface);
   const elevation = THREE.MathUtils.degToRad(look.elevation);
@@ -162,7 +163,7 @@ export function bakeAtmosphere(
     );
   uniforms.showSunDisc.value = 0;
 
-  const size = 1024;
+  const size = lite ? 256 : 1024;
   const options = { type: THREE.HalfFloatType, generateMipmaps: false, minFilter: THREE.LinearFilter };
   const backdrop = new THREE.WebGLCubeRenderTarget(size, options);
   const ambient = new THREE.WebGLCubeRenderTarget(256, options);
