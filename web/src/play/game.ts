@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import type { Species } from '../lib/types';
 import { buildAnimal, type AnimalRig } from '../race/animals';
+import { bakeAtmosphere, type Atmosphere } from '../race/atmosphere';
+import { PARTICLE_STYLES, Particles as Dust } from '../race/particles';
+import { Pipeline } from '../race/post';
 import { Sound } from './audio';
 import { botAt, planBot, type BotPlan, type BotState } from './bots';
 import { Particles } from './fx';
@@ -9,7 +12,7 @@ import { createBody, PAD_TIME, STEP, stepBody, type Body, type Controls } from '
 import type { WorldSample } from './protocol';
 import { ANIMALS, fmtRaceTime, gridPosition, ordinal, SLOT_COLORS, type GridEntry } from './roster';
 import { loadTrack, type Pose, type Track } from './tracks';
-import { buildWorld, type Quality, type World } from './world';
+import { buildWorld, type World } from './world';
 
 export type RaceSetup = {
   trackId: string;
@@ -70,7 +73,7 @@ type Racer = {
   plan: BotPlan | null;
   net: Net | null;
   label: THREE.Sprite | null;
-  blob: THREE.Mesh | null;
+  emit: number;
   dustAt: number;
   place: number;
 };
@@ -85,15 +88,6 @@ function lerpAngle(a: number, b: number, t: number): number {
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
-}
-
-function pickQuality(): Quality {
-  const forced = new URLSearchParams(window.location.search).get('quality');
-  if (forced === 'low' || forced === 'medium' || forced === 'high') return forced;
-  const touch = isTouchDevice();
-  const cores = navigator.hardwareConcurrency || 4;
-  if (!touch) return cores <= 2 ? 'medium' : 'high';
-  return cores <= 4 ? 'low' : 'medium';
 }
 
 function labelSprite(name: string, color: string): { sprite: THREE.Sprite; dispose: () => void } {
@@ -155,11 +149,10 @@ export class Game {
   private accumulator = 0;
   private paused = false;
   private disposed = false;
-  private quality: Quality;
-  private baseRatio: number;
-  private ratio: number;
-  private frameAvg = 16;
-  private frames = 0;
+  private atmosphere: Atmosphere;
+  private pipeline: Pipeline;
+  private dust: Dust;
+  private focus = new THREE.Vector3();
   private camHeading = 0;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
@@ -191,10 +184,7 @@ export class Game {
   } | null = null;
   private resizeObserver: ResizeObserver;
   private disposables: (() => void)[] = [];
-  private dustColor: THREE.Color;
-  private roadDust: THREE.Color;
   private aquatic: boolean;
-  private sunDir: THREE.Vector3;
 
   constructor(root: HTMLElement, setup: RaceSetup, events: GameEvents) {
     this.root = root;
@@ -202,36 +192,42 @@ export class Game {
     this.events = events;
     this.track = loadTrack(setup.trackId);
     this.distance = setup.laps * this.track.length;
-    this.quality = pickQuality();
     this.aquatic = this.track.def.habitat === 'AQUATIC';
-    this.dustColor = new THREE.Color(this.track.def.theme.ground).lerp(new THREE.Color('#ffffff'), 0.25);
-    this.roadDust = new THREE.Color(this.track.def.theme.road).lerp(new THREE.Color('#ffffff'), 0.45);
     this.localClock = -setup.countdownMs;
 
-    this.sunDir = new THREE.Vector3(...this.track.def.theme.sunDir).normalize();
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: this.quality !== 'low',
-      powerPreference: 'high-performance',
-      stencil: false,
-    });
-    this.baseRatio = Math.min(
-      window.devicePixelRatio || 1,
-      this.quality === 'high' ? 2 : this.quality === 'medium' ? 1.6 : 1.25,
-    );
-    this.ratio = this.baseRatio;
-    this.renderer.setPixelRatio(this.ratio);
-    this.renderer.shadowMap.enabled = this.quality !== 'low';
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, stencil: false, powerPreference: 'high-performance' });
+    this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = this.track.def.theme.exposure;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.domElement.className = 'gp-canvas';
     (root.querySelector<HTMLElement>('[data-hud="stage"]') ?? root).append(this.renderer.domElement);
+    this.camera.far = Math.max(2000, this.track.path.size * 8);
 
-    this.world = buildWorld(this.scene, this.track, this.quality, 7919 + this.track.n);
-    this.scene.add(this.particles.points);
+    const path = this.track.path;
+    let facing: number | null = null;
+    if (!this.aquatic) {
+      const straights = path.ranges.filter((range) => range.type !== 'CURVE');
+      const longest = straights.toSorted((a, b) => b.end - b.start - (a.end - a.start))[0];
+      if (longest) {
+        const frame = path.frame((longest.start + longest.end) / 2);
+        facing = Math.atan2(-frame.nx, -frame.nz) + 0.7;
+      }
+    }
+    this.atmosphere = bakeAtmosphere(this.renderer, this.track.def.surface, this.track.def.id.length, facing);
+    const look = this.atmosphere.look;
+    this.renderer.toneMappingExposure = look.exposure;
+    this.dust = new Dust(PARTICLE_STYLES[this.aquatic ? 'WATER' : this.track.def.surface] ?? PARTICLE_STYLES.GRASS);
+    if (!this.aquatic)
+      this.dust.setLight(
+        new THREE.Color(look.sunColor).multiplyScalar(look.sunIntensity / Math.PI + 0.3 * look.ambient),
+      );
+    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera);
+    this.world = buildWorld(this.scene, this.track, this.atmosphere);
+    this.scene.add(this.dust.points, this.particles.points);
+    this.pipeline.onTier = (tier) => this.world.setDetail(tier.detail, tier.shadow);
+    this.world.setDetail(this.pipeline.tier.detail, this.pipeline.tier.shadow);
 
-    const blobTexture = this.quality === 'low' ? this.blobTexture() : null;
-    for (const entry of setup.grid) this.racers.push(this.spawn(entry, blobTexture));
+    for (const entry of setup.grid) this.racers.push(this.spawn(entry));
     this.me = this.racers.find((racer) => racer.kind === 'me') ?? this.racers[0];
     this.stats = ANIMALS[this.me.entry.species];
     const grid = gridPosition(this.me.entry.slot);
@@ -260,53 +256,41 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(root);
     this.resize();
-    this.renderer.compile(this.scene, this.camera);
     if (import.meta.env.DEV) Object.assign(window, { __gp: this });
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.loop);
   }
 
-  private blobTexture(): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 64;
-    const ctx = canvas.getContext('2d')!;
-    const gradient = ctx.createRadialGradient(32, 32, 4, 32, 32, 32);
-    gradient.addColorStop(0, 'rgba(0,0,0,0.5)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 64, 64);
-    const texture = new THREE.CanvasTexture(canvas);
-    this.disposables.push(() => texture.dispose());
-    return texture;
-  }
-
-  private spawn(entry: GridEntry, blobTexture: THREE.CanvasTexture | null): Racer {
+  private spawn(entry: GridEntry): Racer {
     const color = SLOT_COLORS[entry.slot % SLOT_COLORS.length];
     const rig = buildAnimal(entry.species, color);
     const kind = entry.slot === this.setup.meSlot ? 'me' : entry.id === null ? 'bot' : 'remote';
     const grid = gridPosition(entry.slot);
     this.track.pose(grid.s, grid.lat, pose);
-    rig.root.position.set(pose.x, 0, pose.z);
+    rig.root.rotation.order = 'YXZ';
+    rig.root.position.set(pose.x, 0.04, pose.z);
     rig.root.rotation.y = pose.heading;
-    if (this.quality === 'low') rig.root.traverse((object) => (object.castShadow = false));
+    if (ANIMALS[entry.species].habitat === 'AQUATIC') this.world.soak(rig.root);
     this.scene.add(rig.root);
 
     const native = ANIMALS[entry.species].habitat === this.track.def.habitat;
     if (!native) {
-      const material = new THREE.MeshStandardMaterial({
-        color: '#c9f4ff',
+      const material = new THREE.MeshPhysicalMaterial({
+        color: '#eafaff',
         transparent: true,
-        opacity: 0.2,
-        roughness: 0.05,
-        metalness: 0.1,
-        emissive: '#7fdcff',
-        emissiveIntensity: 0.25,
+        opacity: 0.1,
+        roughness: 0.02,
+        metalness: 0,
+        clearcoat: 1,
+        clearcoatRoughness: 0.03,
+        envMapIntensity: 1.6,
         depthWrite: false,
       });
-      const geometry = new THREE.SphereGeometry(1, 16, 12);
+
+      const geometry = new THREE.SphereGeometry(1, 32, 20);
       const bubble = new THREE.Mesh(geometry, material);
       const tall = Math.max(1.5, rig.height * 0.62);
-      bubble.scale.set(1.45, tall, tall > 2.4 ? 1.9 : 2.4);
+      bubble.scale.set(1.25, tall, tall > 2.4 ? 1.7 : 2.1);
       bubble.position.y = tall * 0.92;
       rig.root.add(bubble);
       this.disposables.push(() => {
@@ -322,19 +306,6 @@ export class Game {
       label.position.y = rig.height + 0.7;
       rig.root.add(label);
       this.disposables.push(made.dispose);
-    }
-    let blob: THREE.Mesh | null = null;
-    if (blobTexture) {
-      const geometry = new THREE.PlaneGeometry(3.4, 4.6);
-      const material = new THREE.MeshBasicMaterial({ map: blobTexture, transparent: true, depthWrite: false });
-      blob = new THREE.Mesh(geometry, material);
-      blob.rotation.x = -Math.PI / 2;
-      blob.position.y = 0.12;
-      rig.root.add(blob);
-      this.disposables.push(() => {
-        geometry.dispose();
-        material.dispose();
-      });
     }
     return {
       entry,
@@ -354,7 +325,7 @@ export class Game {
           ? { has: 0, t0: 0, x0: 0, z0: 0, h0: 0, p0: 0, t1: 0, x1: 0, z1: 0, h1: 0, v1: 0, p1: 0, flags: 0 }
           : null,
       label,
-      blob,
+      emit: 0,
       dustAt: 0,
       place: entry.slot + 1,
     };
@@ -411,7 +382,7 @@ export class Game {
     ctx.strokeStyle = 'rgba(255,255,255,0.92)';
     ctx.lineWidth = 7;
     ctx.stroke();
-    ctx.fillStyle = this.track.def.theme.accent;
+    ctx.fillStyle = this.track.def.card.accent;
     ctx.fillRect(ox + track.px[0] * scale - 2, size - (oz + track.pz[0] * scale) - 8, 4, 16);
     this.minimap = { canvas, path, scale, ox, oz };
   }
@@ -419,10 +390,9 @@ export class Game {
   private resize(): void {
     const width = Math.max(1, this.root.clientWidth);
     const height = Math.max(1, this.root.clientHeight);
-    this.renderer.setSize(width, height, false);
+    this.pipeline.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.particles.setViewport(height * this.ratio);
   }
 
   clock(): number {
@@ -649,7 +619,7 @@ export class Game {
     const place = rows.find((row) => row.me)?.place ?? rows.length;
     this.sound.finish(place === 1);
     this.say(place === 1 ? 'YOU WIN!' : `${ordinal(place)} PLACE`, 4, place <= 3 ? 'gold' : '');
-    const theme = this.track.def.theme;
+    const accent = this.track.def.card.accent;
     for (let i = 0; i < 90; i++)
       this.particles.emit(
         this.body.x + (Math.random() - 0.5) * 10,
@@ -658,7 +628,7 @@ export class Game {
         (Math.random() - 0.5) * 9,
         4 + Math.random() * 8,
         (Math.random() - 0.5) * 9,
-        [theme.accent, '#ff5d6c', '#3d9bff', '#ffffff', '#3ddc97'][i % 5],
+        [accent, '#ff5d6c', '#3d9bff', '#ffffff', '#3ddc97'][i % 5],
         0.55,
         2.2 + Math.random(),
         9,
@@ -708,7 +678,7 @@ export class Game {
         racer.speed = renderTime - net.t1 > 1500 ? 0 : net.v1;
         racer.boosting = (net.flags & 1) === 1;
       }
-      racer.rig.root.position.set(racer.x, 0, racer.z);
+      racer.rig.root.position.set(racer.x, 0.04, racer.z);
       racer.rig.root.rotation.y = racer.heading;
       if (racer.kind === 'me')
         racer.rig.root.rotation.z = -this.input.controls.steer * 0.1 * Math.min(1, racer.speed / 20);
@@ -723,51 +693,47 @@ export class Game {
         const shrink = Math.max(0.3, Math.min(1, Math.sqrt(dx * dx + dz * dz) / 26));
         racer.label.scale.set(3.4 * shrink, 0.85 * shrink, 1);
       }
-      if (near && racer.speed > 7 && this.elapsed >= racer.dustAt) {
-        const mine = racer.kind === 'me';
-        const off = mine && this.body.offroad;
-        racer.dustAt = this.elapsed + (racer.boosting || off ? 0.035 : mine ? 0.07 : 0.14);
+      const style = this.dust.style;
+      if (near && racer.speed > 3) {
+        racer.emit += dt * racer.speed * style.rate * (racer.boosting ? 1.6 : 1);
+        const fx = Math.sin(racer.heading);
+        const fz = Math.cos(racer.heading);
+        while (racer.emit >= 1) {
+          racer.emit -= 1;
+          const a = Math.random();
+          const b = Math.random();
+          const c = Math.random();
+          const back = 0.2 + a * 1.3;
+          const sideways = (b - 0.5) * 0.7;
+          const drift = -racer.speed * (this.aquatic ? 0.02 : 0.12) * c;
+          this.dust.emit(
+            racer.x - fx * back + fz * sideways,
+            this.aquatic ? 0.7 + c * 0.9 : 0.06,
+            racer.z - fz * back - fx * sideways,
+            fx * drift + fz * (b - 0.5) * style.spread,
+            style.lift * (0.4 + a * 0.8),
+            fz * drift - fx * (b - 0.5) * style.spread,
+            this.elapsed,
+            0.6 + c * 0.8,
+          );
+        }
+      }
+      if (near && racer.boosting && this.elapsed >= racer.dustAt) {
+        racer.dustAt = this.elapsed + 0.04;
         const bx = racer.x - Math.sin(racer.heading) * 1.2 + (Math.random() - 0.5) * 0.8;
         const bz = racer.z - Math.cos(racer.heading) * 1.2 + (Math.random() - 0.5) * 0.8;
-        if (this.aquatic)
-          this.particles.emit(
-            bx,
-            0.6 + Math.random(),
-            bz,
-            (Math.random() - 0.5) * 1.5,
-            2 + Math.random() * 2,
-            (Math.random() - 0.5) * 1.5,
-            '#e6fbff',
-            0.14 + Math.random() * 0.14,
-            1.1,
-            -1.5,
-          );
-        else
-          this.particles.emit(
-            bx,
-            0.2,
-            bz,
-            (Math.random() - 0.5) * 2,
-            0.8 + Math.random() * 1.4,
-            (Math.random() - 0.5) * 2,
-            off ? this.dustColor : this.roadDust,
-            off ? 0.7 : 0.38,
-            off ? 0.8 : 0.5,
-            1.5,
-          );
-        if (racer.boosting)
-          this.particles.emit(
-            bx,
-            0.9 + Math.random() * 0.8,
-            bz,
-            (Math.random() - 0.5) * 3,
-            Math.random() * 2,
-            (Math.random() - 0.5) * 3,
-            Math.random() < 0.5 ? racer.color : '#fff3b0',
-            0.22,
-            0.4,
-            0,
-          );
+        this.particles.emit(
+          bx,
+          0.9 + Math.random() * 0.8,
+          bz,
+          (Math.random() - 0.5) * 3,
+          Math.random() * 2,
+          (Math.random() - 0.5) * 3,
+          Math.random() < 0.5 ? racer.color : '#fff3b0',
+          0.22,
+          0.4,
+          0,
+        );
       }
     }
   }
@@ -822,10 +788,6 @@ export class Game {
       this.camPos.z + (Math.random() - 0.5) * rumble,
     );
     this.camera.lookAt(this.camLook);
-
-    const sun = this.world.sun;
-    sun.target.position.set(body.x, 0, body.z);
-    sun.position.set(body.x, 0, body.z).addScaledVector(this.sunDir, 130);
   }
 
   private updateHud(clock: number): void {
@@ -899,30 +861,12 @@ export class Game {
     dot(this.me, 8);
   }
 
-  private adapt(frameMs: number): void {
-    this.frameAvg += (frameMs - this.frameAvg) * 0.05;
-    this.frames += 1;
-    if (this.frames < 90) return;
-    this.frames = 0;
-    const floor = Math.max(0.6, this.baseRatio * 0.5);
-    if (this.frameAvg > 24 && this.ratio > floor) this.ratio = Math.max(floor, this.ratio * 0.85);
-    else if (this.frameAvg > 30 && this.renderer.shadowMap.enabled) {
-      this.renderer.shadowMap.enabled = false;
-      this.world.sun.castShadow = false;
-    } else if (this.frameAvg < 13 && this.ratio < this.baseRatio)
-      this.ratio = Math.min(this.baseRatio, this.ratio * 1.1);
-    else return;
-    this.renderer.setPixelRatio(this.ratio);
-    this.resize();
-  }
-
   private loop = (now: number): void => {
     if (this.disposed) return;
     this.raf = requestAnimationFrame(this.loop);
     const frameMs = now - this.last;
     this.last = now;
     const dt = Math.min(0.05, frameMs / 1000);
-    if (frameMs < 200) this.adapt(frameMs);
     if (!this.paused) {
       this.elapsed += dt;
       if (this.setup.startAt === null) this.localClock += dt * 1000;
@@ -954,9 +898,13 @@ export class Game {
       }
     }
     this.updateCamera(clock, dt);
-    this.world.update(this.elapsed, this.camera);
+    this.world.update(this.elapsed, this.camera, this.focus.set(this.body.x, 0, this.body.z));
+    const scale = this.renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2));
+    this.dust.setViewport(this.renderer.domElement.height, this.camera.fov);
+    this.dust.update(this.elapsed);
+    this.particles.setViewport(scale);
     this.updateHud(clock);
-    this.renderer.render(this.scene, this.camera);
+    this.pipeline.render(dt);
   };
 
   dispose(): void {
@@ -966,14 +914,16 @@ export class Game {
     this.input.dispose();
     this.sound.dispose();
     this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
-        const material: THREE.Material | THREE.Material[] = object.material;
-        for (const entry of Array.isArray(material) ? material : [material]) entry.dispose();
-      }
+      if (!(object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Sprite)) return;
+      object.geometry.dispose();
+      const material: THREE.Material | THREE.Material[] = object.material;
+      for (const entry of Array.isArray(material) ? material : [material]) entry.dispose();
     });
     this.world.dispose();
     this.particles.dispose();
     for (const fn of this.disposables) fn();
+    this.pipeline.dispose();
+    this.atmosphere.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();

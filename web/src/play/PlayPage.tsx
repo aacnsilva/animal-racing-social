@@ -145,14 +145,14 @@ function TrackPicker({
             className={`gp-track${value === def.id ? ' active' : ''}`}
             data-testid={`gp-track-${def.id}`}
             style={{
-              background: `linear-gradient(160deg, ${def.theme.skyTop}, ${def.theme.skyHorizon} 55%, ${def.theme.ground})`,
+              background: `linear-gradient(160deg, ${def.card.top}, ${def.card.mid} 55%, ${def.card.bottom})`,
             }}
             onClick={() => onChange(def.id)}
           >
             <svg viewBox="0 0 96 96" aria-hidden>
               <path d={outline.d} fill="none" stroke="rgba(0,0,0,0.45)" strokeWidth="7" strokeLinejoin="round" />
               <path d={outline.d} fill="none" stroke="#fff" strokeWidth="3.5" strokeLinejoin="round" />
-              <circle cx={outline.start[0]} cy={outline.start[1]} r="4" fill={def.theme.accent} stroke="#000" />
+              <circle cx={outline.start[0]} cy={outline.start[1]} r="4" fill={def.card.accent} stroke="#000" />
             </svg>
             <span className="info">
               <b>{def.name}</b>

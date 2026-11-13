@@ -21,13 +21,14 @@ The project exists to showcase backend architecture at scale, with two halves th
 
 ## Animal Grand Prix: race it yourself (implemented)
 
-`/play` is an arcade racer built on the same three.js animal rigs: pick a horse, giraffe, shark or octopus and drive it around four circuits against up to nine rivals.
+`/play` is an arcade racer built on the same three.js animal rigs: pick a horse, giraffe, shark or octopus and drive it around four circuits (turf, desert sand, ice and the sea floor) against up to nine rivals.
 
 - **Solo** needs no sign-in: bots follow a deterministic plan derived from the race seed.
 - **Multiplayer** needs a sign-in: create a room, share the 5-letter code or the `/play/room/CODE` link, up to 10 racers, bots fill the empty grid slots.
 - **Netcode**: the `arcade` service keeps rooms in memory and speaks JSON over one WebSocket (`/v1/arcade/ws`). Each client simulates its own animal and sends ~12 samples per second; the server relays them, owns the lobby, the start clock and the finish order, and clamps reported finish times to its own clock. Bots are computed identically on every client from the shared seed and the synced clock, so they cost no bandwidth.
 - **Auth**: the API issues a 60-second ticket (`POST /v1/arcade/ticket`) that the socket presents in its first message, so the `arcade` service needs no database.
-- **Mobile first**: touch steering, auto-run, dynamic resolution scaling and three quality tiers (`?quality=low|medium|high` forces one).
+- **Rendering**: the game runs on the same stack as the race viewer: the procedural land and sea venues, baked sky with image-based lighting, skinned animal rigs and the HDR bloom pipeline with quality tiers that step down on slow devices.
+- **Mobile first**: touch steering, auto-run, portrait and landscape layouts.
 
 ## Social side: sharding and redundancy (planned)
 

@@ -1,34 +1,13 @@
 import * as THREE from 'three';
+import { LANE_WIDTH, TrackPath } from '../lib/track';
+import type { Segment } from '../lib/types';
 
 export type TrackId = 'meadow' | 'dunes' | 'reef' | 'aurora';
 export type Habitat = 'TERRAIN' | 'AQUATIC';
 
-export type Theme = {
-  skyTop: string;
-  skyHorizon: string;
-  skyBottom: string;
-  fog: string;
-  fogNear: number;
-  fogFar: number;
-  sun: string;
-  sunIntensity: number;
-  sunDir: [number, number, number];
-  hemiSky: string;
-  hemiGround: string;
-  hemiIntensity: number;
-  ground: string;
-  groundAlt: string;
-  road: string;
-  roadAlt: string;
-  line: string;
-  shoulder: string;
-  kerbA: string;
-  kerbB: string;
-  wall: string;
-  wallAlt: string;
-  accent: string;
-  exposure: number;
-};
+export type Surface = 'GRASS' | 'SAND' | 'ICE' | 'OPEN_SEA';
+
+export type Card = { top: string; mid: string; bottom: string; accent: string };
 
 export type TrackDef = {
   id: TrackId;
@@ -40,11 +19,13 @@ export type TrackDef = {
   points: [number, number][];
   pads: [number, number][];
   treats: [number, number][];
-  theme: Theme;
+  surface: Surface;
+  card: Card;
 };
 
-export const ROAD_HALF = 8;
-export const WALL_AT = 13.5;
+export const LANES = 12;
+export const ROAD_HALF = (LANES * LANE_WIDTH) / 2;
+export const WALL_AT = ROAD_HALF + 0.6;
 const SPACING = 1.5;
 
 export const TRACKS: TrackDef[] = [
@@ -88,32 +69,8 @@ export const TRACKS: TrackDef[] = [
       [0.76, 3],
       [0.93, -4],
     ],
-    theme: {
-      skyTop: '#2f7fe0',
-      skyHorizon: '#bfe6ff',
-      skyBottom: '#e8f6ff',
-      fog: '#c4e6fb',
-      fogNear: 180,
-      fogFar: 720,
-      sun: '#fff1d6',
-      sunIntensity: 2.6,
-      sunDir: [0.45, 0.8, 0.35],
-      hemiSky: '#cfe9ff',
-      hemiGround: '#4c7a3a',
-      hemiIntensity: 1.15,
-      ground: '#58a646',
-      groundAlt: '#4a9440',
-      road: '#b98a57',
-      roadAlt: '#a87a4a',
-      line: '#fff6de',
-      shoulder: '#6cb552',
-      kerbA: '#e8483f',
-      kerbB: '#f7f3ea',
-      wall: '#f4f1e8',
-      wallAlt: '#3f8fd8',
-      accent: '#ffd34d',
-      exposure: 1.05,
-    },
+    surface: 'GRASS',
+    card: { top: '#3f86d8', mid: '#bfe1f7', bottom: '#4f9a3f', accent: '#ffd34d' },
   },
   {
     id: 'dunes',
@@ -124,6 +81,7 @@ export const TRACKS: TrackDef[] = [
     scale: 0.8,
     points: [
       [0, 0],
+      [40, 0],
       [85, 0],
       [150, 12],
       [188, 58],
@@ -169,42 +127,19 @@ export const TRACKS: TrackDef[] = [
       [0.83, 3],
       [0.92, -3],
     ],
-    theme: {
-      skyTop: '#3b3f8f',
-      skyHorizon: '#ff9e5e',
-      skyBottom: '#ffd08a',
-      fog: '#f5a873',
-      fogNear: 150,
-      fogFar: 640,
-      sun: '#ffb070',
-      sunIntensity: 2.7,
-      sunDir: [-0.7, 0.42, 0.3],
-      hemiSky: '#ffc9a0',
-      hemiGround: '#8a5a34',
-      hemiIntensity: 1.05,
-      ground: '#dba55c',
-      groundAlt: '#cf9550',
-      road: '#6f5a50',
-      roadAlt: '#645046',
-      line: '#ffe9c2',
-      shoulder: '#e6b66e',
-      kerbA: '#2a2a36',
-      kerbB: '#ffcf4a',
-      wall: '#7a4a2e',
-      wallAlt: '#f0c060',
-      accent: '#ff7a3d',
-      exposure: 1.0,
-    },
+    surface: 'SAND',
+    card: { top: '#5a6fb0', mid: '#f3b27a', bottom: '#d9a55c', accent: '#ff8a3d' },
   },
   {
     id: 'reef',
     name: 'Coral Deep',
-    tagline: 'A glowing reef run on the sea floor. Bubbles provided.',
+    tagline: 'A sea-floor run beneath the waves. Bubbles provided.',
     habitat: 'AQUATIC',
     grade: 'Flowing',
     scale: 0.76,
     points: [
       [0, 0],
+      [40, 0],
       [80, 0],
       [150, -22],
       [215, 5],
@@ -244,37 +179,13 @@ export const TRACKS: TrackDef[] = [
       [0.79, 4],
       [0.85, -4],
     ],
-    theme: {
-      skyTop: '#0a3a6a',
-      skyHorizon: '#1a86a8',
-      skyBottom: '#0c5c7c',
-      fog: '#1585a2',
-      fogNear: 40,
-      fogFar: 330,
-      sun: '#c8fff2',
-      sunIntensity: 1.9,
-      sunDir: [0.2, 0.95, 0.15],
-      hemiSky: '#8fe6ff',
-      hemiGround: '#1c5a6a',
-      hemiIntensity: 1.5,
-      ground: '#86b3a2',
-      groundAlt: '#74a092',
-      road: '#f1e4b9',
-      roadAlt: '#e2d2a0',
-      line: '#22b8a0',
-      shoulder: '#b5cda9',
-      kerbA: '#ff6f91',
-      kerbB: '#fff3d6',
-      wall: '#ff8a5c',
-      wallAlt: '#3fd0c0',
-      accent: '#5ff2d6',
-      exposure: 1.1,
-    },
+    surface: 'OPEN_SEA',
+    card: { top: '#0a3a6a', mid: '#1a86a8', bottom: '#2f7f8a', accent: '#5ff2d6' },
   },
   {
     id: 'aurora',
-    name: 'Aurora Ridge',
-    tagline: 'Neon ice under the northern lights. Flat out and fearless.',
+    name: 'Frostbite Ridge',
+    tagline: 'Hard ice under a low winter sun. Flat out and fearless.',
     habitat: 'TERRAIN',
     grade: 'Fast',
     scale: 0.76,
@@ -320,32 +231,8 @@ export const TRACKS: TrackDef[] = [
       [0.78, 4],
       [0.94, 0],
     ],
-    theme: {
-      skyTop: '#050a24',
-      skyHorizon: '#1b2f6b',
-      skyBottom: '#2a4a8a',
-      fog: '#16255a',
-      fogNear: 120,
-      fogFar: 620,
-      sun: '#b8ccff',
-      sunIntensity: 1.5,
-      sunDir: [-0.35, 0.8, -0.4],
-      hemiSky: '#8fb0ff',
-      hemiGround: '#2a3560',
-      hemiIntensity: 1.7,
-      ground: '#dfe9ff',
-      groundAlt: '#c8d6f5',
-      road: '#2c3a66',
-      roadAlt: '#263359',
-      line: '#5ff2ff',
-      shoulder: '#b9c9ee',
-      kerbA: '#ff4fd8',
-      kerbB: '#3df0ff',
-      wall: '#1a2350',
-      wallAlt: '#3df0ff',
-      accent: '#7dffb0',
-      exposure: 1.15,
-    },
+    surface: 'ICE',
+    card: { top: '#6f9fd8', mid: '#f3dcc8', bottom: '#e4eef8', accent: '#3df0ff' },
   },
 ];
 
@@ -355,8 +242,63 @@ export function trackDef(id: string): TrackDef {
 
 export type Pose = { x: number; z: number; heading: number; tx: number; tz: number; nx: number; nz: number };
 
+function referenceSegments(def: TrackDef): Segment[] {
+  const curve = new THREE.CatmullRomCurve3(
+    def.points.map(([x, z]) => new THREE.Vector3(x * def.scale, 0, z * def.scale)),
+    true,
+    'centripetal',
+  );
+  curve.arcLengthDivisions = def.points.length * 60;
+  const count = Math.round(curve.getLength());
+  const spaced = curve.getSpacedPoints(count).slice(0, count);
+  const tangent = (i: number): [number, number] => {
+    const a = spaced[(i - 1 + count) % count];
+    const b = spaced[(i + 1) % count];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return [(b.x - a.x) / len, (b.z - a.z) / len];
+  };
+  let turned = 0;
+  for (let i = 0; i < count; i++) {
+    const [ax, az] = tangent(i);
+    const [bx, bz] = tangent(i + 1);
+    turned += Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
+  }
+  const winding = turned < 0 ? -1 : 1;
+  const shift = ((LANES - 1) * LANE_WIDTH) / 2;
+  const line = spaced.map((p, i) => {
+    const [tx, tz] = tangent(i);
+    return { x: p.x - winding * tz * shift, z: p.z + winding * tx * shift };
+  });
+  const heading = (i: number): [number, number] => {
+    const a = line[(i - 1 + count) % count];
+    const b = line[(i + 1) % count];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return [(b.x - a.x) / len, (b.z - a.z) / len];
+  };
+  const segments: Segment[] = [];
+  let straight = 0;
+  for (let i = 0; i < count; i++) {
+    const a = line[i];
+    const b = line[(i + 1) % count];
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    const [ax, az] = heading(i);
+    const [bx, bz] = heading(i + 1);
+    const turn = Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
+    if (Math.abs(turn) < 2e-4) {
+      straight += length;
+      continue;
+    }
+    if (straight > 0) segments.push({ type: 'STRAIGHT', length: straight });
+    straight = 0;
+    segments.push({ type: 'CURVE', radius: length / Math.abs(turn), angle: (turn * 180) / Math.PI });
+  }
+  if (straight > 0) segments.push({ type: 'STRAIGHT', length: straight });
+  return segments;
+}
+
 export class Track {
   readonly def: TrackDef;
+  readonly path: TrackPath;
   readonly n: number;
   readonly length: number;
   readonly spacing: number;
@@ -372,15 +314,21 @@ export class Track {
 
   constructor(def: TrackDef) {
     this.def = def;
-    const curve = new THREE.CatmullRomCurve3(
-      def.points.map(([x, z]) => new THREE.Vector3(x * def.scale, 0, z * def.scale)),
-      true,
-      'centripetal',
-    );
-    curve.arcLengthDivisions = def.points.length * 60;
-    const total = curve.getLength();
+    this.path = new TrackPath(referenceSegments(def), undefined, LANES);
+    const centre = (this.path.innerOffset() + this.path.outerOffset()) / 2;
+    const dense = Math.ceil(this.path.lapLength / 0.5);
+    const xs = new Float64Array(dense + 1);
+    const zs = new Float64Array(dense + 1);
+    const along = new Float64Array(dense + 1);
+    const point = { x: 0, y: 0, z: 0 };
+    for (let i = 0; i <= dense; i++) {
+      this.path.point((i / dense) * this.path.lapLength, centre, point);
+      xs[i] = point.x;
+      zs[i] = point.z;
+      if (i > 0) along[i] = along[i - 1] + Math.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]);
+    }
+    const total = along[dense];
     const n = Math.round(total / SPACING);
-    const points = curve.getSpacedPoints(n);
     this.n = n;
     this.length = total;
     this.spacing = total / n;
@@ -389,13 +337,17 @@ export class Track {
     this.tx = new Float32Array(n);
     this.tz = new Float32Array(n);
     this.k = new Float32Array(n);
+    let cursor = 0;
     for (let i = 0; i < n; i++) {
-      this.px[i] = points[i].x;
-      this.pz[i] = points[i].z;
-      this.minX = Math.min(this.minX, points[i].x);
-      this.maxX = Math.max(this.maxX, points[i].x);
-      this.minZ = Math.min(this.minZ, points[i].z);
-      this.maxZ = Math.max(this.maxZ, points[i].z);
+      const target = i * this.spacing;
+      while (cursor < dense - 1 && along[cursor + 1] < target) cursor += 1;
+      const u = (target - along[cursor]) / Math.max(1e-6, along[cursor + 1] - along[cursor]);
+      this.px[i] = xs[cursor] + (xs[cursor + 1] - xs[cursor]) * u;
+      this.pz[i] = zs[cursor] + (zs[cursor + 1] - zs[cursor]) * u;
+      this.minX = Math.min(this.minX, this.px[i]);
+      this.maxX = Math.max(this.maxX, this.px[i]);
+      this.minZ = Math.min(this.minZ, this.pz[i]);
+      this.maxZ = Math.max(this.maxZ, this.pz[i]);
     }
     for (let i = 0; i < n; i++) {
       const a = (i - 1 + n) % n;
