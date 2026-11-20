@@ -202,7 +202,7 @@ stable, `no_engine` at the race engine, `error` at scheduler logs.
 
 ### OddsRepriceSlow
 
-Live prices update less often than every 1.5 s (p95). The odds engine is
+Live prices update less often than every 3 s (p95). The odds engine is
 CPU-bound: check live Monte Carlo time by race class on the Race Day
 dashboard and the Platform dashboard. Lower `ODDS_LIVE_BUDGET_MS` or
 `ODDS_RUNS_LIVE_MIN`, or raise `ODDS_THREADS` if the server has idle cores.

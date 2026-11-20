@@ -341,7 +341,7 @@ alert links to its dashboard and runbook section.
 | SLOSlowBurn         | any SLO in §7 at 6× burn                                       | —    | warning  |
 | ConsumerLagHigh     | lag > 1 000 for bet-worker, settlement, wallet, market-manager | 5 m  | warning  |
 | SchedulerHorizonLow | horizon < 50% of `ars_scheduler_horizon_target`                | 10 m | warning  |
-| OddsRepriceSlow     | p95 `reprice_interval` > 1.5 s                                 | 10 m | warning  |
+| OddsRepriceSlow     | p95 `reprice_interval` > 3 s                                   | 10 m | warning  |
 | ScriptFailures      | increase in `ars_engine_scripts{outcome="failed"}`             | 0 m  | warning  |
 | StablePoolLow       | pool < 80% of target for a species                             | 30 m | warning  |
 | RefreshTokenReuse   | increase in `ars_auth_refresh{outcome="reuse_detected"}`       | 0 m  | warning  |

@@ -183,14 +183,14 @@ groups:
                 - evaluator:
                     type: 'gt'
                     params:
-                      - 1.5
+                      - 3
         noDataState: 'OK'
         execErrState: 'Error'
         for: '10m'
         labels:
           severity: 'warning'
         annotations:
-          summary: 'p95 live reprice interval is above 1.5 s'
+          summary: 'p95 live reprice interval is above 3 s'
           runbook_url: 'https://github.com/aacnsilva/animal-racing-social/blob/main/docs/deployment.md#oddsrepriceslow'
           __dashboardUid__: 'ars-race-day'
           __panelId__: '16'
