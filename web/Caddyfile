@@ -32,11 +32,19 @@
 		file_server
 	}
 
-	handle {
+	@app path_regexp ^/(results|play|bets|wallet|leaderboards|notifications|me|admin|races/[^/]+|play/room/[^/]+|animals(/[^/]+)?|venues(/[^/]+)?|)?$
+	handle @app {
 		root * /srv
 		encode zstd gzip
 		header Cache-Control "no-cache"
 		try_files {path} /index.html
+		file_server
+	}
+
+	handle {
+		root * /srv
+		encode zstd gzip
+		header Cache-Control "no-cache"
 		file_server
 	}
 }
