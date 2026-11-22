@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /v1/
+Disallow: /grafana/
+Disallow: /admin
+Allow: /
+
+Sitemap: https://racing.aacnsilva.com/sitemap.xml
